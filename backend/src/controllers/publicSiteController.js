@@ -1,0 +1,13 @@
+import { successResponse } from '../utils/apiResponse.js';
+import { getPublicSiteBySlug, resolveTagToSite } from '../services/publicSiteService.js';
+
+export async function getSiteBySlug(req, res) {
+  const payload = await getPublicSiteBySlug(req.validated.params.slug);
+  return successResponse(res, payload, { resolvedBy: 'slug' });
+}
+
+export async function resolveTag(req, res) {
+  const payload = await resolveTagToSite(req.validated.params.tagCode);
+  return successResponse(res, payload, { resolvedBy: 'tag' });
+}
+

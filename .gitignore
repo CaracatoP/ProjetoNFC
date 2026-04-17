@@ -1,0 +1,50 @@
+# ================================
+# GIT IGNORE - ARQUIVO PADRÃO
+# ================================
+
+# Variáveis de Ambiente
+.env
+.env.local
+.env.*.local
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Node/NPM (se usar no futuro)
+node_modules/
+npm-debug.log
+package-lock.json
+yarn.lock
+
+# Build outputs
+dist/
+build/
+out/
+coverage/
+.vitest/
+
+# Logs
+logs/
+*.log
+
+# Backups
+*.bak
+*.backup
+*~
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+
+# Documentação privada
+NOTES.md
+TODO.md

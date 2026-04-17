@@ -1,0 +1,16 @@
+{
+  "name": "nfc-linktree-saas",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "npm --prefix backend run dev",
+    "test:frontend": "npm --prefix frontend run test",
+    "test:backend": "npm --prefix backend run test",
+    "build:frontend": "npm --prefix frontend run build"
+  }
+}

@@ -1,0 +1,145 @@
+import { z } from 'zod';
+import { BUSINESS_STATUS_VALUES, LINK_GROUPS, LINK_TYPE_VALUES, SECTION_TYPE_VALUES } from '../../../shared/constants/index.js';
+
+const optionalString = z.string().optional().or(z.literal(''));
+
+const hoursSchema = z.array(
+  z.object({
+    id: optionalString,
+    label: z.string().min(1),
+    value: z.string().min(1),
+  }),
+);
+
+const businessBodySchema = z.object({
+  name: z.string().min(2),
+  legalName: optionalString,
+  slug: z.string().min(2).regex(/^[a-z0-9-]+$/),
+  description: optionalString,
+  logoUrl: optionalString,
+  bannerUrl: optionalString,
+  badge: optionalString,
+  status: z.enum(BUSINESS_STATUS_VALUES),
+  rating: optionalString,
+  address: z
+    .object({
+      display: optionalString,
+      mapUrl: optionalString,
+      embedUrl: optionalString,
+      latitude: z.number().optional(),
+      longitude: z.number().optional(),
+    })
+    .default({}),
+  hours: hoursSchema.default([]),
+  contact: z
+    .object({
+      whatsapp: optionalString,
+      phone: optionalString,
+      email: optionalString,
+      wifi: z
+        .object({
+          ssid: optionalString,
+          password: optionalString,
+          security: optionalString,
+          title: optionalString,
+          description: optionalString,
+        })
+        .optional(),
+      pix: z
+        .object({
+          keyType: optionalString,
+          key: optionalString,
+          receiverName: optionalString,
+          city: optionalString,
+          description: optionalString,
+          actionLabel: optionalString,
+          actionDescription: optionalString,
+        })
+        .optional(),
+    })
+    .default({}),
+  seo: z.object({
+    title: z.string().min(2),
+    description: z.string().min(2),
+    imageUrl: optionalString,
+  }),
+});
+
+const themeBodySchema = z.object({
+  colors: z.record(z.string()),
+  typography: z.record(z.string()),
+  spacing: z.record(z.string()),
+  radius: z.record(z.string()),
+  layout: z.record(z.string()),
+  buttons: z.record(z.any()),
+  customCss: optionalString,
+});
+
+const linksBodySchema = z.array(
+  z.object({
+    id: optionalString,
+    type: z.enum(LINK_TYPE_VALUES),
+    group: z.enum(Object.values(LINK_GROUPS)).default(LINK_GROUPS.PRIMARY),
+    label: optionalString,
+    subtitle: optionalString,
+    icon: optionalString,
+    url: optionalString,
+    value: optionalString,
+    visible: z.boolean().default(true),
+    order: z.number().int().default(0),
+    target: z.enum(['_self', '_blank']).default('_blank'),
+    metadata: z.record(z.any()).default({}),
+  }),
+);
+
+const sectionsBodySchema = z.array(
+  z.object({
+    id: optionalString,
+    key: z.string().min(1),
+    type: z.enum(SECTION_TYPE_VALUES),
+    title: optionalString,
+    description: optionalString,
+    order: z.number().int().default(0),
+    visible: z.boolean().default(true),
+    variant: optionalString,
+    settings: z.record(z.any()).default({}),
+    items: z.array(z.record(z.any())).default([]),
+  }),
+);
+
+export const adminBusinessParamsSchema = z.object({
+  businessId: z.string().min(12),
+});
+
+export const adminBusinessEditorBodySchema = z.object({
+  business: businessBodySchema,
+  theme: themeBodySchema,
+  links: linksBodySchema.default([]),
+  sections: sectionsBodySchema.default([]),
+  nfcTag: z
+    .object({
+      code: optionalString,
+      status: optionalString,
+    })
+    .nullable()
+    .optional(),
+});
+
+export const adminBusinessCreateBodySchema = z
+  .object({
+    business: businessBodySchema.partial().optional(),
+    theme: themeBodySchema.optional(),
+    links: linksBodySchema.optional(),
+    sections: sectionsBodySchema.optional(),
+    nfcTag: z
+      .object({
+        code: optionalString,
+        status: optionalString,
+      })
+      .nullable()
+      .optional(),
+  })
+  .refine((value) => Boolean(value.business?.name || value.business?.slug), {
+    message: 'Informe ao menos nome ou slug para criar o comercio',
+    path: ['business'],
+  });
