@@ -5,37 +5,128 @@ import { listVisibleSectionsByBusinessId } from '../repositories/sectionReposito
 import { listVisibleLinksByBusinessId } from '../repositories/linkRepository.js';
 import { findTagByCode, touchTag } from '../repositories/nfcTagRepository.js';
 import { env } from '../config/env.js';
+import {
+  buildManagedPrimaryLinks,
+  normalizeCreatorSignatureCtaSection,
+} from '../utils/adminDefaults.js';
+
+function normalizePhoneActionValue(value, countryCode = '55') {
+  const digits = String(value || '').replace(/\D/g, '');
+
+  if (!digits) {
+    return '';
+  }
+
+  if (digits.startsWith(countryCode)) {
+    return digits;
+  }
+
+  if (digits.length === 10 || digits.length === 11) {
+    return `${countryCode}${digits}`;
+  }
+
+  return digits;
+}
+
+function isManagedLinkMatch(link, action) {
+  const url = String(link?.url || '').toLowerCase();
+  const icon = String(link?.icon || '').toLowerCase();
+  const metadataAction = String(link?.metadata?.action || '').toLowerCase();
+  const type = String(link?.type || '').toLowerCase();
+
+  switch (action) {
+    case 'whatsapp':
+      return metadataAction === action || icon === 'whatsapp' || url.startsWith('https://wa.me/');
+    case 'phone':
+      return metadataAction === action || icon === 'phone' || url.startsWith('tel:');
+    case 'email':
+      return metadataAction === action || icon === 'mail' || url.startsWith('mailto:');
+    case 'wifi':
+      return metadataAction === action || type === 'wifi';
+    case 'pix':
+      return metadataAction === action || type === 'pix';
+    default:
+      return false;
+  }
+}
+
+function mergePrimaryLinks(links, business) {
+  const managedLinks = buildManagedPrimaryLinks(business);
+  const managedActions = managedLinks
+    .map((link) => String(link.metadata?.action || '').toLowerCase())
+    .filter(Boolean);
+
+  const customPrimaryLinks = links.filter(
+    (link) =>
+      link.group === 'primary' &&
+      !managedActions.some((action) => isManagedLinkMatch(link, action)),
+  );
+
+  const hydratedManagedLinks = managedLinks.map((link) => {
+    const action = String(link.metadata?.action || '').toLowerCase();
+    const existing = links.find(
+      (candidate) => candidate.group === 'primary' && isManagedLinkMatch(candidate, action),
+    );
+
+    if (!existing) {
+      return link;
+    }
+
+    return {
+      ...existing,
+      type: link.type,
+      group: link.group,
+      label: existing.label || link.label,
+      subtitle: existing.subtitle || link.subtitle,
+      icon: existing.icon || link.icon,
+      url: link.url,
+      value: link.value,
+      target: link.target,
+      metadata: {
+        ...(existing.metadata || {}),
+        ...(link.metadata || {}),
+      },
+    };
+  });
+
+  return [...hydratedManagedLinks, ...customPrimaryLinks].sort(
+    (first, second) => first.order - second.order,
+  );
+}
 
 function buildContactItems(business) {
   const items = [];
   const contact = business.contact || {};
+  const whatsappValue = normalizePhoneActionValue(contact.whatsapp);
+  const phoneValue = normalizePhoneActionValue(contact.phone);
+  const emailValue = String(contact.email || '').trim().toLowerCase();
 
-  if (contact.whatsapp) {
+  if (whatsappValue) {
     items.push({
       id: 'contact-whatsapp',
       label: 'WhatsApp',
-      value: contact.whatsapp,
-      href: `https://wa.me/${contact.whatsapp}`,
+      value: whatsappValue,
+      href: `https://wa.me/${whatsappValue}`,
       action: 'external',
     });
   }
 
-  if (contact.phone) {
+  if (phoneValue) {
     items.push({
       id: 'contact-phone',
       label: 'Telefone',
-      value: contact.phone,
-      href: `tel:+${contact.phone}`,
+      value: phoneValue,
+      href: `tel:+${phoneValue}`,
       action: 'external',
     });
   }
 
-  if (contact.email) {
+  if (emailValue) {
     items.push({
       id: 'contact-email',
       label: 'E-mail',
-      value: contact.email,
-      href: `mailto:${contact.email}`,
+      value: emailValue,
+      href: `mailto:${emailValue}`,
       action: 'external',
     });
   }
@@ -43,14 +134,38 @@ function buildContactItems(business) {
   if (business.address?.display) {
     items.push({
       id: 'contact-address',
-      label: 'Endereço',
+      label: 'Endereco',
       value: business.address.display,
-      href: business.address.mapUrl,
-      action: 'external',
+      href: business.address.mapUrl || '',
+      action: business.address.mapUrl ? 'external' : 'display',
     });
   }
 
   return items;
+}
+
+function buildHeroPrimaryAction(business, settings) {
+  const whatsappValue = normalizePhoneActionValue(business.contact?.whatsapp);
+
+  if (!whatsappValue) {
+    return undefined;
+  }
+
+  return {
+    label: settings.primaryAction?.label || 'Agendar pelo WhatsApp',
+    href: `https://wa.me/${whatsappValue}`,
+  };
+}
+
+function buildHeroSecondaryAction(business, settings) {
+  if (!business.contact?.pix?.key) {
+    return undefined;
+  }
+
+  return {
+    label: settings.secondaryAction?.label || 'Copiar PIX',
+    action: 'pix',
+  };
 }
 
 function hydrateSection(section, business, links) {
@@ -60,17 +175,29 @@ function hydrateSection(section, business, links) {
     case 'hero':
       return {
         ...section,
+        title: business.name || section.title,
+        description: business.description || '',
         settings: {
           ...settings,
-          badge: settings.badge || business.badge,
-          rating: settings.rating || business.rating,
+          badge: business.badge || settings.badge,
+          rating: business.rating || settings.rating,
           address: business.address?.display,
           hours: business.hours || [],
-          bannerUrl: settings.bannerUrl || business.bannerUrl,
-          logoUrl: settings.logoUrl || business.logoUrl,
+          bannerUrl: business.bannerUrl || settings.bannerUrl,
+          logoUrl: business.logoUrl || settings.logoUrl,
+          primaryAction: buildHeroPrimaryAction(business, settings),
+          secondaryAction: buildHeroSecondaryAction(business, settings),
         },
       };
     case 'links':
+      return {
+        ...section,
+        items:
+          (settings.group || 'primary') === 'primary'
+            ? mergePrimaryLinks(links, business)
+            : links.filter((link) => link.group === (settings.group || 'primary')),
+        settings,
+      };
     case 'social':
       return {
         ...section,
@@ -128,6 +255,17 @@ function hydrateSection(section, business, links) {
           ...business.address,
         },
       };
+    case 'custom':
+      return {
+        ...section,
+        description: section.key === 'about' ? '' : section.description,
+        settings,
+      };
+    case 'cta':
+      return normalizeCreatorSignatureCtaSection({
+        ...section,
+        settings,
+      });
     default:
       return {
         ...section,
@@ -140,7 +278,7 @@ export async function getPublicSiteBySlug(slug) {
   const business = await findPublicBusinessBySlug(slug);
 
   if (!business) {
-    throw new AppError('Negócio não encontrado', 404, 'business_not_found');
+    throw new AppError('Negocio nao encontrado', 404, 'business_not_found');
   }
 
   const [theme, sections, links] = await Promise.all([
@@ -150,7 +288,7 @@ export async function getPublicSiteBySlug(slug) {
   ]);
 
   if (!theme) {
-    throw new AppError('Tema do negócio não encontrado', 500, 'business_theme_missing');
+    throw new AppError('Tema do negocio nao encontrado', 500, 'business_theme_missing');
   }
 
   const hydratedSections = sections
@@ -221,13 +359,13 @@ export async function resolveTagToSite(tagCode) {
   const tag = await findTagByCode(tagCode);
 
   if (!tag?.businessId) {
-    throw new AppError('Tag NFC não encontrada', 404, 'nfc_tag_not_found');
+    throw new AppError('Tag NFC nao encontrada', 404, 'nfc_tag_not_found');
   }
 
   const business = tag.businessId;
 
   if (business.status !== 'active') {
-    throw new AppError('Negócio inativo para esta tag', 404, 'business_inactive');
+    throw new AppError('Negocio inativo para esta tag', 404, 'business_inactive');
   }
 
   await touchTag(tagCode);
@@ -248,7 +386,7 @@ export async function assertBusinessExists(reference) {
   const business = await findBusinessBySlug(reference.slug);
 
   if (!business) {
-    throw new AppError('Negócio não encontrado para analytics', 404, 'business_not_found');
+    throw new AppError('Negocio nao encontrado para analytics', 404, 'business_not_found');
   }
 
   return business._id.toString();

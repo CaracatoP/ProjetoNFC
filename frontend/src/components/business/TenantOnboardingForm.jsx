@@ -2,13 +2,16 @@ import { useMemo, useState } from 'react';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 
-function slugify(value) {
-  return String(value || '')
+function slugify(value, { preserveTrailingSeparator = false } = {}) {
+  const normalized = String(value || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+/, '');
+
+  return preserveTrailingSeparator ? normalized : normalized.replace(/-+$/g, '');
 }
 
 const initialForm = {
@@ -82,8 +85,9 @@ export function TenantOnboardingForm({ creating, onCreate }) {
             value={form.slug}
             onChange={(event) => {
               setSlugTouched(true);
-              setForm((current) => ({ ...current, slug: slugify(event.target.value) }));
+              setForm((current) => ({ ...current, slug: slugify(event.target.value, { preserveTrailingSeparator: true }) }));
             }}
+            onBlur={(event) => setForm((current) => ({ ...current, slug: slugify(event.target.value) }))}
             placeholder={suggestedSlug || 'restaurante-vista-boa'}
           />
         </label>

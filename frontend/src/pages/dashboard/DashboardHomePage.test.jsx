@@ -1,9 +1,10 @@
 import { MemoryRouter } from 'react-router-dom';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DashboardHomePage } from './DashboardHomePage.jsx';
 import { useAuth } from '@/context/AuthContext.jsx';
 import * as adminService from '@/services/adminService.js';
+import { ApiClientError } from '@/services/apiClient.js';
 
 vi.mock('@/context/AuthContext.jsx', () => ({
   useAuth: vi.fn(),
@@ -266,6 +267,80 @@ describe('DashboardHomePage', () => {
           }),
         }),
       );
+    });
+  });
+
+  it('shows validation details when the editor payload is rejected', async () => {
+    const user = userEvent.setup();
+
+    adminService.updateAdminBusiness.mockRejectedValue(
+      new ApiClientError('Falha de validacao', 400, [
+        { path: 'business.seo.title', message: 'String must contain at least 2 character(s)' },
+      ]),
+    );
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+    expect(await screen.findByText('Analytics do tenant')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Salvar alteracoes/i }));
+
+    expect(await screen.findByText(/business\.seo\.title: String must contain at least 2 character/)).toBeInTheDocument();
+  });
+
+  it('slugifies the editor slug before saving', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+    expect(await screen.findByText('Analytics do tenant')).toBeInTheDocument();
+
+    const editorCard = screen.getByText('Identidade do tenant').closest('section');
+    const slugInput = within(editorCard).getByLabelText('Slug publico');
+    await user.clear(slugInput);
+    await user.type(slugInput, 'Barbearia São João 2026');
+    await user.click(screen.getByRole('button', { name: /Salvar alteracoes/i }));
+
+    await waitFor(() => {
+      expect(
+        adminService.updateAdminBusiness.mock.calls.some(
+          (call) => call[0] === 'admin-token' && call[1] === 'business-1' && call[2]?.business?.slug === 'barbearia-sao-joao-2026',
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('rebuilds derived theme tokens when the admin changes the palette', async () => {
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+    expect(await screen.findByText('Analytics do tenant')).toBeInTheDocument();
+    const primaryColorInput = screen.getByLabelText('Cor primaria');
+    fireEvent.change(primaryColorInput, { target: { value: '#22c55e' } });
+    fireEvent.click(screen.getByRole('button', { name: /Salvar alteracoes/i }));
+
+    await waitFor(() => {
+      const saveCall = adminService.updateAdminBusiness.mock.calls
+        .filter((call) => call[0] === 'admin-token' && call[1] === 'business-1')
+        .at(-1);
+
+      expect(saveCall?.[2]?.theme?.colors?.primary).toBe('#22c55e');
+      expect(saveCall?.[2]?.theme?.colors?.accent).toContain('34, 197, 94');
+      expect(saveCall?.[2]?.theme?.buttons?.primary?.background).toContain('#22c55e');
     });
   });
 });

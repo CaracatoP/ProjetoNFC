@@ -50,17 +50,18 @@ export function BusinessServicesSection({ business, section, onTrackAction }) {
                 <Button
                   disabled={!pix}
                   onClick={async () => {
-                    await copy(pix?.key);
+                    const servicePixPayload = buildPixPayload(pix, service.price);
+                    await copy(servicePixPayload);
                     onTrackAction?.({
                       eventType: 'copy_action',
                       sectionType: 'services',
-                      targetType: 'pix_key',
+                      targetType: 'pix_payload',
                       targetId: service.id,
                       targetLabel: service.name,
                     });
                   }}
                 >
-                  {lastCopied === pix?.key ? 'PIX copiado' : 'Copiar PIX'}
+                  {lastCopied === buildPixPayload(pix, service.price) ? 'Codigo copiado' : 'Copiar codigo PIX'}
                 </Button>
               </div>
             </article>
@@ -97,4 +98,3 @@ export function BusinessServicesSection({ business, section, onTrackAction }) {
     </>
   );
 }
-

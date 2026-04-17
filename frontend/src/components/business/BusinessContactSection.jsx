@@ -6,32 +6,50 @@ export function BusinessContactSection({ section, onTrackAction }) {
     return null;
   }
 
+  function renderContactItem(item) {
+    const content = (
+      <>
+        <span>{item.label}</span>
+        <strong>{item.value}</strong>
+      </>
+    );
+
+    if (!item.href) {
+      return (
+        <div key={item.id} className="info-card">
+          {content}
+        </div>
+      );
+    }
+
+    return (
+      <a
+        key={item.id}
+        href={item.href}
+        target={item.href.startsWith('http') ? '_blank' : '_self'}
+        rel="noreferrer"
+        className="info-card"
+        onClick={() =>
+          onTrackAction?.({
+            eventType: 'link_click',
+            sectionType: 'contact',
+            targetType: item.label,
+            targetId: item.id,
+            targetLabel: item.value,
+          })
+        }
+      >
+        {content}
+      </a>
+    );
+  }
+
   return (
     <Card className="section-card">
       <SectionHeader title={section.title} description={section.description} />
       <div className={`contact-layout ${section.settings?.hours?.length ? 'contact-layout--with-hours' : ''}`}>
         <div className="contact-grid">
-          {section.items.map((item) => (
-            <a
-              key={item.id}
-              href={item.href || '#'}
-              target={item.href?.startsWith('http') ? '_blank' : '_self'}
-              rel="noreferrer"
-              className="info-card"
-              onClick={() =>
-                onTrackAction?.({
-                  eventType: 'link_click',
-                  sectionType: 'contact',
-                  targetType: item.label,
-                  targetId: item.id,
-                  targetLabel: item.value,
-                })
-              }
-            >
-              <span>{item.label}</span>
-              <strong>{item.value}</strong>
-            </a>
-          ))}
+          {section.items.map((item) => renderContactItem(item))}
         </div>
 
         {section.settings?.hours?.length ? (

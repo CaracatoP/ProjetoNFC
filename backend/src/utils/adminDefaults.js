@@ -68,47 +68,136 @@ function createDefaultTheme() {
   };
 }
 
-function buildPrimaryLinks(business) {
+function normalizePhoneActionValue(value, countryCode = '55') {
+  const digits = String(value || '').replace(/\D/g, '');
+
+  if (!digits) {
+    return '';
+  }
+
+  if (digits.startsWith(countryCode)) {
+    return digits;
+  }
+
+  if (digits.length === 10 || digits.length === 11) {
+    return `${countryCode}${digits}`;
+  }
+
+  return digits;
+}
+
+function buildMailToLink(email) {
+  return `mailto:${String(email || '').trim()}`;
+}
+
+function mergeActionConfig(defaultAction, action) {
+  if (!defaultAction && !action) {
+    return undefined;
+  }
+
+  return {
+    ...(defaultAction || {}),
+    ...(action || {}),
+  };
+}
+
+export function buildCreatorSignatureCtaSection(overrides = {}) {
+  const settings = overrides.settings || {};
+  const section = {
+    key: 'cta',
+    type: SECTION_TYPES.CTA,
+    title: 'Feito por Caraçato',
+    description: 'Entre em contato pelo Instagram @caracato_.',
+    order: 100,
+    visible: true,
+    variant: '',
+    settings: {
+      variant: 'footer-signature',
+      eyebrow: 'Criacao do site',
+      primaryAction: {
+        label: 'Instagram @caracato_',
+        href: 'https://instagram.com/caracato_',
+      },
+    },
+    items: [],
+  };
+
+  return {
+    ...section,
+    ...overrides,
+    title: String(overrides.title || '').trim() || section.title,
+    description: String(overrides.description || '').trim() || section.description,
+    settings: {
+      ...section.settings,
+      ...settings,
+      primaryAction: mergeActionConfig(section.settings.primaryAction, settings.primaryAction),
+      secondaryAction: mergeActionConfig(undefined, settings.secondaryAction),
+    },
+    items: Array.isArray(overrides.items) ? overrides.items : section.items,
+  };
+}
+
+export function normalizeCreatorSignatureCtaSection(section = {}) {
+  const normalizedTitle = String(section.title || '').trim().toLowerCase();
+  const isLegacyDefault = normalizedTitle === 'pronto para voltar?' || normalizedTitle === 'cta';
+
+  return buildCreatorSignatureCtaSection({
+    ...section,
+    title: isLegacyDefault ? '' : section.title,
+    description: isLegacyDefault ? '' : section.description,
+    visible: section.visible !== false,
+    settings: section.settings || {},
+    items: Array.isArray(section.items) ? section.items : [],
+  });
+}
+
+export function buildManagedPrimaryLinks(business) {
   const links = [];
   const contact = business.contact || {};
-  const address = business.address || {};
+  const whatsappValue = normalizePhoneActionValue(contact.whatsapp);
+  const phoneValue = normalizePhoneActionValue(contact.phone);
+  const emailValue = String(contact.email || '').trim().toLowerCase();
+  const nextOrder = () => links.length + 1;
 
-  if (contact.whatsapp) {
+  if (whatsappValue) {
     links.push({
       type: LINK_TYPES.CONTACT,
       group: LINK_GROUPS.PRIMARY,
       label: 'WhatsApp',
       subtitle: 'Fale com o negocio',
       icon: 'whatsapp',
-      url: `https://wa.me/${contact.whatsapp}`,
-      order: 1,
+      url: `https://wa.me/${whatsappValue}`,
+      order: nextOrder(),
       target: '_blank',
+      metadata: { action: 'whatsapp' },
     });
   }
 
-  if (contact.phone) {
+  if (phoneValue) {
     links.push({
       type: LINK_TYPES.CONTACT,
       group: LINK_GROUPS.PRIMARY,
       label: 'Telefone',
       subtitle: 'Ligue agora',
       icon: 'phone',
-      url: `tel:+${contact.phone}`,
-      order: 2,
+      url: `tel:+${phoneValue}`,
+      order: nextOrder(),
       target: '_self',
+      metadata: { action: 'phone' },
     });
   }
 
-  if (address.mapUrl) {
+  if (emailValue) {
     links.push({
-      type: LINK_TYPES.EXTERNAL,
+      type: LINK_TYPES.CONTACT,
       group: LINK_GROUPS.PRIMARY,
-      label: 'Como chegar',
-      subtitle: 'Abrir rota no mapa',
-      icon: 'map',
-      url: address.mapUrl,
-      order: 3,
-      target: '_blank',
+      label: 'E-mail',
+      subtitle: 'Envie uma mensagem',
+      icon: 'mail',
+      url: buildMailToLink(emailValue),
+      order: nextOrder(),
+      target: '_self',
+      metadata: { action: 'email' },
     });
   }
 
@@ -120,7 +209,7 @@ function buildPrimaryLinks(business) {
       subtitle: 'Abrir senha e QR Code',
       icon: 'wifi',
       value: contact.wifi.password,
-      order: 4,
+      order: nextOrder(),
       target: '_self',
       metadata: { action: 'wifi' },
     });
@@ -134,7 +223,7 @@ function buildPrimaryLinks(business) {
       subtitle: 'Copiar chave de pagamento',
       icon: 'pix',
       value: contact.pix.key,
-      order: 5,
+      order: nextOrder(),
       target: '_self',
       metadata: { action: 'pix' },
     });
@@ -225,7 +314,7 @@ function buildSections(business) {
       key: 'about',
       type: SECTION_TYPES.CUSTOM,
       title: 'Sobre nos',
-      description: business.description,
+      description: '',
       order: 60,
       visible: Boolean(business.description),
       settings: {
@@ -271,21 +360,9 @@ function buildSections(business) {
       items: [],
     },
     {
-      key: 'cta',
-      type: SECTION_TYPES.CTA,
-      title: 'Fale com o negocio',
-      description: 'Mantenha um CTA final de conversao na pagina.',
-      order: 100,
-      visible: true,
-      settings: {
-        primaryAction: business.contact?.whatsapp
-          ? {
-              label: 'Conversar no WhatsApp',
-              href: `https://wa.me/${business.contact.whatsapp}`,
-            }
-          : undefined,
-      },
-      items: [],
+      ...buildCreatorSignatureCtaSection({
+        order: 100,
+      }),
     },
   ];
 }
@@ -330,7 +407,7 @@ export function buildDefaultTenantSetup(input = {}) {
   return {
     business,
     theme: createDefaultTheme(),
-    links: buildPrimaryLinks(business),
+    links: buildManagedPrimaryLinks(business),
     sections: buildSections(business),
     nfcTag: {
       code: String(input.nfcTag?.code || `${slug.toUpperCase().replace(/-/g, '')}-001`).slice(0, 40),

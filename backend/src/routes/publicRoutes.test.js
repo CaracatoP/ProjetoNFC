@@ -26,7 +26,7 @@ describe('Public routes', () => {
   });
 
   beforeEach(async () => {
-    await seedDemoData();
+    await seedDemoData({ reset: true });
     await AnalyticsEvent.deleteMany({});
   });
 

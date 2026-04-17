@@ -19,6 +19,8 @@ const siteFixture = {
     slug: 'barbearia-estilo-vivo',
     name: 'Barbearia Estilo Vivo',
     description: 'Experiencia premium.',
+    logoUrl: 'https://cdn.example.com/logo.png',
+    bannerUrl: 'https://cdn.example.com/banner.png',
     badge: 'Barbearia Estilo Vivo',
     status: 'active',
     address: { display: 'Av. Paulista, 1000' },
@@ -77,11 +79,11 @@ const siteFixture = {
       key: 'hero-main',
       type: 'hero',
       title: 'Barbearia Estilo Vivo',
-      description: 'Experiencia premium.',
+      description: 'Descricao antiga da secao.',
       order: 10,
       visible: true,
       settings: {
-        badge: 'Landing Page NFC',
+        badge: 'Badge antigo',
         rating: '4.8/5.0',
         address: 'Av. Paulista, 1000',
         hours: [{ id: 'weekday', label: 'Seg-Sex', value: '09:00 - 18:00' }],
@@ -141,6 +143,17 @@ const siteFixture = {
       settings: { ssid: 'WiFi', password: 'Senha123', security: 'WPA', displayMode: 'modal' },
       items: [],
     },
+    {
+      id: 'cta-1',
+      key: 'cta',
+      type: 'cta',
+      title: '',
+      description: '',
+      order: 60,
+      visible: true,
+      settings: {},
+      items: [],
+    },
   ],
   links: [],
   seo: {
@@ -171,8 +184,16 @@ describe('PublicSitePage', () => {
       </TenantProvider>,
     );
 
-    expect(await screen.findByText('Barbearia Estilo Vivo')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Barbearia Estilo Vivo' })).toBeInTheDocument();
     expect(screen.getByText('Servicos')).toBeInTheDocument();
+    expect(screen.getByText('Experiencia premium.')).toBeInTheDocument();
+    expect(screen.getByText('Feito por Caraçato')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Instagram @caracato_/i })).toHaveAttribute(
+      'href',
+      'https://instagram.com/caracato_',
+    );
+    expect(screen.queryByText('Descricao antiga da secao.')).not.toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Logo Barbearia Estilo Vivo/i })).toBeInTheDocument();
     expect(screen.queryByText('Oculta')).not.toBeInTheDocument();
     expect(screen.queryByText('Ver horarios')).not.toBeInTheDocument();
 

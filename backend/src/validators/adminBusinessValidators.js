@@ -2,19 +2,52 @@ import { z } from 'zod';
 import { BUSINESS_STATUS_VALUES, LINK_GROUPS, LINK_TYPE_VALUES, SECTION_TYPE_VALUES } from '../../../shared/constants/index.js';
 
 const optionalString = z.string().optional().or(z.literal(''));
+const slugPattern = /^[a-z0-9-]+$/;
+
+function slugify(value) {
+  if (value === undefined || value === null) {
+    return value;
+  }
+
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+const optionalNumber = z.preprocess((value) => {
+  if (value === '' || value === null || value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().replace(',', '.');
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : value;
+  }
+
+  return value;
+}, z.number().finite().optional());
 
 const hoursSchema = z.array(
   z.object({
     id: optionalString,
-    label: z.string().min(1),
-    value: z.string().min(1),
+    label: optionalString,
+    value: optionalString,
   }),
+);
+
+const slugSchema = z.preprocess(
+  (value) => slugify(value),
+  z.string().min(2).regex(slugPattern, 'Informe um slug valido usando apenas letras, numeros e hifens'),
 );
 
 const businessBodySchema = z.object({
   name: z.string().min(2),
   legalName: optionalString,
-  slug: z.string().min(2).regex(/^[a-z0-9-]+$/),
+  slug: slugSchema,
   description: optionalString,
   logoUrl: optionalString,
   bannerUrl: optionalString,
@@ -26,8 +59,8 @@ const businessBodySchema = z.object({
       display: optionalString,
       mapUrl: optionalString,
       embedUrl: optionalString,
-      latitude: z.number().optional(),
-      longitude: z.number().optional(),
+      latitude: optionalNumber,
+      longitude: optionalNumber,
     })
     .default({}),
   hours: hoursSchema.default([]),
@@ -59,8 +92,8 @@ const businessBodySchema = z.object({
     })
     .default({}),
   seo: z.object({
-    title: z.string().min(2),
-    description: z.string().min(2),
+    title: optionalString,
+    description: optionalString,
     imageUrl: optionalString,
   }),
 });

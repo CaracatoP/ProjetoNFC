@@ -17,6 +17,11 @@ function MetaPill({ label, value }) {
 
 export function BusinessHeroSection({ business, section, onBusinessAction, onTrackAction }) {
   const { settings = {} } = section;
+  const badge = business.badge || settings.badge;
+  const title = business.name || section.title;
+  const description = business.description || section.description;
+  const logoUrl = business.logoUrl || settings.logoUrl;
+  const bannerUrl = business.bannerUrl || settings.bannerUrl;
   const primaryAction = settings.primaryAction;
   const secondaryAction = settings.secondaryAction;
 
@@ -44,10 +49,16 @@ export function BusinessHeroSection({ business, section, onBusinessAction, onTra
   return (
     <Card className="hero-card">
       <div className="hero-card__content">
+        {logoUrl ? (
+          <div className="hero-card__branding">
+            <img className="hero-card__logo" src={logoUrl} alt={`Logo ${business.name}`} />
+          </div>
+        ) : null}
+
         <SectionHeader
-          eyebrow={settings.badge || business.badge}
-          title={section.title || business.name}
-          description={section.description || business.description}
+          eyebrow={badge}
+          title={title}
+          description={description}
         />
 
         <div className="hero-card__meta">
@@ -93,7 +104,7 @@ export function BusinessHeroSection({ business, section, onBusinessAction, onTra
       </div>
 
       <div className="hero-card__visual">
-        {settings.bannerUrl ? <img src={settings.bannerUrl} alt={business.name} /> : null}
+        {bannerUrl ? <img src={bannerUrl} alt={business.name} /> : null}
       </div>
     </Card>
   );

@@ -18,7 +18,18 @@ import {
   uploadAdminImage,
 } from '@/services/adminService.js';
 
+function formatValidationDetails(details = []) {
+  return details
+    .filter((detail) => detail?.message)
+    .map((detail) => (detail.path ? `${detail.path}: ${detail.message}` : detail.message))
+    .join(' | ');
+}
+
 function getErrorMessage(error) {
+  if (Array.isArray(error?.details) && error.details.length) {
+    return formatValidationDetails(error.details);
+  }
+
   return error?.message || 'Nao foi possivel concluir esta operacao.';
 }
 

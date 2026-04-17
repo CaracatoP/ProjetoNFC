@@ -1,5 +1,9 @@
 import { AppError } from '../utils/appError.js';
-import { buildDefaultTenantSetup } from '../utils/adminDefaults.js';
+import {
+  buildDefaultTenantSetup,
+  buildManagedPrimaryLinks,
+  normalizeCreatorSignatureCtaSection,
+} from '../utils/adminDefaults.js';
 import {
   createBusinessRecord,
   deleteBusinessGraphRecords,
@@ -14,6 +18,15 @@ import {
   upsertThemeRecord,
 } from '../repositories/adminRepository.js';
 
+function normalizeCoordinate(value) {
+  if (value === '' || value === null || value === undefined) {
+    return undefined;
+  }
+
+  const parsed = typeof value === 'number' ? value : Number(String(value).trim().replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function normalizeHours(hours = []) {
   return hours
     .filter((hour) => hour?.label || hour?.value)
@@ -26,11 +39,17 @@ function normalizeHours(hours = []) {
 }
 
 function normalizeBusinessPayload(payload = {}) {
+  const name = String(payload.name || '').trim();
+  const description = String(payload.description || '').trim();
+  const seoTitle = String(payload.seo?.title || '').trim() || (name ? `${name} | Pagina NFC` : '');
+  const seoDescription =
+    String(payload.seo?.description || '').trim() || description || (name ? `Pagina NFC oficial de ${name}.` : '');
+
   return {
-    name: String(payload.name || '').trim(),
+    name,
     legalName: String(payload.legalName || '').trim(),
     slug: String(payload.slug || '').trim(),
-    description: String(payload.description || '').trim(),
+    description,
     logoUrl: String(payload.logoUrl || '').trim(),
     bannerUrl: String(payload.bannerUrl || '').trim(),
     badge: String(payload.badge || '').trim(),
@@ -40,8 +59,8 @@ function normalizeBusinessPayload(payload = {}) {
       display: String(payload.address?.display || '').trim(),
       mapUrl: String(payload.address?.mapUrl || '').trim(),
       embedUrl: String(payload.address?.embedUrl || '').trim(),
-      latitude: payload.address?.latitude,
-      longitude: payload.address?.longitude,
+      latitude: normalizeCoordinate(payload.address?.latitude),
+      longitude: normalizeCoordinate(payload.address?.longitude),
     },
     hours: normalizeHours(payload.hours),
     contact: {
@@ -70,8 +89,8 @@ function normalizeBusinessPayload(payload = {}) {
         : undefined,
     },
     seo: {
-      title: String(payload.seo?.title || '').trim(),
-      description: String(payload.seo?.description || '').trim(),
+      title: seoTitle,
+      description: seoDescription,
       imageUrl: String(payload.seo?.imageUrl || '').trim(),
     },
   };
@@ -107,6 +126,77 @@ function normalizeLinksPayload(links = []) {
     .filter((link) => link.label);
 }
 
+function isManagedLinkMatch(link, action) {
+  const url = String(link?.url || '').toLowerCase();
+  const icon = String(link?.icon || '').toLowerCase();
+  const metadataAction = String(link?.metadata?.action || '').toLowerCase();
+  const type = String(link?.type || '').toLowerCase();
+
+  switch (action) {
+    case 'whatsapp':
+      return metadataAction === action || icon === 'whatsapp' || url.startsWith('https://wa.me/');
+    case 'phone':
+      return metadataAction === action || icon === 'phone' || url.startsWith('tel:');
+    case 'email':
+      return metadataAction === action || icon === 'mail' || url.startsWith('mailto:');
+    case 'wifi':
+      return metadataAction === action || type === 'wifi';
+    case 'pix':
+      return metadataAction === action || type === 'pix';
+    default:
+      return false;
+  }
+}
+
+function synchronizeManagedLinks(links = [], business = {}) {
+  const managedLinks = buildManagedPrimaryLinks(business);
+  const managedActions = managedLinks
+    .map((link) => String(link.metadata?.action || '').toLowerCase())
+    .filter(Boolean);
+
+  const otherLinks = links.filter(
+    (link) =>
+      link.group !== 'primary' ||
+      !managedActions.some((action) => isManagedLinkMatch(link, action)),
+  );
+
+  const nextManagedLinks = managedLinks.map((link) => {
+    const action = String(link.metadata?.action || '').toLowerCase();
+    const existing = links.find(
+      (candidate) => candidate.group === 'primary' && isManagedLinkMatch(candidate, action),
+    );
+
+    if (!existing) {
+      return link;
+    }
+
+    return {
+      ...existing,
+      type: link.type,
+      group: link.group,
+      label: existing.label || link.label,
+      subtitle: existing.subtitle || link.subtitle,
+      icon: existing.icon || link.icon,
+      url: link.url,
+      value: link.value,
+      visible: existing.visible !== false,
+      order: Number(existing.order ?? link.order),
+      target: link.target,
+      metadata: {
+        ...(existing.metadata || {}),
+        ...(link.metadata || {}),
+      },
+    };
+  });
+
+  return [...nextManagedLinks, ...otherLinks]
+    .sort((first, second) => Number(first.order ?? 0) - Number(second.order ?? 0))
+    .map((link, index) => ({
+      ...link,
+      order: Number(link.order ?? index + 1),
+    }));
+}
+
 function normalizeSectionItems(items = []) {
   return items
     .map((item, index) => ({
@@ -129,6 +219,20 @@ function normalizeSectionsPayload(sections = []) {
       settings: section.settings || {},
       items: normalizeSectionItems(section.items),
     }))
+    .map((section) => {
+      if (section.key === 'about') {
+        return {
+          ...section,
+          description: '',
+        };
+      }
+
+      if (section.key === 'cta') {
+        return normalizeCreatorSignatureCtaSection(section);
+      }
+
+      return section;
+    })
     .filter((section) => section.key && section.type);
 }
 
@@ -223,10 +327,14 @@ export async function createAdminBusiness(input) {
     ...defaults.business,
     ...(input.business || input),
   });
+  const linksPayload = synchronizeManagedLinks(
+    normalizeLinksPayload(input.links || defaults.links),
+    businessPayload,
+  );
   const business = await createBusinessRecord(businessPayload);
 
   await upsertThemeRecord(business._id, normalizeThemePayload(input.theme || defaults.theme));
-  await replaceLinkRecords(business._id, normalizeLinksPayload(input.links || defaults.links));
+  await replaceLinkRecords(business._id, linksPayload);
   await replaceSectionRecords(business._id, normalizeSectionsPayload(input.sections || defaults.sections));
   await upsertNfcTagRecord(business._id, normalizeTagPayload(input.nfcTag || defaults.nfcTag));
 
@@ -235,6 +343,7 @@ export async function createAdminBusiness(input) {
 
 export async function updateAdminBusiness(businessId, input) {
   const businessPayload = normalizeBusinessPayload(input.business || {});
+  const linksPayload = synchronizeManagedLinks(normalizeLinksPayload(input.links || []), businessPayload);
   const business = await updateBusinessRecord(businessId, businessPayload);
 
   if (!business) {
@@ -243,7 +352,7 @@ export async function updateAdminBusiness(businessId, input) {
 
   await Promise.all([
     upsertThemeRecord(businessId, normalizeThemePayload(input.theme || {})),
-    replaceLinkRecords(businessId, normalizeLinksPayload(input.links || [])),
+    replaceLinkRecords(businessId, linksPayload),
     replaceSectionRecords(businessId, normalizeSectionsPayload(input.sections || [])),
     upsertNfcTagRecord(businessId, normalizeTagPayload(input.nfcTag || null)),
   ]);

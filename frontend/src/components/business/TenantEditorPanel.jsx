@@ -7,6 +7,114 @@ function cloneDeep(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function hexToRgb(value) {
+  const hex = String(value || '').trim().replace('#', '');
+
+  if (!/^[\da-fA-F]{6}$/.test(hex)) {
+    return null;
+  }
+
+  return {
+    r: Number.parseInt(hex.slice(0, 2), 16),
+    g: Number.parseInt(hex.slice(2, 4), 16),
+    b: Number.parseInt(hex.slice(4, 6), 16),
+  };
+}
+
+function hexToRgba(value, alpha) {
+  const rgb = hexToRgb(value);
+
+  if (!rgb) {
+    return value;
+  }
+
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+}
+
+function mixHexColors(base, mixWith, weight) {
+  const first = hexToRgb(base);
+  const second = hexToRgb(mixWith);
+
+  if (!first || !second) {
+    return base;
+  }
+
+  const mixChannel = (channel) =>
+    Math.round(first[channel] * (1 - weight) + second[channel] * weight)
+      .toString(16)
+      .padStart(2, '0');
+
+  return `#${mixChannel('r')}${mixChannel('g')}${mixChannel('b')}`;
+}
+
+function getReadableTextColor(background) {
+  const rgb = hexToRgb(background);
+
+  if (!rgb) {
+    return '#ffffff';
+  }
+
+  const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+  return luminance > 0.58 ? '#1a120f' : '#ffffff';
+}
+
+function buildDerivedTheme(theme, overrides) {
+  const palette = {
+    primary: overrides.primary || theme.colors?.primary || '#f97316',
+    secondary: overrides.secondary || theme.colors?.secondary || '#fb7185',
+    background: overrides.background || theme.colors?.background || '#140d09',
+    text: overrides.text || theme.colors?.text || '#fff8f2',
+  };
+
+  const elevatedSurface = mixHexColors(palette.background, '#ffffff', 0.08);
+  const alternateSurface = mixHexColors(palette.background, '#ffffff', 0.16);
+
+  return {
+    ...theme,
+    colors: {
+      ...theme.colors,
+      primary: palette.primary,
+      secondary: palette.secondary,
+      background: palette.background,
+      surface: hexToRgba(elevatedSurface, 0.92),
+      surfaceAlt: hexToRgba(alternateSurface, 0.86),
+      text: palette.text,
+      textMuted: hexToRgba(palette.text, 0.74),
+      border: hexToRgba(palette.text, 0.12),
+      accent: hexToRgba(palette.primary, 0.18),
+      success: theme.colors?.success || '#22c55e',
+      danger: theme.colors?.danger || '#ef4444',
+    },
+    buttons: {
+      ...theme.buttons,
+      primary: {
+        ...(theme.buttons?.primary || {}),
+        background: `linear-gradient(135deg, ${palette.primary}, ${palette.secondary})`,
+        color: getReadableTextColor(mixHexColors(palette.primary, palette.secondary, 0.5)),
+        border: 'none',
+      },
+      secondary: {
+        ...(theme.buttons?.secondary || {}),
+        background: hexToRgba(palette.text, 0.06),
+        color: palette.text,
+        border: `1px solid ${hexToRgba(palette.text, 0.12)}`,
+      },
+    },
+  };
+}
+
+function slugify(value, { preserveTrailingSeparator = false } = {}) {
+  const normalized = String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+/, '');
+
+  return preserveTrailingSeparator ? normalized : normalized.replace(/-+$/g, '');
+}
+
 function ensureSection(draft, key, fallbackType = 'custom') {
   const existing = draft.sections.find((section) => section.key === key);
 
@@ -69,6 +177,81 @@ function newGalleryItem() {
     imageUrl: '',
     alt: '',
   };
+}
+
+const SECTION_LABELS = {
+  'hero-main': 'Hero principal',
+  'quick-actions': 'Acesso rapido',
+  services: 'Servicos',
+  contact: 'Contato e atendimento',
+  gallery: 'Galeria',
+  about: 'Sobre nos',
+  wifi: 'Wi-Fi',
+  pix: 'Pagamento PIX',
+  social: 'Redes sociais',
+  cta: 'Assinatura do criador',
+};
+
+const SECTION_TYPE_LABELS = {
+  hero: 'Hero',
+  links: 'Links e atalhos',
+  services: 'Servicos',
+  contact: 'Contato',
+  gallery: 'Galeria',
+  custom: 'Conteudo livre',
+  wifi: 'Wi-Fi',
+  pix: 'PIX',
+  social: 'Social',
+  cta: 'Footer promocional',
+};
+
+const ANALYTICS_EVENT_LABELS = {
+  page_view: 'Visualizacao de pagina',
+  link_click: 'Clique em atalho',
+  copy_action: 'Copia de acao',
+  cta_click: 'Clique em CTA',
+  modal_open: 'Abertura de modal',
+};
+
+function humanizeToken(value) {
+  return String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function getSectionDisplayLabel(section) {
+  return SECTION_LABELS[section.key] || section.title || humanizeToken(section.key);
+}
+
+function getSectionTypeLabel(section) {
+  return SECTION_TYPE_LABELS[section.type] || humanizeToken(section.type);
+}
+
+function getAnalyticsEventLabel(eventType) {
+  return ANALYTICS_EVENT_LABELS[eventType] || humanizeToken(eventType);
+}
+
+function formatAnalyticsTimestamp(value) {
+  if (!value) {
+    return 'Sem registro';
+  }
+
+  return new Date(value).toLocaleString('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+}
+
+function getAnalyticsTargetSummary(event) {
+  const pieces = [
+    event.targetLabel || '',
+    event.sectionType ? `Secao ${humanizeToken(event.sectionType)}` : '',
+    event.targetType ? `Alvo ${humanizeToken(event.targetType)}` : '',
+  ].filter(Boolean);
+
+  return pieces.join(' • ') || 'Sem alvo detalhado';
 }
 
 function AdminField({ label, children, description }) {
@@ -134,12 +317,18 @@ export function TenantEditorPanel({
   const gallerySection = draft.sections.find((section) => section.key === 'gallery');
   const aboutSection = draft.sections.find((section) => section.key === 'about');
   const ctaSection = draft.sections.find((section) => section.key === 'cta');
+  const analyticsByEventType = analyticsSummary?.byEventType || [];
+  const recentAnalyticsEvents = analyticsSummary?.recentEvents || [];
+  const maxAnalyticsEventCount = Math.max(1, ...analyticsByEventType.map((item) => item.count || 0));
+  const latestAnalyticsEvent = recentAnalyticsEvents[0] || null;
   const quickLinks = [
     { href: '#tenant-identity', label: 'Identidade' },
     { href: '#tenant-media', label: 'Midia' },
-    { href: '#tenant-operations', label: 'Operacao' },
+    { href: '#tenant-contact', label: 'Contato' },
+    { href: '#tenant-payments', label: 'Pagamentos' },
     { href: '#tenant-links', label: 'Acessos' },
     { href: '#tenant-content', label: 'Conteudo' },
+    { href: '#tenant-footer-signature', label: 'Rodape' },
     { href: '#tenant-analytics', label: 'Analytics' },
   ];
 
@@ -203,7 +392,11 @@ export function TenantEditorPanel({
                 value={draft.business.slug}
                 onChange={(event) => setDraft((current) => ({
                   ...current,
-                  business: { ...current.business, slug: event.target.value },
+                  business: { ...current.business, slug: slugify(event.target.value, { preserveTrailingSeparator: true }) },
+                }))}
+                onBlur={(event) => setDraft((current) => ({
+                  ...current,
+                  business: { ...current.business, slug: slugify(event.target.value) },
                 }))}
               />
             </AdminField>
@@ -332,11 +525,11 @@ export function TenantEditorPanel({
           </div>
         </Card>
 
-        <Card id="tenant-operations" className="admin-panel-card admin-panel-card--span-2">
+        <Card id="tenant-contact" className="admin-panel-card">
           <div className="admin-panel-card__header">
             <div>
-              <h2>Contato, localizacao e pagamentos</h2>
-              <p>Campos operacionais do tenant e das conveniencias da pagina.</p>
+              <h2>Contato e atendimento</h2>
+              <p>Canais principais, endereco e horario resumido do tenant.</p>
             </div>
           </div>
 
@@ -389,18 +582,6 @@ export function TenantEditorPanel({
                 }))}
               />
             </AdminField>
-            <AdminField label="Mapa URL">
-              <input
-                value={draft.business.address?.mapUrl || ''}
-                onChange={(event) => setDraft((current) => ({
-                  ...current,
-                  business: {
-                    ...current.business,
-                    address: { ...current.business.address, mapUrl: event.target.value },
-                  },
-                }))}
-              />
-            </AdminField>
             <AdminField label="Horario principal" description="Use o bloco de horarios do editor para detalhar mais linhas.">
               <input
                 value={draft.business.hours?.[0]?.value || ''}
@@ -414,6 +595,15 @@ export function TenantEditorPanel({
                 })}
               />
             </AdminField>
+          </div>
+        </Card>
+
+        <Card id="tenant-payments" className="admin-panel-card">
+          <div className="admin-panel-card__header">
+            <div>
+              <h2>Pagamentos e conveniencias</h2>
+              <p>PIX e Wi-Fi continuam dinamicos e controlados pelo admin.</p>
+            </div>
           </div>
 
           <div className="admin-split-grid">
@@ -457,7 +647,7 @@ export function TenantEditorPanel({
               <h3>PIX</h3>
               <div className="admin-form-grid">
                 <AdminField label="Tipo de chave">
-                  <input
+                  <select
                     value={draft.business.contact?.pix?.keyType || ''}
                     onChange={(event) => setDraft((current) => ({
                       ...current,
@@ -469,7 +659,14 @@ export function TenantEditorPanel({
                         },
                       },
                     }))}
-                  />
+                  >
+                    <option value="">Selecione</option>
+                    <option value="cpf">cpf</option>
+                    <option value="cnpj">cnpj</option>
+                    <option value="email">email</option>
+                    <option value="telefone">telefone</option>
+                    <option value="aleatoria">aleatoria</option>
+                  </select>
                 </AdminField>
                 <AdminField label="Chave PIX">
                   <input
@@ -812,7 +1009,7 @@ export function TenantEditorPanel({
           <div className="admin-panel-card__header">
             <div>
               <h2>Conteudo, SEO e secoes</h2>
-              <p>Controle visibilidade, mensagem institucional, CTA final e cores do tenant.</p>
+              <p>Controle visibilidade, mensagem institucional e cores do tenant.</p>
             </div>
           </div>
 
@@ -824,6 +1021,7 @@ export function TenantEditorPanel({
                 const nextDraft = cloneDeep(current);
                 updateSectionDraft(nextDraft, 'about', 'custom', (section) => {
                   section.visible = Boolean(event.target.value);
+                  section.description = '';
                   section.items = [{ id: 'about-1', body: event.target.value }];
                 });
                 return nextDraft;
@@ -832,44 +1030,6 @@ export function TenantEditorPanel({
           </AdminField>
 
           <div className="admin-form-grid">
-            <AdminField label="CTA primario">
-              <input
-                value={ctaSection?.settings?.primaryAction?.label || ''}
-                onChange={(event) => setDraft((current) => {
-                  const nextDraft = cloneDeep(current);
-                  updateSectionDraft(nextDraft, 'cta', 'cta', (section) => {
-                    section.settings = {
-                      ...(section.settings || {}),
-                      primaryAction: {
-                        ...(section.settings?.primaryAction || {}),
-                        label: event.target.value,
-                        href: section.settings?.primaryAction?.href || '',
-                      },
-                    };
-                  });
-                  return nextDraft;
-                })}
-              />
-            </AdminField>
-            <AdminField label="CTA primario URL">
-              <input
-                value={ctaSection?.settings?.primaryAction?.href || ''}
-                onChange={(event) => setDraft((current) => {
-                  const nextDraft = cloneDeep(current);
-                  updateSectionDraft(nextDraft, 'cta', 'cta', (section) => {
-                    section.settings = {
-                      ...(section.settings || {}),
-                      primaryAction: {
-                        ...(section.settings?.primaryAction || {}),
-                        label: section.settings?.primaryAction?.label || '',
-                        href: event.target.value,
-                      },
-                    };
-                  });
-                  return nextDraft;
-                })}
-              />
-            </AdminField>
             <AdminField label="SEO title">
               <input
                 value={draft.business.seo?.title || ''}
@@ -900,10 +1060,7 @@ export function TenantEditorPanel({
                 value={draft.theme.colors?.primary || '#f97316'}
                 onChange={(event) => setDraft((current) => ({
                   ...current,
-                  theme: {
-                    ...current.theme,
-                    colors: { ...current.theme.colors, primary: event.target.value },
-                  },
+                  theme: buildDerivedTheme(current.theme, { primary: event.target.value }),
                 }))}
               />
             </AdminField>
@@ -913,10 +1070,7 @@ export function TenantEditorPanel({
                 value={draft.theme.colors?.secondary || '#fb7185'}
                 onChange={(event) => setDraft((current) => ({
                   ...current,
-                  theme: {
-                    ...current.theme,
-                    colors: { ...current.theme.colors, secondary: event.target.value },
-                  },
+                  theme: buildDerivedTheme(current.theme, { secondary: event.target.value }),
                 }))}
               />
             </AdminField>
@@ -926,10 +1080,7 @@ export function TenantEditorPanel({
                 value={draft.theme.colors?.background || '#140d09'}
                 onChange={(event) => setDraft((current) => ({
                   ...current,
-                  theme: {
-                    ...current.theme,
-                    colors: { ...current.theme.colors, background: event.target.value },
-                  },
+                  theme: buildDerivedTheme(current.theme, { background: event.target.value }),
                 }))}
               />
             </AdminField>
@@ -939,11 +1090,113 @@ export function TenantEditorPanel({
                 value={draft.theme.colors?.text || '#fff8f2'}
                 onChange={(event) => setDraft((current) => ({
                   ...current,
-                  theme: {
-                    ...current.theme,
-                    colors: { ...current.theme.colors, text: event.target.value },
-                  },
+                  theme: buildDerivedTheme(current.theme, { text: event.target.value }),
                 }))}
+              />
+            </AdminField>
+          </div>
+
+          <div id="tenant-footer-signature" className="admin-subpanel admin-subpanel--highlight">
+            <div className="admin-panel-card__header">
+              <div>
+                <h2>Assinatura do criador</h2>
+                <p>Um rodape discreto para creditar a criacao do site e manter um contato rapido.</p>
+              </div>
+              <Button
+                variant={ctaSection?.visible !== false ? 'primary' : 'secondary'}
+                className="admin-toggle-button"
+                onClick={() => setDraft((current) => {
+                  const nextDraft = cloneDeep(current);
+                  updateSectionDraft(nextDraft, 'cta', 'cta', (section) => {
+                    section.visible = section.visible === false;
+                  });
+                  return nextDraft;
+                })}
+              >
+                {ctaSection?.visible !== false ? 'Assinatura visivel' : 'Assinatura oculta'}
+              </Button>
+            </div>
+
+            <div className="admin-form-grid">
+              <AdminField label="Titulo do rodape">
+                <input
+                  value={ctaSection?.title || ''}
+                  onChange={(event) => setDraft((current) => {
+                    const nextDraft = cloneDeep(current);
+                    updateSectionDraft(nextDraft, 'cta', 'cta', (section) => {
+                      section.title = event.target.value;
+                    });
+                    return nextDraft;
+                  })}
+                />
+              </AdminField>
+              <AdminField label="Legenda">
+                <input
+                  value={ctaSection?.settings?.eyebrow || ''}
+                  onChange={(event) => setDraft((current) => {
+                    const nextDraft = cloneDeep(current);
+                    updateSectionDraft(nextDraft, 'cta', 'cta', (section) => {
+                      section.settings = {
+                        ...(section.settings || {}),
+                        variant: section.settings?.variant || 'footer-signature',
+                        eyebrow: event.target.value,
+                      };
+                    });
+                    return nextDraft;
+                  })}
+                />
+              </AdminField>
+              <AdminField label="Label do botao">
+                <input
+                  value={ctaSection?.settings?.primaryAction?.label || ''}
+                  onChange={(event) => setDraft((current) => {
+                    const nextDraft = cloneDeep(current);
+                    updateSectionDraft(nextDraft, 'cta', 'cta', (section) => {
+                      section.settings = {
+                        ...(section.settings || {}),
+                        variant: section.settings?.variant || 'footer-signature',
+                        primaryAction: {
+                          ...(section.settings?.primaryAction || {}),
+                          label: event.target.value,
+                        },
+                      };
+                    });
+                    return nextDraft;
+                  })}
+                />
+              </AdminField>
+              <AdminField label="Link do Instagram">
+                <input
+                  value={ctaSection?.settings?.primaryAction?.href || ''}
+                  onChange={(event) => setDraft((current) => {
+                    const nextDraft = cloneDeep(current);
+                    updateSectionDraft(nextDraft, 'cta', 'cta', (section) => {
+                      section.settings = {
+                        ...(section.settings || {}),
+                        variant: section.settings?.variant || 'footer-signature',
+                        primaryAction: {
+                          ...(section.settings?.primaryAction || {}),
+                          href: event.target.value,
+                        },
+                      };
+                    });
+                    return nextDraft;
+                  })}
+                />
+              </AdminField>
+            </div>
+
+            <AdminField label="Texto complementar">
+              <textarea
+                rows="3"
+                value={ctaSection?.description || ''}
+                onChange={(event) => setDraft((current) => {
+                  const nextDraft = cloneDeep(current);
+                  updateSectionDraft(nextDraft, 'cta', 'cta', (section) => {
+                    section.description = event.target.value;
+                  });
+                  return nextDraft;
+                })}
               />
             </AdminField>
           </div>
@@ -951,34 +1204,39 @@ export function TenantEditorPanel({
           <div className="admin-sections-list">
             {draft.sections.map((section) => (
               <div key={section.key} className="admin-sections-list__item">
-                <div>
-                  <strong>{section.key}</strong>
-                  <span>{section.type}</span>
+                <div className="admin-section-summary">
+                  <strong>{getSectionDisplayLabel(section)}</strong>
+                  <div className="admin-section-summary__meta">
+                    <span className="admin-section-chip">{getSectionTypeLabel(section)}</span>
+                    <span className="admin-section-chip admin-section-chip--muted">ID: {section.key}</span>
+                  </div>
                 </div>
                 <div className="admin-sections-list__controls">
-                  <label>
+                  <Button
+                    variant={section.visible !== false ? 'primary' : 'secondary'}
+                    className="admin-toggle-button"
+                    onClick={() => setDraft((current) => ({
+                      ...current,
+                      sections: current.sections.map((item) =>
+                        item.key === section.key ? { ...item, visible: item.visible === false } : item,
+                      ),
+                    }))}
+                  >
+                    {section.visible !== false ? 'Visivel' : 'Oculta'}
+                  </Button>
+                  <label className="admin-section-order">
+                    <span>Ordem</span>
                     <input
-                      type="checkbox"
-                      checked={section.visible !== false}
+                      type="number"
+                      value={section.order}
                       onChange={(event) => setDraft((current) => ({
                         ...current,
                         sections: current.sections.map((item) =>
-                          item.key === section.key ? { ...item, visible: event.target.checked } : item,
+                          item.key === section.key ? { ...item, order: Number(event.target.value) } : item,
                         ),
                       }))}
                     />
-                    visivel
                   </label>
-                  <input
-                    type="number"
-                    value={section.order}
-                    onChange={(event) => setDraft((current) => ({
-                      ...current,
-                      sections: current.sections.map((item) =>
-                        item.key === section.key ? { ...item, order: Number(event.target.value) } : item,
-                      ),
-                    }))}
-                  />
                 </div>
               </div>
             ))}
@@ -993,38 +1251,84 @@ export function TenantEditorPanel({
             </div>
           </div>
 
-          <div className="admin-mini-stats">
-            <div>
+          <div className="admin-analytics-summary">
+            <div className="admin-analytics-stat-card">
               <span>Total de eventos</span>
               <strong>{analyticsSummary?.totalEvents || 0}</strong>
+              <small>Visao consolidada de todas as interacoes.</small>
             </div>
-            <div>
+            <div className="admin-analytics-stat-card">
               <span>Ultimos 7 dias</span>
               <strong>{analyticsSummary?.last7DaysEvents || 0}</strong>
+              <small>Movimento recente do tenant na ultima semana.</small>
+            </div>
+            <div className="admin-analytics-stat-card">
+              <span>Tipos rastreados</span>
+              <strong>{analyticsByEventType.length}</strong>
+              <small>Quantos comportamentos diferentes o painel ja capturou.</small>
+            </div>
+            <div className="admin-analytics-stat-card">
+              <span>Ultimo registro</span>
+              <strong>{latestAnalyticsEvent ? formatAnalyticsTimestamp(latestAnalyticsEvent.occurredAt) : 'Sem eventos'}</strong>
+              <small>{latestAnalyticsEvent ? getAnalyticsEventLabel(latestAnalyticsEvent.eventType) : 'Assim que chegar um evento ele aparece aqui.'}</small>
             </div>
           </div>
 
-          <div className="admin-ranked-list">
-            {(analyticsSummary?.byEventType || []).map((item) => (
-              <div key={item.eventType} className="admin-ranked-item">
+          <div className="admin-analytics-panels">
+            <div className="admin-analytics-panel">
+              <div className="admin-analytics-panel__header">
                 <div>
-                  <strong>{item.eventType}</strong>
+                  <h3>Eventos por tipo</h3>
+                  <p>Entenda o que o visitante faz com mais frequencia.</p>
                 </div>
-                <b>{item.count}</b>
               </div>
-            ))}
-          </div>
 
-          <div className="admin-event-list">
-            {(analyticsSummary?.recentEvents || []).map((event) => (
-              <div key={event.id} className="admin-event-item">
-                <div>
-                  <strong>{event.eventType}</strong>
-                  <span>{event.targetLabel || event.targetType || 'Sem alvo'}</span>
-                </div>
-                <time dateTime={event.occurredAt}>{new Date(event.occurredAt).toLocaleString('pt-BR')}</time>
+              <div className="admin-ranked-list admin-ranked-list--scroll">
+                {analyticsByEventType.map((item) => (
+                  <div key={item.eventType} className="admin-ranked-item admin-ranked-item--analytics">
+                    <div>
+                      <span className="admin-section-chip admin-section-chip--accent">
+                        {getAnalyticsEventLabel(item.eventType)}
+                      </span>
+                      <strong>{getAnalyticsEventLabel(item.eventType)}</strong>
+                      <span>{item.count} evento(s) registrados.</span>
+                    </div>
+                    <div className="admin-ranked-item__meta">
+                      <b>{item.count}</b>
+                      <div className="admin-meter">
+                        <span style={{ width: `${Math.max(10, (item.count / maxAnalyticsEventCount) * 100)}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+
+            <div className="admin-analytics-panel">
+              <div className="admin-analytics-panel__header">
+                <div>
+                  <h3>Timeline recente</h3>
+                  <p>Ultimas acoes registradas para este tenant.</p>
+                </div>
+              </div>
+
+              <div className="admin-event-list admin-event-list--scroll">
+                {recentAnalyticsEvents.map((event) => (
+                  <div key={event.id} className="admin-event-item admin-event-item--analytics">
+                    <div>
+                      <span className="admin-section-chip admin-section-chip--muted">
+                        {getAnalyticsEventLabel(event.eventType)}
+                      </span>
+                      <strong>{getAnalyticsTargetSummary(event)}</strong>
+                      <span>
+                        {event.targetLabel || event.targetType || 'Sem alvo'}
+                      </span>
+                    </div>
+                    <time dateTime={event.occurredAt}>{formatAnalyticsTimestamp(event.occurredAt)}</time>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </Card>
       </div>

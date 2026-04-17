@@ -53,6 +53,12 @@ const iconPaths = {
       <circle cx="16.3" cy="7.8" r="1" fill="currentColor" stroke="none" />
     </>
   ),
+  mail: (
+    <>
+      <path d="M4.5 7.5A1.5 1.5 0 0 1 6 6h12a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 18 18H6a1.5 1.5 0 0 1-1.5-1.5v-9Z" />
+      <path d="m5.5 8 6.5 5L18.5 8" />
+    </>
+  ),
   default: (
     <>
       <path d="M8 8h8v8H8z" />

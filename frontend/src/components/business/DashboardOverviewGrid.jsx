@@ -31,7 +31,7 @@ export function DashboardOverviewGrid({ overview }) {
               <p>Os negocios mais acessados no momento.</p>
             </div>
           </div>
-          <div className="admin-ranked-list">
+          <div className="admin-ranked-list admin-ranked-list--scroll">
             {overview.topBusinesses.length ? (
               overview.topBusinesses.map((business) => (
                 <div key={business.businessId} className="admin-ranked-item">
@@ -55,7 +55,7 @@ export function DashboardOverviewGrid({ overview }) {
               <p>Ultimas interacoes registradas na plataforma.</p>
             </div>
           </div>
-          <div className="admin-event-list">
+          <div className="admin-event-list admin-event-list--scroll">
             {overview.recentEvents.length ? (
               overview.recentEvents.map((event) => (
                 <div key={event.id} className="admin-event-item">

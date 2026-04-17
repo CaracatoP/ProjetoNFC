@@ -43,7 +43,7 @@ export function BusinessLinksSection({ section, onBusinessAction, onTrackAction 
         {visibleItems.map((item) => {
           const action = resolveAction(item);
           const iconName = resolveIcon(item, action);
-          const isInternalAction = Boolean(item.metadata?.action) || (!item.url && Boolean(action));
+          const isInternalAction = !item.url && Boolean(action);
           const tileClassName = [
             'action-tile',
             section.settings?.layout === 'compact' ? 'action-tile--showcase' : '',

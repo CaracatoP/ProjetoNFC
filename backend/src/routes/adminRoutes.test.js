@@ -29,7 +29,7 @@ describe('Admin routes', () => {
   });
 
   beforeEach(async () => {
-    await seedDemoData();
+    await seedDemoData({ reset: true });
     const loginResponse = await request(app).post('/api/admin/auth/login').send({
       username: 'admin@nfc.local',
       password: 'admin123456',
@@ -99,6 +99,105 @@ describe('Admin routes', () => {
 
     expect(updateResponse.status).toBe(200);
     expect(updateResponse.body.data.business.name).toBe('Barbearia Estilo Vivo Premium');
+  });
+
+  it('sanitizes blank editor fields during update instead of rejecting the payload', async () => {
+    const listResponse = await request(app)
+      .get('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const targetBusiness = listResponse.body.data.find((item) => item.slug === 'barbearia-estilo-vivo');
+    const targetId = targetBusiness.id;
+    const detailResponse = await request(app)
+      .get(`/api/admin/businesses/${targetId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const { business, theme, links, sections, nfcTag } = detailResponse.body.data;
+    business.hours[0].value = '';
+    business.seo.title = '';
+    business.seo.description = '';
+    business.address.latitude = '';
+    business.address.longitude = '';
+
+    const updateResponse = await request(app)
+      .put(`/api/admin/businesses/${targetId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ business, theme, links, sections, nfcTag });
+
+    expect(updateResponse.status).toBe(200);
+    expect(updateResponse.body.data.business.seo.title).toBe('Barbearia Estilo Vivo | Pagina NFC');
+    expect(updateResponse.body.data.business.seo.description).toContain('Barbearia tradicional');
+    expect(updateResponse.body.data.business.hours.some((item) => item.id === 'weekday')).toBe(false);
+    expect(updateResponse.body.data.business.address).not.toHaveProperty('latitude');
+    expect(updateResponse.body.data.business.address).not.toHaveProperty('longitude');
+  });
+
+  it('normalizes a human-readable slug during update', async () => {
+    const listResponse = await request(app)
+      .get('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const targetBusiness = listResponse.body.data.find((item) => item.slug === 'barbearia-estilo-vivo');
+    const targetId = targetBusiness.id;
+    const detailResponse = await request(app)
+      .get(`/api/admin/businesses/${targetId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const { business, theme, links, sections, nfcTag } = detailResponse.body.data;
+    business.slug = 'Barbearia São João 2026';
+
+    const updateResponse = await request(app)
+      .put(`/api/admin/businesses/${targetId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ business, theme, links, sections, nfcTag });
+
+    expect(updateResponse.status).toBe(200);
+    expect(updateResponse.body.data.business.slug).toBe('barbearia-sao-joao-2026');
+  });
+
+  it('reflects admin-managed business fields on the public site and keeps them after a normal demo seed boot', async () => {
+    const listResponse = await request(app)
+      .get('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const targetBusiness = listResponse.body.data.find((item) => item.slug === 'barbearia-estilo-vivo');
+    const targetId = targetBusiness.id;
+    const detailResponse = await request(app)
+      .get(`/api/admin/businesses/${targetId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const { business, theme, links, sections, nfcTag } = detailResponse.body.data;
+    business.badge = 'Agenda premium';
+    business.logoUrl = 'https://cdn.example.com/logo-novo.png';
+    business.bannerUrl = 'https://cdn.example.com/banner-novo.png';
+    business.description = 'Descricao atualizada pelo painel.';
+    business.contact.email = 'contato@estilovivo.com';
+
+    const updateResponse = await request(app)
+      .put(`/api/admin/businesses/${targetId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ business, theme, links, sections, nfcTag });
+
+    expect(updateResponse.status).toBe(200);
+
+    const publicResponse = await request(app).get('/api/public/site/barbearia-estilo-vivo');
+
+    expect(publicResponse.status).toBe(200);
+    expect(publicResponse.body.data.business.badge).toBe('Agenda premium');
+    const heroSection = publicResponse.body.data.sections.find((section) => section.key === 'hero-main');
+    expect(heroSection.description).toBe('Descricao atualizada pelo painel.');
+    expect(heroSection.settings.logoUrl).toBe('https://cdn.example.com/logo-novo.png');
+    expect(heroSection.settings.bannerUrl).toBe('https://cdn.example.com/banner-novo.png');
+    const quickActions = publicResponse.body.data.sections.find((section) => section.key === 'quick-actions');
+    expect(quickActions.items.some((item) => item.url === 'mailto:contato@estilovivo.com')).toBe(true);
+
+    await seedDemoData();
+
+    const afterSeedResponse = await request(app).get('/api/public/site/barbearia-estilo-vivo');
+
+    expect(afterSeedResponse.status).toBe(200);
+    expect(afterSeedResponse.body.data.business.badge).toBe('Agenda premium');
+    expect(afterSeedResponse.body.data.business.logoUrl).toBe('https://cdn.example.com/logo-novo.png');
   });
 
   it('returns dashboard overview and accepts image uploads', async () => {

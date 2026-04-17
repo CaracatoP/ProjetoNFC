@@ -8,15 +8,16 @@ export class ApiClientError extends Error {
 }
 
 export async function apiRequest(url, options = {}, schema) {
-  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  const { headers: customHeaders = {}, ...restOptions } = options;
+  const isFormData = typeof FormData !== 'undefined' && restOptions.body instanceof FormData;
   const headers = {
-    ...(isFormData ? {} : options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-    ...(options.headers || {}),
+    ...(isFormData ? {} : restOptions.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    ...customHeaders,
   };
 
   const response = await fetch(url, {
     headers,
-    ...options,
+    ...restOptions,
   });
 
   const payload = await response.json().catch(() => ({}));
