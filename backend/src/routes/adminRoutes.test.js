@@ -77,6 +77,12 @@ describe('Admin routes', () => {
 
     expect(createResponse.status).toBe(201);
     expect(createResponse.body.data.business.slug).toBe('restaurante-vista-boa');
+    expect(createResponse.body.data.business.status).toBe('active');
+
+    const publicResponse = await request(app).get('/api/public/site/restaurante-vista-boa');
+
+    expect(publicResponse.status).toBe(200);
+    expect(publicResponse.body.data.business.slug).toBe('restaurante-vista-boa');
 
     const listResponse = await request(app)
       .get('/api/admin/businesses')

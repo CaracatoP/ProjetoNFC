@@ -264,6 +264,7 @@ describe('DashboardHomePage', () => {
           business: expect.objectContaining({
             name: 'Loja Nova',
             slug: 'loja-nova',
+            status: 'active',
           }),
         }),
       );

@@ -39,6 +39,7 @@ export function TenantOnboardingForm({ creating, onCreate }) {
       business: {
         name: form.name.trim(),
         slug: (form.slug || suggestedSlug).trim(),
+        status: 'active',
         description: form.description.trim(),
         contact: {
           whatsapp: form.whatsapp.trim(),

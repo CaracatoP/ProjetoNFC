@@ -358,7 +358,7 @@ export function buildDefaultTenantSetup(input = {}) {
     logoUrl: String(input.logoUrl || '').trim(),
     bannerUrl: String(input.bannerUrl || '').trim(),
     badge: String(input.badge || name).trim(),
-    status: input.status || BUSINESS_STATUS.DRAFT,
+    status: input.status || BUSINESS_STATUS.ACTIVE,
     rating: String(input.rating || '').trim(),
     address: {
       display: addressDisplay,
