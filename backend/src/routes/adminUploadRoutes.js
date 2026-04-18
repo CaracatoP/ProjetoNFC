@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { env } from '../config/env.js';
 import { uploadAdminImageController } from '../controllers/adminUploadController.js';
 import { requireAdminAuth } from '../middlewares/requireAdminAuth.js';
+import { AppError } from '../utils/appError.js';
 
 const router = Router();
 
@@ -13,7 +14,7 @@ const upload = multer({
   },
   fileFilter(_req, file, callback) {
     if (!file.mimetype.startsWith('image/')) {
-      callback(new Error('Apenas imagens sao permitidas'));
+      callback(new AppError('Apenas imagens sao permitidas', 400, 'upload_invalid_type'));
       return;
     }
 

@@ -97,9 +97,15 @@ export async function deleteAdminBusiness(token, businessId) {
   return response.data;
 }
 
-export async function uploadAdminImage(token, file) {
+export async function uploadAdminImage(token, file, options = {}) {
   const formData = new FormData();
   formData.append('file', file);
+  if (options.tenantSlug) {
+    formData.append('tenantSlug', options.tenantSlug);
+  }
+  if (options.assetType) {
+    formData.append('assetType', options.assetType);
+  }
 
   const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/uploads/image`, {
     method: 'POST',

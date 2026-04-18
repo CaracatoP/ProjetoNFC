@@ -195,6 +195,7 @@ function newGalleryItem() {
   return {
     id: `gallery-${Date.now()}`,
     imageUrl: '',
+    imagePublicId: '',
     alt: '',
   };
 }
@@ -359,13 +360,13 @@ function PreviewImage({ src, alt }) {
   );
 }
 
-async function uploadImageAndPatch(file, onUpload, onDone) {
+async function uploadImageAndPatch(file, onUpload, options, onDone) {
   if (!file || !onUpload) {
     return;
   }
 
-  const upload = await onUpload(file);
-  onDone(upload.url);
+  const upload = await onUpload(file, options);
+  onDone(upload);
 }
 
 export function TenantEditorPanel({
@@ -553,7 +554,11 @@ export function TenantEditorPanel({
                   value={draft.business.logoUrl || ''}
                   onChange={(event) => setDraft((current) => ({
                     ...current,
-                    business: { ...current.business, logoUrl: event.target.value },
+                    business: {
+                      ...current.business,
+                      logoUrl: event.target.value,
+                      logoPublicId: '',
+                    },
                   }))}
                 />
               </AdminField>
@@ -564,10 +569,17 @@ export function TenantEditorPanel({
                   const file = event.target.files?.[0];
                   if (!file) return;
                   setUploadingField('logo');
-                  await uploadImageAndPatch(file, onUpload, (url) =>
+                  await uploadImageAndPatch(file, onUpload, {
+                    tenantSlug: draft.business.slug,
+                    assetType: 'logo',
+                  }, (upload) =>
                     setDraft((current) => ({
                       ...current,
-                      business: { ...current.business, logoUrl: url },
+                      business: {
+                        ...current.business,
+                        logoUrl: upload.url,
+                        logoPublicId: upload.publicId || '',
+                      },
                     })),
                   );
                   setUploadingField('');
@@ -585,7 +597,11 @@ export function TenantEditorPanel({
                     ...current,
                     business: {
                       ...current.business,
-                      seo: { ...current.business.seo, imageUrl: event.target.value },
+                      seo: {
+                        ...current.business.seo,
+                        imageUrl: event.target.value,
+                        imagePublicId: '',
+                      },
                     },
                   }))}
                 />
@@ -597,12 +613,19 @@ export function TenantEditorPanel({
                   const file = event.target.files?.[0];
                   if (!file) return;
                   setUploadingField('site-icon');
-                  await uploadImageAndPatch(file, onUpload, (url) =>
+                  await uploadImageAndPatch(file, onUpload, {
+                    tenantSlug: draft.business.slug,
+                    assetType: 'site-icon',
+                  }, (upload) =>
                     setDraft((current) => ({
                       ...current,
                       business: {
                         ...current.business,
-                        seo: { ...current.business.seo, imageUrl: url },
+                        seo: {
+                          ...current.business.seo,
+                          imageUrl: upload.url,
+                          imagePublicId: upload.publicId || '',
+                        },
                       },
                     })),
                   );
@@ -619,7 +642,11 @@ export function TenantEditorPanel({
                   value={draft.business.bannerUrl || ''}
                   onChange={(event) => setDraft((current) => ({
                     ...current,
-                    business: { ...current.business, bannerUrl: event.target.value },
+                    business: {
+                      ...current.business,
+                      bannerUrl: event.target.value,
+                      bannerPublicId: '',
+                    },
                   }))}
                 />
               </AdminField>
@@ -630,10 +657,17 @@ export function TenantEditorPanel({
                   const file = event.target.files?.[0];
                   if (!file) return;
                   setUploadingField('banner');
-                  await uploadImageAndPatch(file, onUpload, (url) =>
+                  await uploadImageAndPatch(file, onUpload, {
+                    tenantSlug: draft.business.slug,
+                    assetType: 'banner',
+                  }, (upload) =>
                     setDraft((current) => ({
                       ...current,
-                      business: { ...current.business, bannerUrl: url },
+                      business: {
+                        ...current.business,
+                        bannerUrl: upload.url,
+                        bannerPublicId: upload.publicId || '',
+                      },
                     })),
                   );
                   setUploadingField('');
@@ -1065,7 +1099,11 @@ export function TenantEditorPanel({
                       onChange={(event) => setDraft((current) => {
                         const nextDraft = cloneDeep(current);
                         updateSectionDraft(nextDraft, 'gallery', 'gallery', (section) => {
-                          section.items[index] = { ...section.items[index], imageUrl: event.target.value };
+                          section.items[index] = {
+                            ...section.items[index],
+                            imageUrl: event.target.value,
+                            imagePublicId: '',
+                          };
                         });
                         return nextDraft;
                       })}
@@ -1091,11 +1129,18 @@ export function TenantEditorPanel({
                     const file = event.target.files?.[0];
                     if (!file) return;
                     setUploadingField(`gallery-${index}`);
-                    await uploadImageAndPatch(file, onUpload, (url) =>
+                    await uploadImageAndPatch(file, onUpload, {
+                      tenantSlug: draft.business.slug,
+                      assetType: 'gallery',
+                    }, (upload) =>
                       setDraft((current) => {
                         const nextDraft = cloneDeep(current);
                         updateSectionDraft(nextDraft, 'gallery', 'gallery', (section) => {
-                          section.items[index] = { ...section.items[index], imageUrl: url };
+                          section.items[index] = {
+                            ...section.items[index],
+                            imageUrl: upload.url,
+                            imagePublicId: upload.publicId || '',
+                          };
                         });
                         return nextDraft;
                       }),

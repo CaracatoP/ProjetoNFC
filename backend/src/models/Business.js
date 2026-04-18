@@ -9,7 +9,9 @@ const businessSchema = new mongoose.Schema(
     slug: { type: String, required: true, unique: true, index: true, trim: true },
     description: { type: String, trim: true },
     logoUrl: { type: String, trim: true },
+    logoPublicId: { type: String, trim: true },
     bannerUrl: { type: String, trim: true },
+    bannerPublicId: { type: String, trim: true },
     badge: { type: String, trim: true },
     status: { type: String, enum: BUSINESS_STATUS_VALUES, default: 'draft', index: true },
     rating: { type: String, trim: true },
@@ -53,10 +55,10 @@ const businessSchema = new mongoose.Schema(
       title: { type: String, required: true, trim: true },
       description: { type: String, required: true, trim: true },
       imageUrl: { type: String, trim: true },
+      imagePublicId: { type: String, trim: true },
     },
   },
   baseSchemaOptions,
 );
 
 export const Business = mongoose.models.Business || mongoose.model('Business', businessSchema);
-

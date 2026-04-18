@@ -211,12 +211,12 @@ export function DashboardHomePage() {
     }
   }
 
-  async function handleUpload(file) {
+  async function handleUpload(file, options = {}) {
     setMessage('');
     setError('');
 
     try {
-      const result = await uploadAdminImage(token, file);
+      const result = await uploadAdminImage(token, file, options);
       setMessage('Upload concluido. O editor ja pode usar a nova imagem.');
       return result;
     } catch (uploadError) {

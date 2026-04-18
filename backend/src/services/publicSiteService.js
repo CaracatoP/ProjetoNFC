@@ -168,6 +168,22 @@ function buildHeroSecondaryAction(business, settings) {
   };
 }
 
+function sanitizePublicSectionItem(item, fallbackId) {
+  if (!item) {
+    return item;
+  }
+
+  const nextItem = {
+    ...item,
+    id: item.id || item._id?.toString() || fallbackId,
+  };
+
+  delete nextItem.imagePublicId;
+  delete nextItem.publicId;
+
+  return nextItem;
+}
+
 function hydrateSection(section, business, links) {
   const settings = { ...(section.settings || {}) };
 
@@ -297,7 +313,11 @@ export async function getPublicSiteBySlug(slug) {
       hours: business.hours || [],
       rating: business.rating,
       contact: business.contact || {},
-      seo: business.seo,
+      seo: {
+        title: business.seo?.title,
+        description: business.seo?.description,
+        imageUrl: business.seo?.imageUrl,
+      },
     },
     theme: {
       colors: theme.colors,
@@ -318,10 +338,9 @@ export async function getPublicSiteBySlug(slug) {
       visible: section.visible,
       variant: section.variant,
       settings: section.settings || {},
-      items: (section.items || []).map((item, index) => ({
-        ...item,
-        id: item.id || item._id?.toString() || `${section.key}-${index + 1}`,
-      })),
+      items: (section.items || []).map((item, index) =>
+        sanitizePublicSectionItem(item, `${section.key}-${index + 1}`),
+      ),
     })),
     links: links.map((link) => ({
       id: link._id.toString(),
@@ -337,7 +356,11 @@ export async function getPublicSiteBySlug(slug) {
       target: link.target,
       metadata: link.metadata || {},
     })),
-    seo: business.seo,
+    seo: {
+      title: business.seo?.title,
+      description: business.seo?.description,
+      imageUrl: business.seo?.imageUrl,
+    },
   };
 }
 

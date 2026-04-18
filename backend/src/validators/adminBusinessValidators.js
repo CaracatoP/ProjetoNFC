@@ -50,7 +50,9 @@ const businessBodySchema = z.object({
   slug: slugSchema,
   description: optionalString,
   logoUrl: optionalString,
+  logoPublicId: optionalString,
   bannerUrl: optionalString,
+  bannerPublicId: optionalString,
   badge: optionalString,
   status: z.enum(BUSINESS_STATUS_VALUES),
   rating: optionalString,
@@ -95,6 +97,7 @@ const businessBodySchema = z.object({
     title: optionalString,
     description: optionalString,
     imageUrl: optionalString,
+    imagePublicId: optionalString,
   }),
 });
 

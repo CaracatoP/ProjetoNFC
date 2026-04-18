@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 
@@ -8,6 +8,19 @@ let disconnectDatabase;
 let seedDemoData;
 let mongoServer;
 let adminToken;
+
+vi.mock('../utils/cloudinaryUpload.js', () => ({
+  buildTenantAssetFolder: vi.fn((tenantSlug = 'default') => `nfc-saas/${tenantSlug || 'default'}`),
+  uploadImageBufferToCloudinary: vi.fn(async (_file, options = {}) => ({
+    secure_url: `https://res.cloudinary.com/demo/image/upload/v1/${options.folder || 'nfc-saas/default'}/${options.assetType || 'image'}.png`,
+    public_id: `${options.folder || 'nfc-saas/default'}/${options.assetType || 'image'}-demo`,
+    bytes: 2048,
+    width: 1200,
+    height: 630,
+    format: 'png',
+  })),
+  destroyCloudinaryAsset: vi.fn(),
+}));
 
 describe('Admin routes', () => {
   beforeAll(async () => {
@@ -169,7 +182,9 @@ describe('Admin routes', () => {
     const { business, theme, links, sections, nfcTag } = detailResponse.body.data;
     business.badge = 'Agenda premium';
     business.logoUrl = 'https://cdn.example.com/logo-novo.png';
+    business.logoPublicId = 'nfc-saas/barbearia-estilo-vivo/logo-demo';
     business.bannerUrl = 'https://cdn.example.com/banner-novo.png';
+    business.bannerPublicId = 'nfc-saas/barbearia-estilo-vivo/banner-demo';
     business.description = 'Descricao atualizada pelo painel.';
     business.contact.email = 'contato@estilovivo.com';
     business.contact.wifi = {
@@ -179,6 +194,7 @@ describe('Admin routes', () => {
       security: 'WPA',
     };
     business.seo.imageUrl = 'https://cdn.example.com/favicon-novo.png';
+    business.seo.imagePublicId = 'nfc-saas/barbearia-estilo-vivo/site-icon-demo';
     links.push({
       type: 'social',
       group: 'primary',
@@ -220,6 +236,15 @@ describe('Admin routes', () => {
     expect(afterSeedResponse.status).toBe(200);
     expect(afterSeedResponse.body.data.business.badge).toBe('Agenda premium');
     expect(afterSeedResponse.body.data.business.logoUrl).toBe('https://cdn.example.com/logo-novo.png');
+
+    const persistedEditorResponse = await request(app)
+      .get(`/api/admin/businesses/${targetId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(persistedEditorResponse.status).toBe(200);
+    expect(persistedEditorResponse.body.data.business.logoPublicId).toBe('nfc-saas/barbearia-estilo-vivo/logo-demo');
+    expect(persistedEditorResponse.body.data.business.bannerPublicId).toBe('nfc-saas/barbearia-estilo-vivo/banner-demo');
+    expect(persistedEditorResponse.body.data.business.seo.imagePublicId).toBe('nfc-saas/barbearia-estilo-vivo/site-icon-demo');
   });
 
   it('returns dashboard overview and accepts image uploads', async () => {
@@ -233,12 +258,15 @@ describe('Admin routes', () => {
     const uploadResponse = await request(app)
       .post('/api/admin/uploads/image')
       .set('Authorization', `Bearer ${adminToken}`)
+      .field('tenantSlug', 'barbearia-estilo-vivo')
+      .field('assetType', 'banner')
       .attach('file', Buffer.from('fake-image-content'), {
         filename: 'logo.png',
         contentType: 'image/png',
       });
 
     expect(uploadResponse.status).toBe(201);
-    expect(uploadResponse.body.data.url).toContain('/uploads/');
+    expect(uploadResponse.body.data.url).toContain('res.cloudinary.com');
+    expect(uploadResponse.body.data.publicId).toBe('nfc-saas/barbearia-estilo-vivo/banner-demo');
   });
 });

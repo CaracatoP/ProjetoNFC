@@ -8,6 +8,10 @@ function formatZodIssues(error) {
   }));
 }
 
+function isZodLikeError(error) {
+  return error instanceof ZodError || Array.isArray(error?.issues);
+}
+
 export function validateRequest(schemas) {
   return (req, _res, next) => {
     try {
@@ -28,7 +32,7 @@ export function validateRequest(schemas) {
       req.validated = validated;
       next();
     } catch (error) {
-      if (error instanceof ZodError) {
+      if (isZodLikeError(error)) {
         next(new AppError('Falha de validação', 400, 'validation_error', formatZodIssues(error)));
         return;
       }
@@ -37,4 +41,3 @@ export function validateRequest(schemas) {
     }
   };
 }
-

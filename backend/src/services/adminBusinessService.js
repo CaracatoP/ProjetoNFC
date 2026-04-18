@@ -51,7 +51,9 @@ function normalizeBusinessPayload(payload = {}) {
     slug: String(payload.slug || '').trim(),
     description,
     logoUrl: String(payload.logoUrl || '').trim(),
+    logoPublicId: String(payload.logoPublicId || '').trim(),
     bannerUrl: String(payload.bannerUrl || '').trim(),
+    bannerPublicId: String(payload.bannerPublicId || '').trim(),
     badge: String(payload.badge || '').trim(),
     status: String(payload.status || 'draft').trim(),
     rating: String(payload.rating || '').trim(),
@@ -92,6 +94,7 @@ function normalizeBusinessPayload(payload = {}) {
       title: seoTitle,
       description: seoDescription,
       imageUrl: String(payload.seo?.imageUrl || '').trim(),
+      imagePublicId: String(payload.seo?.imagePublicId || '').trim(),
     },
   };
 }
