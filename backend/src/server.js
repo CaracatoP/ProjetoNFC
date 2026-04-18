@@ -10,8 +10,8 @@ async function bootstrap() {
     await seedDemoData();
   }
 
-  app.listen(env.port, () => {
-    console.log(`API rodando em http://localhost:${env.port}`);
+  app.listen(env.port, '0.0.0.0', () => {
+    console.log(`API rodando na porta ${env.port}`);
   });
 }
 
@@ -19,4 +19,3 @@ bootstrap().catch((error) => {
   console.error('Falha ao iniciar a API:', error);
   process.exit(1);
 });
-
