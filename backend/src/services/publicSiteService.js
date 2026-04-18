@@ -9,6 +9,7 @@ import {
   buildManagedPrimaryLinks,
   normalizeCreatorSignatureCtaSection,
 } from '../utils/adminDefaults.js';
+import { BUSINESS_STATUS } from '../../../shared/constants/index.js';
 
 function normalizePhoneActionValue(value, countryCode = '55') {
   const digits = String(value || '').replace(/\D/g, '');
@@ -182,6 +183,10 @@ function sanitizePublicSectionItem(item, fallbackId) {
   delete nextItem.publicId;
 
   return nextItem;
+}
+
+function isPubliclyAccessibleStatus(status) {
+  return status === BUSINESS_STATUS.ACTIVE || status === BUSINESS_STATUS.DRAFT;
 }
 
 function hydrateSection(section, business, links) {
@@ -373,7 +378,7 @@ export async function resolveTagToSite(tagCode) {
 
   const business = tag.businessId;
 
-  if (business.status !== 'active') {
+  if (!isPubliclyAccessibleStatus(business.status)) {
     throw new AppError('Negocio inativo para esta tag', 404, 'business_inactive');
   }
 

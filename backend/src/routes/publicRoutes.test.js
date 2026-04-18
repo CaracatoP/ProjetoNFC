@@ -7,6 +7,7 @@ let connectDatabase;
 let disconnectDatabase;
 let seedDemoData;
 let AnalyticsEvent;
+let Business;
 let mongoServer;
 
 describe('Public routes', () => {
@@ -20,6 +21,7 @@ describe('Public routes', () => {
     ({ connectDatabase, disconnectDatabase } = await import('../config/database.js'));
     ({ seedDemoData } = await import('../utils/seedDemoData.js'));
     ({ AnalyticsEvent } = await import('../models/AnalyticsEvent.js'));
+    ({ Business } = await import('../models/Business.js'));
     ({ default: app } = await import('../app.js'));
 
     await connectDatabase();
@@ -53,12 +55,31 @@ describe('Public routes', () => {
     expect(response.body.error.code).toBe('business_not_found');
   });
 
+  it('allows public access for a draft tenant slug', async () => {
+    await Business.findOneAndUpdate({ slug: 'barbearia-estilo-vivo' }, { status: 'draft' });
+
+    const response = await request(app).get('/api/public/site/barbearia-estilo-vivo');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.business.slug).toBe('barbearia-estilo-vivo');
+    expect(response.body.data.business.status).toBe('draft');
+  });
+
   it('resolves an NFC tag to a business site', async () => {
     const response = await request(app).get('/api/public/tags/NFC-BARB-001/resolve');
 
     expect(response.status).toBe(200);
     expect(response.body.data.slug).toBe('barbearia-estilo-vivo');
     expect(response.body.data.siteUrl).toContain('/site/barbearia-estilo-vivo');
+  });
+
+  it('resolves an NFC tag for a draft tenant', async () => {
+    await Business.findOneAndUpdate({ slug: 'barbearia-estilo-vivo' }, { status: 'draft' });
+
+    const response = await request(app).get('/api/public/tags/NFC-BARB-001/resolve');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.slug).toBe('barbearia-estilo-vivo');
   });
 
   it('records analytics events with validation', async () => {
