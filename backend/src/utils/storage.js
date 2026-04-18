@@ -24,7 +24,7 @@ function slugifyFileName(value) {
     .toLowerCase();
 }
 
-export async function saveImageUpload(file) {
+export async function saveImageUpload(file, publicBaseUrl = env.apiPublicBaseUrl) {
   ensureUploadsDirectory();
 
   const now = new Date();
@@ -41,7 +41,7 @@ export async function saveImageUpload(file) {
   return {
     filename,
     relativePath,
-    url: `${env.apiPublicBaseUrl.replace(/\/$/, '')}/uploads/${relativePath}`,
+    url: `${String(publicBaseUrl || env.apiPublicBaseUrl).replace(/\/$/, '')}/uploads/${relativePath}`,
     mimeType: file.mimetype,
     size: file.size,
   };

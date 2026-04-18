@@ -324,23 +324,11 @@ function buildSections(business) {
       items: business.description ? [{ id: 'about-1', body: business.description }] : [],
     },
     {
-      key: 'wifi',
-      type: SECTION_TYPES.WIFI,
-      title: 'Wi-Fi do local',
-      description: 'Abra esta conveniencia apenas por clique.',
-      order: 70,
-      visible: hasWifi,
-      settings: {
-        displayMode: 'modal',
-      },
-      items: [],
-    },
-    {
       key: 'pix',
       type: SECTION_TYPES.PIX,
       title: 'Pagamento via PIX',
       description: 'Escaneie ou copie a chave PIX.',
-      order: 80,
+      order: 70,
       visible: hasPix,
       settings: {
         allowAmountInput: true,
@@ -348,20 +336,8 @@ function buildSections(business) {
       items: [],
     },
     {
-      key: 'social',
-      type: SECTION_TYPES.SOCIAL,
-      title: 'Redes sociais',
-      description: 'Continue o relacionamento nos canais digitais.',
-      order: 90,
-      visible: false,
-      settings: {
-        group: LINK_GROUPS.SOCIAL,
-      },
-      items: [],
-    },
-    {
       ...buildCreatorSignatureCtaSection({
-        order: 100,
+        order: 80,
       }),
     },
   ];

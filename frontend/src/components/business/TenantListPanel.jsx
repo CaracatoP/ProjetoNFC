@@ -1,4 +1,5 @@
 import { Card } from '@/components/common/Card.jsx';
+import { resolveMediaUrl } from '@/utils/formatters.js';
 
 export function TenantListPanel({ businesses, selectedBusinessId, loading, onSelect }) {
   return (
@@ -23,7 +24,7 @@ export function TenantListPanel({ businesses, selectedBusinessId, loading, onSel
             onClick={() => onSelect?.(business.id)}
           >
             <div className="tenant-list__meta">
-              {business.logoUrl ? <img src={business.logoUrl} alt={business.name} className="tenant-list__logo" /> : null}
+              {business.logoUrl ? <img src={resolveMediaUrl(business.logoUrl)} alt={business.name} className="tenant-list__logo" /> : null}
               <div>
                 <strong>{business.name}</strong>
                 <span>{business.slug}</span>

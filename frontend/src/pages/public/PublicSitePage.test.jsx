@@ -1,5 +1,5 @@
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { TenantProvider } from '@/context/TenantContext.jsx';
 import { PublicSitePage } from './PublicSitePage.jsx';
 import * as publicSiteService from '@/services/publicSiteService.js';
@@ -42,6 +42,7 @@ const siteFixture = {
     seo: {
       title: 'Barbearia Estilo Vivo',
       description: 'Pagina publica',
+      imageUrl: 'https://cdn.example.com/favicon.png',
     },
   },
   theme: {
@@ -107,7 +108,22 @@ const siteFixture = {
           subtitle: 'Confira atendimento e endereco',
           metadata: { action: 'contact', targetSection: 'contact' },
         },
-        { id: 'link-1', type: 'wifi', label: 'Abrir Wi-Fi', subtitle: 'Senha e QR', metadata: { action: 'wifi' } },
+        {
+          id: 'link-wifi',
+          type: 'wifi',
+          label: 'Wi-Fi',
+          subtitle: 'Abrir senha e QR Code',
+          metadata: { action: 'wifi' },
+        },
+        {
+          id: 'link-instagram',
+          type: 'social',
+          label: 'Instagram',
+          subtitle: 'Acompanhe novidades',
+          icon: 'instagram',
+          url: 'https://instagram.com/estilovivo',
+          target: '_blank',
+        },
       ],
     },
     {
@@ -133,17 +149,6 @@ const siteFixture = {
       items: [],
     },
     {
-      id: 'wifi-1',
-      key: 'wifi',
-      type: 'wifi',
-      title: 'Wi-Fi do local',
-      description: 'Conecte-se',
-      order: 50,
-      visible: true,
-      settings: { ssid: 'WiFi', password: 'Senha123', security: 'WPA', displayMode: 'modal' },
-      items: [],
-    },
-    {
       id: 'cta-1',
       key: 'cta',
       type: 'cta',
@@ -159,6 +164,7 @@ const siteFixture = {
   seo: {
     title: 'Barbearia Estilo Vivo',
     description: 'Pagina publica',
+    imageUrl: 'https://cdn.example.com/favicon.png',
   },
 };
 
@@ -173,7 +179,7 @@ describe('PublicSitePage', () => {
     });
   });
 
-  it('renders dynamic sections, hides support shortcuts in compact actions and tracks interactions', async () => {
+  it('renders dynamic sections, applies favicon and tracks interactions', async () => {
     render(
       <TenantProvider>
         <MemoryRouter initialEntries={['/site/barbearia-estilo-vivo']}>
@@ -185,6 +191,7 @@ describe('PublicSitePage', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'Barbearia Estilo Vivo' })).toBeInTheDocument();
+    expect(screen.getAllByText('Barbearia Estilo Vivo')).toHaveLength(1);
     expect(screen.getByText('Servicos')).toBeInTheDocument();
     expect(screen.getByText('Experiencia premium.')).toBeInTheDocument();
     expect(screen.getByText('Feito por Caraçato')).toBeInTheDocument();
@@ -192,14 +199,24 @@ describe('PublicSitePage', () => {
       'href',
       'https://instagram.com/caracato_',
     );
+    expect(screen.getByRole('button', { name: /Wi-Fi/i })).toBeInTheDocument();
+    expect(screen.getByText('Instagram').closest('a')).toHaveAttribute(
+      'href',
+      'https://instagram.com/estilovivo',
+    );
+    expect(document.querySelector("link[rel='icon']")?.getAttribute('href')).toBe(
+      'https://cdn.example.com/favicon.png',
+    );
+    expect(document.querySelector("link[rel='alternate icon']")?.getAttribute('href')).toBe(
+      'https://cdn.example.com/favicon.png',
+    );
+    expect(document.querySelector("link[rel='shortcut icon']")?.getAttribute('href')).toBe(
+      'https://cdn.example.com/favicon.png',
+    );
     expect(screen.queryByText('Descricao antiga da secao.')).not.toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Logo Barbearia Estilo Vivo/i })).toBeInTheDocument();
     expect(screen.queryByText('Oculta')).not.toBeInTheDocument();
     expect(screen.queryByText('Ver horarios')).not.toBeInTheDocument();
-
-    await waitFor(() => {
-      expect(document.documentElement.style.getPropertyValue('--theme-primary')).toBe('#f97316');
-    });
 
     expect(analyticsService.trackEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -208,15 +225,8 @@ describe('PublicSitePage', () => {
       }),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Abrir Wi-Fi/i }));
-
-    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
-    expect(await screen.findByRole('dialog', { name: /Wi-Fi/i })).toBeInTheDocument();
-    expect(analyticsService.trackEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        eventType: 'link_click',
-        sectionType: 'links',
-      }),
-    );
+    await waitFor(() => {
+      expect(document.documentElement.style.getPropertyValue('--theme-primary')).toBe('#f97316');
+    });
   });
 });

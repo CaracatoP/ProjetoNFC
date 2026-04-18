@@ -80,17 +80,19 @@ Importante: o frontend não deve ser aberto diretamente pelo `index.html` nem se
 
 ## Demo no Netlify
 
-Você já pode publicar o frontend no Netlify para mostrar o tenant de exemplo.
+Você pode publicar o frontend no Netlify, mas ele depende de um backend público acessível.
 
-- o slug de demo `/site/barbearia-estilo-vivo` funciona mesmo sem backend público
-- isso acontece porque o frontend usa um fallback local quando a API não responde para o tenant demo
-- o dashboard `/auth` e `/dashboard` não é o melhor fluxo para demonstração pública sem um backend online
+- o slug `/site/barbearia-estilo-vivo` não usa mais fallback local
+- o frontend consulta a API definida em `VITE_API_BASE_URL`
+- se essa variável não estiver configurada no deploy, o app cai no valor local `http://localhost:4000/api` e a página pública entra em erro
+- o dashboard `/auth` e `/dashboard` também precisa do backend online para funcionar
 
 O projeto já está preparado com `netlify.toml` na raiz. No Netlify, use:
 
 - Base directory: `frontend`
 - Build command: `npm run build`
 - Publish directory: `dist`
+- Environment variable: `VITE_API_BASE_URL=https://seu-backend-publico/api`
 
 Depois do deploy, a URL ideal para mostrar é:
 

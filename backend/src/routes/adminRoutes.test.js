@@ -172,6 +172,25 @@ describe('Admin routes', () => {
     business.bannerUrl = 'https://cdn.example.com/banner-novo.png';
     business.description = 'Descricao atualizada pelo painel.';
     business.contact.email = 'contato@estilovivo.com';
+    business.contact.wifi = {
+      ...(business.contact.wifi || {}),
+      ssid: 'Estilo Vivo Guest',
+      password: 'Senha123',
+      security: 'WPA',
+    };
+    business.seo.imageUrl = 'https://cdn.example.com/favicon-novo.png';
+    links.push({
+      type: 'social',
+      group: 'primary',
+      label: 'Instagram',
+      subtitle: 'Acompanhe novidades',
+      icon: 'instagram',
+      url: 'https://instagram.com/estilovivo',
+      visible: true,
+      order: 999,
+      target: '_blank',
+      metadata: {},
+    });
 
     const updateResponse = await request(app)
       .put(`/api/admin/businesses/${targetId}`)
@@ -184,12 +203,15 @@ describe('Admin routes', () => {
 
     expect(publicResponse.status).toBe(200);
     expect(publicResponse.body.data.business.badge).toBe('Agenda premium');
+    expect(publicResponse.body.data.seo.imageUrl).toBe('https://cdn.example.com/favicon-novo.png');
     const heroSection = publicResponse.body.data.sections.find((section) => section.key === 'hero-main');
     expect(heroSection.description).toBe('Descricao atualizada pelo painel.');
     expect(heroSection.settings.logoUrl).toBe('https://cdn.example.com/logo-novo.png');
     expect(heroSection.settings.bannerUrl).toBe('https://cdn.example.com/banner-novo.png');
     const quickActions = publicResponse.body.data.sections.find((section) => section.key === 'quick-actions');
     expect(quickActions.items.some((item) => item.url === 'mailto:contato@estilovivo.com')).toBe(true);
+    expect(quickActions.items.some((item) => item.type === 'wifi')).toBe(true);
+    expect(quickActions.items.some((item) => item.url === 'https://instagram.com/estilovivo')).toBe(true);
 
     await seedDemoData();
 

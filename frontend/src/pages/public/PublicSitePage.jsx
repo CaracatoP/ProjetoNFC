@@ -12,6 +12,22 @@ import { useTenantTheme } from '@/hooks/useTenantTheme.js';
 import { useTenant } from '@/context/TenantContext.jsx';
 import { getSectionAnchor } from '@/utils/sections.js';
 
+function upsertHeadLink(attributes) {
+  const selector = Object.entries(attributes)
+    .map(([name, value]) => `[${name}="${value}"]`)
+    .join('');
+
+  let element = document.head.querySelector(selector);
+
+  if (!element) {
+    element = document.createElement('link');
+    document.head.appendChild(element);
+  }
+
+  Object.entries(attributes).forEach(([name, value]) => element.setAttribute(name, value));
+  return element;
+}
+
 export function PublicSitePage() {
   const { slug = '' } = useParams();
   const { status, data: site, error } = useBusinessSite(slug);
@@ -30,6 +46,24 @@ export function PublicSitePage() {
         trackPageView();
       }
       document.title = site.seo.title;
+
+      const faviconHref = site.seo.imageUrl || site.business.seo?.imageUrl || site.business.logoUrl || '';
+      if (faviconHref) {
+        upsertHeadLink({ rel: 'icon' }).setAttribute('href', faviconHref);
+        upsertHeadLink({ rel: 'alternate icon' }).setAttribute('href', faviconHref);
+        upsertHeadLink({ rel: 'shortcut icon' }).setAttribute('href', faviconHref);
+      }
+
+      const themeColor = site.theme?.colors?.background || '';
+      if (themeColor) {
+        let themeColorMeta = document.head.querySelector("meta[name='theme-color']");
+        if (!themeColorMeta) {
+          themeColorMeta = document.createElement('meta');
+          themeColorMeta.setAttribute('name', 'theme-color');
+          document.head.appendChild(themeColorMeta);
+        }
+        themeColorMeta.setAttribute('content', themeColor);
+      }
     }
   }, [setSite, site, trackPageView]);
 

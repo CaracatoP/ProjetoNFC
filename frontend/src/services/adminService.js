@@ -1,6 +1,45 @@
 import { appConfig } from '@/config/appConfig.js';
 import { apiRequest } from '@/services/apiClient.js';
 import { buildAdminAuthHeaders } from '@/services/authService.js';
+import { resolveMediaUrl } from '@/utils/formatters.js';
+
+function normalizeBusinessMedia(business = {}) {
+  return {
+    ...business,
+    logoUrl: resolveMediaUrl(business.logoUrl),
+    bannerUrl: resolveMediaUrl(business.bannerUrl),
+    seo: business.seo
+      ? {
+          ...business.seo,
+          imageUrl: resolveMediaUrl(business.seo.imageUrl),
+        }
+      : business.seo,
+  };
+}
+
+function normalizeGallerySections(sections = []) {
+  return sections.map((section) => {
+    if (section.type !== 'gallery') {
+      return section;
+    }
+
+    return {
+      ...section,
+      items: (section.items || []).map((item) => ({
+        ...item,
+        imageUrl: resolveMediaUrl(item.imageUrl),
+      })),
+    };
+  });
+}
+
+function normalizeEditorPayload(editor = {}) {
+  return {
+    ...editor,
+    business: normalizeBusinessMedia(editor.business),
+    sections: normalizeGallerySections(editor.sections || []),
+  };
+}
 
 export async function fetchAdminOverview(token) {
   const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/dashboard/overview`, {
@@ -15,7 +54,10 @@ export async function listAdminBusinesses(token) {
     headers: buildAdminAuthHeaders(token),
   });
 
-  return response.data;
+  return response.data.map((business) => ({
+    ...business,
+    logoUrl: resolveMediaUrl(business.logoUrl),
+  }));
 }
 
 export async function getAdminBusiness(token, businessId) {
@@ -23,7 +65,7 @@ export async function getAdminBusiness(token, businessId) {
     headers: buildAdminAuthHeaders(token),
   });
 
-  return response.data;
+  return normalizeEditorPayload(response.data);
 }
 
 export async function createAdminBusiness(token, payload) {
@@ -33,7 +75,7 @@ export async function createAdminBusiness(token, payload) {
     body: JSON.stringify(payload),
   });
 
-  return response.data;
+  return normalizeEditorPayload(response.data);
 }
 
 export async function updateAdminBusiness(token, businessId, payload) {
@@ -43,7 +85,7 @@ export async function updateAdminBusiness(token, businessId, payload) {
     body: JSON.stringify(payload),
   });
 
-  return response.data;
+  return normalizeEditorPayload(response.data);
 }
 
 export async function deleteAdminBusiness(token, businessId) {
@@ -65,5 +107,8 @@ export async function uploadAdminImage(token, file) {
     body: formData,
   });
 
-  return response.data;
+  return {
+    ...response.data,
+    url: resolveMediaUrl(response.data.url),
+  };
 }

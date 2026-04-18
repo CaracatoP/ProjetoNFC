@@ -199,11 +199,7 @@ function hydrateSection(section, business, links) {
         settings,
       };
     case 'social':
-      return {
-        ...section,
-        items: links.filter((link) => link.group === (settings.group || 'primary')),
-        settings,
-      };
+      return null;
     case 'contact': {
       const items = buildContactItems(business);
       if (!items.length) {
@@ -220,17 +216,7 @@ function hydrateSection(section, business, links) {
       };
     }
     case 'wifi':
-      if (!business.contact?.wifi?.password) {
-        return null;
-      }
-
-      return {
-        ...section,
-        settings: {
-          ...settings,
-          ...business.contact.wifi,
-        },
-      };
+      return null;
     case 'pix':
       if (!business.contact?.pix?.key) {
         return null;

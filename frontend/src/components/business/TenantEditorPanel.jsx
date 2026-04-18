@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 import { EmptyState } from '@/components/common/EmptyState.jsx';
+import { resolveMediaUrl } from '@/utils/formatters.js';
 
 function cloneDeep(value) {
   return JSON.parse(JSON.stringify(value));
@@ -103,6 +104,25 @@ function buildDerivedTheme(theme, overrides) {
   };
 }
 
+function isHexColor(value) {
+  return /^#([\da-fA-F]{6}|[\da-fA-F]{3})$/.test(String(value || '').trim());
+}
+
+function normalizeHexColor(value, fallback = '#000000') {
+  const trimmed = String(value || '').trim();
+  const withHash = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+
+  if (!isHexColor(withHash)) {
+    return fallback;
+  }
+
+  if (withHash.length === 4) {
+    return `#${withHash[1]}${withHash[1]}${withHash[2]}${withHash[2]}${withHash[3]}${withHash[3]}`.toLowerCase();
+  }
+
+  return withHash.toLowerCase();
+}
+
 function slugify(value, { preserveTrailingSeparator = false } = {}) {
   const normalized = String(value || '')
     .normalize('NFD')
@@ -186,9 +206,7 @@ const SECTION_LABELS = {
   contact: 'Contato e atendimento',
   gallery: 'Galeria',
   about: 'Sobre nos',
-  wifi: 'Wi-Fi',
   pix: 'Pagamento PIX',
-  social: 'Redes sociais',
   cta: 'Assinatura do criador',
 };
 
@@ -199,11 +217,11 @@ const SECTION_TYPE_LABELS = {
   contact: 'Contato',
   gallery: 'Galeria',
   custom: 'Conteudo livre',
-  wifi: 'Wi-Fi',
   pix: 'PIX',
-  social: 'Social',
   cta: 'Footer promocional',
 };
+
+const HIDDEN_ADMIN_SECTION_KEYS = new Set(['wifi', 'social']);
 
 const ANALYTICS_EVENT_LABELS = {
   page_view: 'Visualizacao de pagina',
@@ -264,14 +282,79 @@ function AdminField({ label, children, description }) {
   );
 }
 
+function ThemeColorField({ label, value, fallback, onChange }) {
+  const pickerId = useId();
+  const normalizedValue = normalizeHexColor(value, fallback);
+  const [textValue, setTextValue] = useState(normalizedValue);
+
+  useEffect(() => {
+    setTextValue(normalizedValue);
+  }, [normalizedValue]);
+
+  function commit(nextValue) {
+    const committed = normalizeHexColor(nextValue, normalizedValue);
+    setTextValue(committed);
+    onChange?.(committed);
+  }
+
+  return (
+    <AdminField label={label} description="Use um valor hexadecimal, por exemplo #f97316.">
+      <div className="admin-color-control">
+        <input
+          aria-label={label}
+          value={textValue}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            setTextValue(nextValue);
+
+            const candidate = nextValue.startsWith('#') ? nextValue : `#${nextValue}`;
+            if (isHexColor(candidate)) {
+              onChange?.(normalizeHexColor(nextValue, normalizedValue));
+            }
+          }}
+          onBlur={(event) => commit(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              commit(textValue);
+            }
+          }}
+          placeholder={fallback}
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck="false"
+        />
+        <button
+          type="button"
+          className="admin-color-swatch"
+          aria-label={`Selecionar ${label}`}
+          style={{ background: normalizedValue }}
+          onClick={() => document.getElementById(pickerId)?.click()}
+        />
+        <input
+          id={pickerId}
+          type="color"
+          className="admin-color-picker"
+          value={normalizedValue}
+          onChange={(event) => commit(event.target.value)}
+          tabIndex={-1}
+          aria-hidden="true"
+        />
+      </div>
+    </AdminField>
+  );
+}
+
 function PreviewImage({ src, alt }) {
-  if (!src) {
+  const resolvedSrc = resolveMediaUrl(src);
+
+  if (!resolvedSrc) {
     return <div className="admin-image-preview admin-image-preview--empty">Sem imagem</div>;
   }
 
   return (
     <div className="admin-image-preview">
-      <img src={src} alt={alt} />
+      <img src={resolvedSrc} alt={alt} />
     </div>
   );
 }
@@ -458,7 +541,7 @@ export function TenantEditorPanel({
           <div className="admin-panel-card__header">
             <div>
               <h2>Logo, banner e uploads</h2>
-              <p>Suba imagens agora em armazenamento local preparado para trocar por cloud depois.</p>
+              <p>Suba logo, icone do site e banner em armazenamento local preparado para trocar por cloud depois.</p>
             </div>
           </div>
 
@@ -491,6 +574,42 @@ export function TenantEditorPanel({
                 }}
               />
               {uploadingField === 'logo' ? <small>Enviando logo...</small> : null}
+            </div>
+
+            <div className="admin-media-card">
+              <PreviewImage src={draft.business.seo?.imageUrl} alt={`Icone ${draft.business.name}`} />
+              <AdminField label="Icone do site" description="Usado como icone da aba do navegador e identidade curta do site.">
+                <input
+                  value={draft.business.seo?.imageUrl || ''}
+                  onChange={(event) => setDraft((current) => ({
+                    ...current,
+                    business: {
+                      ...current.business,
+                      seo: { ...current.business.seo, imageUrl: event.target.value },
+                    },
+                  }))}
+                />
+              </AdminField>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  if (!file) return;
+                  setUploadingField('site-icon');
+                  await uploadImageAndPatch(file, onUpload, (url) =>
+                    setDraft((current) => ({
+                      ...current,
+                      business: {
+                        ...current.business,
+                        seo: { ...current.business.seo, imageUrl: url },
+                      },
+                    })),
+                  );
+                  setUploadingField('');
+                }}
+              />
+              {uploadingField === 'site-icon' ? <small>Enviando icone...</small> : null}
             </div>
 
             <div className="admin-media-card">
@@ -601,48 +720,12 @@ export function TenantEditorPanel({
         <Card id="tenant-payments" className="admin-panel-card">
           <div className="admin-panel-card__header">
             <div>
-              <h2>Pagamentos e conveniencias</h2>
-              <p>PIX e Wi-Fi continuam dinamicos e controlados pelo admin.</p>
+              <h2>Pagamentos</h2>
+              <p>Configure o PIX do site principal e o Wi-Fi usado no atalho rapido.</p>
             </div>
           </div>
 
           <div className="admin-split-grid">
-            <div className="admin-subpanel">
-              <h3>Wi-Fi</h3>
-              <div className="admin-form-grid">
-                <AdminField label="SSID">
-                  <input
-                    value={draft.business.contact?.wifi?.ssid || ''}
-                    onChange={(event) => setDraft((current) => ({
-                      ...current,
-                      business: {
-                        ...current.business,
-                        contact: {
-                          ...current.business.contact,
-                          wifi: { ...(current.business.contact?.wifi || {}), ssid: event.target.value },
-                        },
-                      },
-                    }))}
-                  />
-                </AdminField>
-                <AdminField label="Senha">
-                  <input
-                    value={draft.business.contact?.wifi?.password || ''}
-                    onChange={(event) => setDraft((current) => ({
-                      ...current,
-                      business: {
-                        ...current.business,
-                        contact: {
-                          ...current.business.contact,
-                          wifi: { ...(current.business.contact?.wifi || {}), password: event.target.value },
-                        },
-                      },
-                    }))}
-                  />
-                </AdminField>
-              </div>
-            </div>
-
             <div className="admin-subpanel">
               <h3>PIX</h3>
               <div className="admin-form-grid">
@@ -700,6 +783,42 @@ export function TenantEditorPanel({
                 </AdminField>
               </div>
             </div>
+
+            <div className="admin-subpanel">
+              <h3>Wi-Fi do atalho rapido</h3>
+              <div className="admin-form-grid">
+                <AdminField label="SSID">
+                  <input
+                    value={draft.business.contact?.wifi?.ssid || ''}
+                    onChange={(event) => setDraft((current) => ({
+                      ...current,
+                      business: {
+                        ...current.business,
+                        contact: {
+                          ...current.business.contact,
+                          wifi: { ...(current.business.contact?.wifi || {}), ssid: event.target.value },
+                        },
+                      },
+                    }))}
+                  />
+                </AdminField>
+                <AdminField label="Senha">
+                  <input
+                    value={draft.business.contact?.wifi?.password || ''}
+                    onChange={(event) => setDraft((current) => ({
+                      ...current,
+                      business: {
+                        ...current.business,
+                        contact: {
+                          ...current.business.contact,
+                          wifi: { ...(current.business.contact?.wifi || {}), password: event.target.value },
+                        },
+                      },
+                    }))}
+                  />
+                </AdminField>
+              </div>
+            </div>
           </div>
         </Card>
 
@@ -747,10 +866,10 @@ export function TenantEditorPanel({
                         return { ...current, links };
                       })}
                     >
-                      <option value="external">external</option>
-                      <option value="contact">contact</option>
-                      <option value="social">social</option>
-                      <option value="wifi">wifi</option>
+                      <option value="external">link externo</option>
+                      <option value="contact">contato</option>
+                      <option value="social">instagram / social</option>
+                      <option value="wifi">wi-fi</option>
                       <option value="pix">pix</option>
                     </select>
                   </AdminField>
@@ -1054,46 +1173,42 @@ export function TenantEditorPanel({
                 }))}
               />
             </AdminField>
-            <AdminField label="Cor primaria">
-              <input
-                type="color"
-                value={draft.theme.colors?.primary || '#f97316'}
-                onChange={(event) => setDraft((current) => ({
-                  ...current,
-                  theme: buildDerivedTheme(current.theme, { primary: event.target.value }),
-                }))}
-              />
-            </AdminField>
-            <AdminField label="Cor secundaria">
-              <input
-                type="color"
-                value={draft.theme.colors?.secondary || '#fb7185'}
-                onChange={(event) => setDraft((current) => ({
-                  ...current,
-                  theme: buildDerivedTheme(current.theme, { secondary: event.target.value }),
-                }))}
-              />
-            </AdminField>
-            <AdminField label="Fundo">
-              <input
-                type="color"
-                value={draft.theme.colors?.background || '#140d09'}
-                onChange={(event) => setDraft((current) => ({
-                  ...current,
-                  theme: buildDerivedTheme(current.theme, { background: event.target.value }),
-                }))}
-              />
-            </AdminField>
-            <AdminField label="Texto">
-              <input
-                type="color"
-                value={draft.theme.colors?.text || '#fff8f2'}
-                onChange={(event) => setDraft((current) => ({
-                  ...current,
-                  theme: buildDerivedTheme(current.theme, { text: event.target.value }),
-                }))}
-              />
-            </AdminField>
+            <ThemeColorField
+              label="Cor primaria"
+              value={draft.theme.colors?.primary || '#f97316'}
+              fallback="#f97316"
+              onChange={(nextValue) => setDraft((current) => ({
+                ...current,
+                theme: buildDerivedTheme(current.theme, { primary: nextValue }),
+              }))}
+            />
+            <ThemeColorField
+              label="Cor secundaria"
+              value={draft.theme.colors?.secondary || '#fb7185'}
+              fallback="#fb7185"
+              onChange={(nextValue) => setDraft((current) => ({
+                ...current,
+                theme: buildDerivedTheme(current.theme, { secondary: nextValue }),
+              }))}
+            />
+            <ThemeColorField
+              label="Fundo"
+              value={draft.theme.colors?.background || '#140d09'}
+              fallback="#140d09"
+              onChange={(nextValue) => setDraft((current) => ({
+                ...current,
+                theme: buildDerivedTheme(current.theme, { background: nextValue }),
+              }))}
+            />
+            <ThemeColorField
+              label="Texto"
+              value={draft.theme.colors?.text || '#fff8f2'}
+              fallback="#fff8f2"
+              onChange={(nextValue) => setDraft((current) => ({
+                ...current,
+                theme: buildDerivedTheme(current.theme, { text: nextValue }),
+              }))}
+            />
           </div>
 
           <div id="tenant-footer-signature" className="admin-subpanel admin-subpanel--highlight">
@@ -1202,7 +1317,9 @@ export function TenantEditorPanel({
           </div>
 
           <div className="admin-sections-list">
-            {draft.sections.map((section) => (
+            {draft.sections
+              .filter((section) => !HIDDEN_ADMIN_SECTION_KEYS.has(section.key))
+              .map((section) => (
               <div key={section.key} className="admin-sections-list__item">
                 <div className="admin-section-summary">
                   <strong>{getSectionDisplayLabel(section)}</strong>

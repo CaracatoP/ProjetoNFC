@@ -2,6 +2,14 @@ import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 import { SectionHeader } from '@/components/common/SectionHeader.jsx';
 
+function normalizeComparableText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
 function MetaPill({ label, value }) {
   if (!value) {
     return null;
@@ -19,6 +27,8 @@ export function BusinessHeroSection({ business, section, onBusinessAction, onTra
   const { settings = {} } = section;
   const badge = business.badge || settings.badge;
   const title = business.name || section.title;
+  const shouldHideDuplicateBadge =
+    normalizeComparableText(badge) && normalizeComparableText(badge) === normalizeComparableText(title);
   const description = business.description || section.description;
   const logoUrl = business.logoUrl || settings.logoUrl;
   const bannerUrl = business.bannerUrl || settings.bannerUrl;
@@ -56,7 +66,7 @@ export function BusinessHeroSection({ business, section, onBusinessAction, onTra
         ) : null}
 
         <SectionHeader
-          eyebrow={badge}
+          eyebrow={shouldHideDuplicateBadge ? '' : badge}
           title={title}
           description={description}
         />
