@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { createEvent } from '../controllers/analyticsController.js';
-import { getSiteBySlug, resolveTag } from '../controllers/publicSiteController.js';
+import { getSiteByHost, getSiteBySlug, resolveTag } from '../controllers/publicSiteController.js';
 import { resolveTenant } from '../middlewares/resolveTenant.js';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import { analyticsValidators } from '../validators/analyticsValidators.js';
@@ -9,6 +9,11 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 
 const router = Router();
 
+router.get(
+  '/site',
+  validateRequest(publicSiteValidators.siteByHost),
+  asyncHandler(getSiteByHost),
+);
 router.get(
   '/site/:slug',
   resolveTenant,
@@ -27,4 +32,3 @@ router.post(
 );
 
 export default router;
-

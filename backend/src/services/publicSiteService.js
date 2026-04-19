@@ -1,5 +1,5 @@
 import { AppError } from '../utils/appError.js';
-import { findBusinessBySlug, findPublicBusinessByTenantContext } from '../repositories/businessRepository.js';
+import { findBusinessBySlug, findBusinessByTenantContext } from '../repositories/businessRepository.js';
 import { findThemeByBusinessId } from '../repositories/themeRepository.js';
 import { listVisibleSectionsByBusinessId } from '../repositories/sectionRepository.js';
 import { listVisibleLinksByBusinessId } from '../repositories/linkRepository.js';
@@ -194,6 +194,15 @@ function buildBusinessPublicSiteUrl(business) {
     return `https://${business.domains.customDomain}`;
   }
 
+  if (business?.domains?.subdomain) {
+    try {
+      const baseUrl = new URL(env.publicSiteBaseUrl);
+      return `${baseUrl.protocol}//${business.domains.subdomain}.${baseUrl.host}`;
+    } catch {
+      // Fall through to the slug URL when the configured base URL is invalid.
+    }
+  }
+
   return `${env.publicSiteBaseUrl.replace(/\/$/, '')}/site/${business.slug}`;
 }
 
@@ -291,10 +300,18 @@ function hydrateSection(section, business, links) {
 
 export async function getPublicSiteBySlug(reference) {
   const tenantReference = typeof reference === 'string' ? { slug: reference } : reference;
-  const business = await findPublicBusinessByTenantContext(tenantReference);
+  const business = await findBusinessByTenantContext(tenantReference);
 
   if (!business) {
     throw new AppError('Negocio nao encontrado', 404, 'business_not_found');
+  }
+
+  if (!isPubliclyAccessibleStatus(business.status)) {
+    throw new AppError(
+      'Este site esta temporariamente indisponivel.',
+      423,
+      'business_inactive',
+    );
   }
 
   const [theme, sections, links] = await Promise.all([
@@ -389,7 +406,7 @@ export async function resolveTagToSite(tagCode) {
   const business = tag.businessId;
 
   if (!isPubliclyAccessibleStatus(business.status)) {
-    throw new AppError('Negocio inativo para esta tag', 404, 'business_inactive');
+    throw new AppError('Este site esta temporariamente indisponivel.', 423, 'business_inactive');
   }
 
   await touchTag(tagCode);

@@ -88,6 +88,16 @@ export async function updateAdminBusiness(token, businessId, payload) {
   return normalizeEditorPayload(response.data);
 }
 
+export async function updateAdminBusinessStatus(token, businessId, status) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/businesses/${businessId}/status`, {
+    method: 'PATCH',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify({ status }),
+  });
+
+  return normalizeEditorPayload(response.data);
+}
+
 export async function deleteAdminBusiness(token, businessId) {
   const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/businesses/${businessId}`, {
     method: 'DELETE',

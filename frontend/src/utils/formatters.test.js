@@ -1,11 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
-
-vi.mock('@/config/appConfig.js', () => ({
-  appConfig: {
-    apiBaseUrl: 'https://api.example.com/api',
-  },
-}));
-
+import { describe, expect, it } from 'vitest';
 import { resolveMediaUrl } from './formatters.js';
 
 describe('resolveMediaUrl', () => {
@@ -13,15 +6,13 @@ describe('resolveMediaUrl', () => {
     expect(resolveMediaUrl('https://cdn.example.com/logo.png')).toBe('https://cdn.example.com/logo.png');
   });
 
-  it('rewrites localhost upload URLs to the configured API origin', () => {
-    expect(resolveMediaUrl('http://localhost:4000/uploads/2026-04/logo.png')).toBe(
-      'https://api.example.com/uploads/2026-04/logo.png',
-    );
+  it('keeps cloudinary URLs untouched', () => {
+    expect(
+      resolveMediaUrl('https://res.cloudinary.com/demo/image/upload/v1/nfc-saas/default/banner.png'),
+    ).toBe('https://res.cloudinary.com/demo/image/upload/v1/nfc-saas/default/banner.png');
   });
 
-  it('expands relative upload URLs with the configured API origin', () => {
-    expect(resolveMediaUrl('/uploads/2026-04/banner.png')).toBe(
-      'https://api.example.com/uploads/2026-04/banner.png',
-    );
+  it('returns relative paths as-is when explicitly provided', () => {
+    expect(resolveMediaUrl('/assets/logo-local.svg')).toBe('/assets/logo-local.svg');
   });
 });

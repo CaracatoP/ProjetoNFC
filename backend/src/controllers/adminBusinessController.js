@@ -5,6 +5,7 @@ import {
   getAdminBusinessEditor,
   listAdminBusinesses,
   updateAdminBusiness,
+  updateAdminBusinessStatus,
 } from '../services/adminBusinessService.js';
 
 export async function listAdminBusinessesController(_req, res, next) {
@@ -39,6 +40,17 @@ export async function updateAdminBusinessController(req, res, next) {
   try {
     const businessId = req.validated?.params?.businessId || req.params.businessId;
     const business = await updateAdminBusiness(businessId, req.validated?.body || req.body);
+    return successResponse(res, business);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function updateAdminBusinessStatusController(req, res, next) {
+  try {
+    const businessId = req.validated?.params?.businessId || req.params.businessId;
+    const status = req.validated?.body?.status || req.body?.status;
+    const business = await updateAdminBusinessStatus(businessId, status);
     return successResponse(res, business);
   } catch (error) {
     return next(error);

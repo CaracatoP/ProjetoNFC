@@ -66,4 +66,24 @@ const businessSchema = new mongoose.Schema(
   baseSchemaOptions,
 );
 
+businessSchema.index(
+  { 'domains.subdomain': 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      'domains.subdomain': { $exists: true, $type: 'string' },
+    },
+  },
+);
+
+businessSchema.index(
+  { 'domains.customDomain': 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      'domains.customDomain': { $exists: true, $type: 'string' },
+    },
+  },
+);
+
 export const Business = mongoose.models.Business || mongoose.model('Business', businessSchema);

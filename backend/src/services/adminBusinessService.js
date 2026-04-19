@@ -4,6 +4,7 @@ import {
   buildManagedPrimaryLinks,
   normalizeCreatorSignatureCtaSection,
 } from '../utils/adminDefaults.js';
+import { env } from '../config/env.js';
 import {
   createBusinessRecord,
   deleteBusinessGraphRecords,
@@ -17,7 +18,11 @@ import {
   upsertNfcTagRecord,
   upsertThemeRecord,
 } from '../repositories/adminRepository.js';
-import { isBusinessSlugTaken } from '../repositories/businessRepository.js';
+import {
+  isBusinessCustomDomainTaken,
+  isBusinessSlugTaken,
+  isBusinessSubdomainTaken,
+} from '../repositories/businessRepository.js';
 import { ensureDefaultSubscriptionForBusiness } from './billingService.js';
 
 function normalizeCoordinate(value) {
@@ -27,6 +32,38 @@ function normalizeCoordinate(value) {
 
   const parsed = typeof value === 'number' ? value : Number(String(value).trim().replace(',', '.'));
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function normalizeOptionalValue(value) {
+  const normalized = String(value || '').trim();
+  return normalized || undefined;
+}
+
+function normalizeHost(value) {
+  return normalizeOptionalValue(value)
+    ?.toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/.*$/, '')
+    .replace(/\.$/, '');
+}
+
+function buildBusinessPublicUrl(business = {}) {
+  const publicSiteBaseUrl = String(env.publicSiteBaseUrl || '').trim().replace(/\/$/, '');
+
+  if (business?.domains?.customDomain) {
+    return `https://${business.domains.customDomain}`;
+  }
+
+  if (business?.domains?.subdomain) {
+    try {
+      const baseUrl = new URL(publicSiteBaseUrl);
+      return `${baseUrl.protocol}//${business.domains.subdomain}.${baseUrl.host}`;
+    } catch {
+      // Fall through to slug URL when the environment URL is not parseable.
+    }
+  }
+
+  return `${publicSiteBaseUrl}/site/${business.slug}`;
 }
 
 function normalizeHours(hours = []) {
@@ -60,8 +97,8 @@ function normalizeBusinessPayload(payload = {}) {
     status: String(payload.status || 'draft').trim(),
     rating: String(payload.rating || '').trim(),
     domains: {
-      subdomain: String(payload.domains?.subdomain || '').trim().toLowerCase(),
-      customDomain: String(payload.domains?.customDomain || '').trim().toLowerCase(),
+      subdomain: normalizeOptionalValue(payload.domains?.subdomain)?.toLowerCase(),
+      customDomain: normalizeHost(payload.domains?.customDomain),
     },
     address: {
       display: String(payload.address?.display || '').trim(),
@@ -116,6 +153,58 @@ async function assertBusinessSlugAvailable(slug, excludedBusinessId = null) {
     throw new AppError('Este slug ja esta em uso por outro tenant', 409, 'business_slug_conflict', [
       { path: 'business.slug', message: 'Este slug ja esta em uso por outro tenant' },
     ]);
+  }
+}
+
+async function assertBusinessDomainsAvailable(domains = {}, excludedBusinessId = null) {
+  const subdomain = normalizeOptionalValue(domains.subdomain)?.toLowerCase();
+  const customDomain = normalizeHost(domains.customDomain);
+  const reservedSubdomains = new Set(['www', 'api']);
+
+  if (subdomain && reservedSubdomains.has(subdomain)) {
+    throw new AppError(
+      'Este subdominio esta reservado e nao pode ser usado por um tenant',
+      409,
+      'business_subdomain_reserved',
+      [{ path: 'business.domains.subdomain', message: 'Escolha outro subdominio para este tenant' }],
+    );
+  }
+
+  if (subdomain) {
+    const subdomainAlreadyTaken = await isBusinessSubdomainTaken(subdomain, excludedBusinessId);
+
+    if (subdomainAlreadyTaken) {
+      throw new AppError(
+        'Este subdominio ja esta em uso por outro tenant',
+        409,
+        'business_subdomain_conflict',
+        [{ path: 'business.domains.subdomain', message: 'Este subdominio ja esta em uso por outro tenant' }],
+      );
+    }
+  }
+
+  if (customDomain) {
+    const primaryPublicHost = normalizeHost(env.publicSiteBaseUrl);
+
+    if (primaryPublicHost && customDomain === primaryPublicHost) {
+      throw new AppError(
+        'Este dominio esta reservado como dominio principal da operacao',
+        409,
+        'business_custom_domain_reserved',
+        [{ path: 'business.domains.customDomain', message: 'Escolha outro dominio customizado para o tenant' }],
+      );
+    }
+
+    const customDomainAlreadyTaken = await isBusinessCustomDomainTaken(customDomain, excludedBusinessId);
+
+    if (customDomainAlreadyTaken) {
+      throw new AppError(
+        'Este dominio customizado ja esta em uso por outro tenant',
+        409,
+        'business_custom_domain_conflict',
+        [{ path: 'business.domains.customDomain', message: 'Este dominio customizado ja esta em uso por outro tenant' }],
+      );
+    }
   }
 }
 
@@ -277,6 +366,11 @@ function serializeSummary(business, analyticsMap) {
     slug: business.slug,
     status: business.status,
     logoUrl: business.logoUrl,
+    domains: {
+      subdomain: business.domains?.subdomain || '',
+      customDomain: business.domains?.customDomain || '',
+    },
+    publicUrl: buildBusinessPublicUrl(business),
     description: business.description,
     createdAt: business.createdAt,
     updatedAt: business.updatedAt,
@@ -302,6 +396,7 @@ async function hydrateEditorResponse(businessId) {
     business: {
       id: String(graph.business._id),
       ...normalizeBusinessPayload(graph.business),
+      publicUrl: buildBusinessPublicUrl(graph.business),
     },
     theme: graph.theme ? normalizeThemePayload(graph.theme) : buildDefaultTenantSetup(graph.business).theme,
     links: normalizeLinksPayload(graph.links),
@@ -351,6 +446,7 @@ export async function createAdminBusiness(input) {
     ...(input.business || input),
   });
   await assertBusinessSlugAvailable(businessPayload.slug);
+  await assertBusinessDomainsAvailable(businessPayload.domains);
   const linksPayload = synchronizeManagedLinks(
     normalizeLinksPayload(input.links || defaults.links),
     businessPayload,
@@ -369,6 +465,7 @@ export async function createAdminBusiness(input) {
 export async function updateAdminBusiness(businessId, input) {
   const businessPayload = normalizeBusinessPayload(input.business || {});
   await assertBusinessSlugAvailable(businessPayload.slug, businessId);
+  await assertBusinessDomainsAvailable(businessPayload.domains, businessId);
   const linksPayload = synchronizeManagedLinks(normalizeLinksPayload(input.links || []), businessPayload);
   const business = await updateBusinessRecord(businessId, businessPayload);
 
@@ -382,6 +479,16 @@ export async function updateAdminBusiness(businessId, input) {
     replaceSectionRecords(businessId, normalizeSectionsPayload(input.sections || [])),
     upsertNfcTagRecord(businessId, normalizeTagPayload(input.nfcTag || null)),
   ]);
+
+  return hydrateEditorResponse(businessId);
+}
+
+export async function updateAdminBusinessStatus(businessId, status) {
+  const business = await updateBusinessRecord(businessId, { status });
+
+  if (!business) {
+    throw new AppError('Negocio nao encontrado', 404, 'business_not_found');
+  }
 
   return hydrateEditorResponse(businessId);
 }

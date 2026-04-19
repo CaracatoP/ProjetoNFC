@@ -1,9 +1,10 @@
 export class ApiClientError extends Error {
-  constructor(message, status = 500, details) {
+  constructor(message, status = 500, details, code = 'api_error') {
     super(message);
     this.name = 'ApiClientError';
     this.status = status;
     this.details = details;
+    this.code = code;
   }
 }
 
@@ -23,7 +24,7 @@ export async function apiRequest(url, options = {}, schema) {
       ...restOptions,
     });
   } catch (_networkError) {
-    throw new ApiClientError('Nao foi possivel conectar com a API', 0);
+    throw new ApiClientError('Nao foi possivel conectar com a API', 0, undefined, 'network_error');
   }
 
   const payload = await response.json().catch(() => ({}));
@@ -33,6 +34,7 @@ export async function apiRequest(url, options = {}, schema) {
       payload.error?.message || 'Falha ao processar a requisicao',
       response.status,
       payload.error?.details,
+      payload.error?.code || 'api_error',
     );
   }
 

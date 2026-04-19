@@ -50,6 +50,15 @@ export async function getPublicSiteBySlug(slug) {
   return normalizePublicSiteMedia(response.data);
 }
 
+export async function getPublicSiteByHost(host) {
+  const response = await apiRequest(
+    `${appConfig.apiBaseUrl}/public/site?host=${encodeURIComponent(host)}`,
+    {},
+    publicSiteResponseSchema,
+  );
+  return normalizePublicSiteMedia(response.data);
+}
+
 export async function resolveNfcTag(tagCode) {
   const response = await apiRequest(`${appConfig.apiBaseUrl}/public/tags/${tagCode}/resolve`);
   return response.data;

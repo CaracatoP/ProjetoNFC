@@ -1,5 +1,6 @@
 export function resolveTenant(req, _res, next) {
-  const host = (req.headers.host || '').split(':')[0];
+  const forwardedHost = String(req.headers['x-tenant-host'] || '').trim();
+  const host = (forwardedHost || req.headers.host || '').split(':')[0];
   const hostParts = host.split('.').filter(Boolean);
   const headerSlug = req.headers['x-tenant-slug'];
   let slug = req.params.slug || headerSlug;

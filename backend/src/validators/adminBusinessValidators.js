@@ -1,8 +1,16 @@
 import { z } from 'zod';
-import { BUSINESS_STATUS_VALUES, LINK_GROUPS, LINK_TYPE_VALUES, SECTION_TYPE_VALUES } from '../../../shared/constants/index.js';
+import {
+  BUSINESS_STATUS,
+  BUSINESS_STATUS_VALUES,
+  LINK_GROUPS,
+  LINK_TYPE_VALUES,
+  SECTION_TYPE_VALUES,
+} from '../../../shared/constants/index.js';
 
 const optionalString = z.string().optional().or(z.literal(''));
 const slugPattern = /^[a-z0-9-]+$/;
+const subdomainPattern = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/;
+const customDomainPattern = /^(?!:\/\/)(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
 
 function slugify(value) {
   if (value === undefined || value === null) {
@@ -15,6 +23,27 @@ function slugify(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
+}
+
+function normalizeHost(value) {
+  if (value === undefined || value === null || value === '') {
+    return '';
+  }
+
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/.*$/, '')
+    .replace(/\.$/, '');
+}
+
+function normalizeSubdomain(value) {
+  if (value === undefined || value === null || value === '') {
+    return '';
+  }
+
+  return slugify(value);
 }
 
 const optionalNumber = z.preprocess((value) => {
@@ -44,6 +73,22 @@ const slugSchema = z.preprocess(
   z.string().min(2).regex(slugPattern, 'Informe um slug valido usando apenas letras, numeros e hifens'),
 );
 
+const optionalSubdomainSchema = z.preprocess(
+  (value) => normalizeSubdomain(value),
+  z.union([
+    z.string().regex(subdomainPattern, 'Informe um subdominio valido usando apenas letras, numeros e hifens'),
+    z.literal(''),
+  ]),
+);
+
+const optionalCustomDomainSchema = z.preprocess(
+  (value) => normalizeHost(value),
+  z.union([
+    z.string().regex(customDomainPattern, 'Informe um dominio customizado valido'),
+    z.literal(''),
+  ]),
+);
+
 const businessBodySchema = z.object({
   name: z.string().min(2),
   legalName: optionalString,
@@ -58,8 +103,8 @@ const businessBodySchema = z.object({
   rating: optionalString,
   domains: z
     .object({
-      subdomain: optionalString,
-      customDomain: optionalString,
+      subdomain: optionalSubdomainSchema,
+      customDomain: optionalCustomDomainSchema,
     })
     .default({}),
   address: z
@@ -185,3 +230,7 @@ export const adminBusinessCreateBodySchema = z
     message: 'Informe ao menos nome ou slug para criar o comercio',
     path: ['business'],
   });
+
+export const adminBusinessStatusBodySchema = z.object({
+  status: z.enum([BUSINESS_STATUS.ACTIVE, BUSINESS_STATUS.INACTIVE]),
+});

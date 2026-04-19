@@ -15,6 +15,7 @@ import {
   getAdminBusiness,
   listAdminBusinesses,
   updateAdminBusiness,
+  updateAdminBusinessStatus,
   uploadAdminImage,
 } from '@/services/adminService.js';
 
@@ -43,6 +44,7 @@ export function DashboardHomePage() {
   const [loadingEditor, setLoadingEditor] = useState(false);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [togglingStatus, setTogglingStatus] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -211,6 +213,27 @@ export function DashboardHomePage() {
     }
   }
 
+  async function handleToggleStatus(businessId, nextStatus) {
+    setTogglingStatus(true);
+    setMessage('');
+    setError('');
+
+    try {
+      const updatedEditor = await updateAdminBusinessStatus(token, businessId, nextStatus);
+      setEditor(updatedEditor);
+      await refreshCollections(businessId);
+      setMessage(
+        nextStatus === 'active'
+          ? 'Site ativado com sucesso. A pagina publica voltou a ficar disponivel.'
+          : 'Site inativado com sucesso. O publico agora ve uma mensagem neutra de indisponibilidade.',
+      );
+    } catch (statusError) {
+      setError(getErrorMessage(statusError));
+    } finally {
+      setTogglingStatus(false);
+    }
+  }
+
   async function handleUpload(file, options = {}) {
     setMessage('');
     setError('');
@@ -249,7 +272,7 @@ export function DashboardHomePage() {
               {loadingWorkspace ? 'Atualizando...' : 'Atualizar dados'}
             </Button>
             {selectedSummary ? (
-              <Button href={`/site/${selectedSummary.slug}`} target="_blank" rel="noreferrer">
+              <Button href={selectedSummary.publicUrl || `/site/${selectedSummary.slug}`} target="_blank" rel="noreferrer">
                 Abrir pagina publica
               </Button>
             ) : null}
@@ -302,8 +325,10 @@ export function DashboardHomePage() {
                 <TenantEditorPanel
                   editor={editor}
                   saving={saving}
+                  togglingStatus={togglingStatus}
                   deleting={deleting}
                   onSave={handleSave}
+                  onToggleStatus={handleToggleStatus}
                   onDelete={handleDelete}
                   onUpload={handleUpload}
                 />
