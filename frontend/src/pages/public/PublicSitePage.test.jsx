@@ -1,9 +1,10 @@
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { TenantProvider } from '@/context/TenantContext.jsx';
 import { PublicSitePage } from './PublicSitePage.jsx';
 import * as publicSiteService from '@/services/publicSiteService.js';
 import * as analyticsService from '@/services/analyticsService.js';
+import * as tenantRealtimeService from '@/services/tenantRealtimeService.js';
 
 vi.mock('@/services/publicSiteService.js', () => ({
   getPublicSiteBySlug: vi.fn(),
@@ -11,6 +12,9 @@ vi.mock('@/services/publicSiteService.js', () => ({
 }));
 vi.mock('@/services/analyticsService.js', () => ({
   trackEvent: vi.fn(),
+}));
+vi.mock('@/services/tenantRealtimeService.js', () => ({
+  subscribeToTenantUpdates: vi.fn(),
 }));
 
 const siteFixture = {
@@ -175,9 +179,15 @@ const siteFixture = {
 };
 
 describe('PublicSitePage', () => {
+  let realtimeCallbacks;
+
   beforeEach(() => {
     publicSiteService.getPublicSiteBySlug.mockResolvedValue(siteFixture);
     analyticsService.trackEvent.mockClear();
+    tenantRealtimeService.subscribeToTenantUpdates.mockImplementation((_target, callbacks = {}) => {
+      realtimeCallbacks = callbacks;
+      return vi.fn();
+    });
     Element.prototype.scrollIntoView = vi.fn();
     Object.defineProperty(window.navigator, 'clipboard', {
       configurable: true,
@@ -255,5 +265,42 @@ describe('PublicSitePage', () => {
 
     expect(await screen.findByText('Este site esta temporariamente indisponivel')).toBeInTheDocument();
     expect(screen.getByText('Tente novamente mais tarde.')).toBeInTheDocument();
+  });
+
+  it('reloads the tenant when a realtime update arrives', async () => {
+    publicSiteService.getPublicSiteBySlug
+      .mockResolvedValueOnce(siteFixture)
+      .mockResolvedValueOnce({
+        ...siteFixture,
+        business: {
+          ...siteFixture.business,
+          description: 'Experiencia atualizada em tempo real.',
+        },
+      });
+
+    render(
+      <TenantProvider>
+        <MemoryRouter initialEntries={['/site/barbearia-estilo-vivo']}>
+          <Routes>
+            <Route path="/site/:slug" element={<PublicSitePage />} />
+          </Routes>
+        </MemoryRouter>
+      </TenantProvider>,
+    );
+
+    expect(await screen.findByText('Experiencia premium.')).toBeInTheDocument();
+
+    await act(async () => {
+      realtimeCallbacks?.onTenantUpdated?.({
+        businessId: 'business-1',
+        slug: 'barbearia-estilo-vivo',
+        operation: 'updated',
+      });
+    });
+
+    expect(await screen.findByText('Experiencia atualizada em tempo real.')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(publicSiteService.getPublicSiteBySlug.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
   });
 });

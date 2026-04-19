@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { createEvent } from '../controllers/analyticsController.js';
-import { getSiteByHost, getSiteBySlug, resolveTag } from '../controllers/publicSiteController.js';
+import { getSiteByHost, getSiteBySlug, resolveTag, streamTenantUpdates } from '../controllers/publicSiteController.js';
 import { resolveTenant } from '../middlewares/resolveTenant.js';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import { analyticsValidators } from '../validators/analyticsValidators.js';
@@ -13,6 +13,11 @@ router.get(
   '/site',
   validateRequest(publicSiteValidators.siteByHost),
   asyncHandler(getSiteByHost),
+);
+router.get(
+  '/realtime/tenant',
+  validateRequest(publicSiteValidators.realtimeSubscription),
+  streamTenantUpdates,
 );
 router.get(
   '/site/:slug',

@@ -24,6 +24,7 @@ import {
   isBusinessSubdomainTaken,
 } from '../repositories/businessRepository.js';
 import { ensureDefaultSubscriptionForBusiness } from './billingService.js';
+import { publishTenantUpdated } from './tenantRealtimeService.js';
 
 function normalizeCoordinate(value) {
   if (value === '' || value === null || value === undefined) {
@@ -64,6 +65,19 @@ function buildBusinessPublicUrl(business = {}) {
   }
 
   return `${publicSiteBaseUrl}/site/${business.slug}`;
+}
+
+function publishBusinessRealtimeUpdate(editor, context = {}) {
+  publishTenantUpdated({
+    operation: context.operation || 'updated',
+    businessId: editor?.business?.id,
+    slug: editor?.business?.slug,
+    previousSlug: context.previousSlug,
+    status: editor?.business?.status,
+    publicUrl: editor?.business?.publicUrl,
+    domains: editor?.business?.domains,
+    previousDomains: context.previousDomains,
+  });
 }
 
 function normalizeHours(hours = []) {
@@ -458,11 +472,13 @@ export async function createAdminBusiness(input) {
   await replaceSectionRecords(business._id, normalizeSectionsPayload(input.sections || defaults.sections));
   await upsertNfcTagRecord(business._id, normalizeTagPayload(input.nfcTag || defaults.nfcTag));
   await ensureDefaultSubscriptionForBusiness(business._id);
-
-  return hydrateEditorResponse(String(business._id));
+  const editor = await hydrateEditorResponse(String(business._id));
+  publishBusinessRealtimeUpdate(editor, { operation: 'created' });
+  return editor;
 }
 
 export async function updateAdminBusiness(businessId, input) {
+  const existingGraph = await findBusinessGraphForAdmin(businessId);
   const businessPayload = normalizeBusinessPayload(input.business || {});
   await assertBusinessSlugAvailable(businessPayload.slug, businessId);
   await assertBusinessDomainsAvailable(businessPayload.domains, businessId);
@@ -480,17 +496,32 @@ export async function updateAdminBusiness(businessId, input) {
     upsertNfcTagRecord(businessId, normalizeTagPayload(input.nfcTag || null)),
   ]);
 
-  return hydrateEditorResponse(businessId);
+  const editor = await hydrateEditorResponse(businessId);
+  publishBusinessRealtimeUpdate(editor, {
+    operation: 'updated',
+    previousSlug: existingGraph.business?.slug,
+    previousDomains: existingGraph.business?.domains,
+  });
+
+  return editor;
 }
 
 export async function updateAdminBusinessStatus(businessId, status) {
+  const existingGraph = await findBusinessGraphForAdmin(businessId);
   const business = await updateBusinessRecord(businessId, { status });
 
   if (!business) {
     throw new AppError('Negocio nao encontrado', 404, 'business_not_found');
   }
 
-  return hydrateEditorResponse(businessId);
+  const editor = await hydrateEditorResponse(businessId);
+  publishBusinessRealtimeUpdate(editor, {
+    operation: 'status_changed',
+    previousSlug: existingGraph.business?.slug,
+    previousDomains: existingGraph.business?.domains,
+  });
+
+  return editor;
 }
 
 export async function deleteAdminBusiness(businessId) {
@@ -501,9 +532,20 @@ export async function deleteAdminBusiness(businessId) {
   }
 
   await deleteBusinessGraphRecords(businessId);
+  publishTenantUpdated({
+    operation: 'deleted',
+    businessId,
+    slug: existing.business.slug,
+    previousSlug: existing.business.slug,
+    status: 'deleted',
+    publicUrl: buildBusinessPublicUrl(existing.business),
+    domains: existing.business.domains,
+    previousDomains: existing.business.domains,
+  });
 
   return {
     deleted: true,
     businessId,
+    slug: existing.business.slug,
   };
 }

@@ -12,6 +12,16 @@ function normalizeHost(value) {
     .replace(/\.$/, '');
 }
 
+const optionalStringSchema = z.preprocess(
+  (value) => String(value || '').trim(),
+  z.string(),
+);
+
+const optionalHostSchema = z.preprocess(
+  (value) => normalizeHost(value),
+  z.string(),
+);
+
 export const publicSiteValidators = {
   siteBySlug: {
     params: slugParamsSchema,
@@ -23,6 +33,31 @@ export const publicSiteValidators = {
         z.string().regex(hostPattern, 'Informe um host valido para resolver o tenant'),
       ),
     }),
+  },
+  realtimeSubscription: {
+    query: z
+      .object({
+        businessId: optionalStringSchema.optional(),
+        slug: optionalStringSchema.optional(),
+        host: optionalHostSchema.optional(),
+      })
+      .superRefine((value, context) => {
+        if (!value.businessId && !value.slug && !value.host) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['slug'],
+            message: 'Informe businessId, slug ou host para assinar atualizacoes do tenant',
+          });
+        }
+
+        if (value.host && !hostPattern.test(value.host)) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['host'],
+            message: 'Informe um host valido para assinar atualizacoes do tenant',
+          });
+        }
+      }),
   },
   tagResolution: {
     params: tagParamsSchema,

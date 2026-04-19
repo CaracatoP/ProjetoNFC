@@ -1,4 +1,4 @@
-import { startTransition, useDeferredValue, useEffect, useState } from 'react';
+import { startTransition, useCallback, useDeferredValue, useEffect, useState } from 'react';
 import { getPublicSiteBySlug } from '@/services/publicSiteService.js';
 
 const initialState = {
@@ -10,6 +10,11 @@ const initialState = {
 export function useBusinessSite(slug) {
   const deferredSlug = useDeferredValue(slug);
   const [state, setState] = useState(initialState);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const reload = useCallback(() => {
+    setReloadKey((current) => current + 1);
+  }, []);
 
   useEffect(() => {
     if (!deferredSlug) {
@@ -48,8 +53,10 @@ export function useBusinessSite(slug) {
     return () => {
       cancelled = true;
     };
-  }, [deferredSlug]);
+  }, [deferredSlug, reloadKey]);
 
-  return state;
+  return {
+    ...state,
+    reload,
+  };
 }
-

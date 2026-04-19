@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { BusinessPixModal } from '@/components/business/BusinessPixModal.jsx';
 import { BusinessWifiModal } from '@/components/business/BusinessWifiModal.jsx';
 import { EmptyState } from '@/components/common/EmptyState.jsx';
@@ -7,6 +7,7 @@ import { PublicSiteLayout } from '@/components/layout/PublicSiteLayout.jsx';
 import { SectionRenderer } from '@/components/business/SectionRenderer.jsx';
 import { useAnalytics } from '@/hooks/useAnalytics.js';
 import { useBusinessSite } from '@/hooks/useBusinessSite.js';
+import { subscribeToTenantUpdates } from '@/services/tenantRealtimeService.js';
 import { useTenantTheme } from '@/hooks/useTenantTheme.js';
 import { useTenant } from '@/context/TenantContext.jsx';
 import { getSectionAnchor } from '@/utils/sections.js';
@@ -50,7 +51,8 @@ function getPublicErrorContent(error) {
 
 export function PublicSitePage() {
   const { slug = '' } = useParams();
-  const { status, data: site, error } = useBusinessSite(slug);
+  const navigate = useNavigate();
+  const { status, data: site, error, reload } = useBusinessSite(slug);
   const { setSite } = useTenant();
   const { trackAction, trackPageView } = useAnalytics(site);
   const trackedSlugRef = useRef('');
@@ -89,6 +91,29 @@ export function PublicSitePage() {
       themeColorMeta.setAttribute('content', themeColor);
     }
   }, [setSite, site, trackPageView]);
+
+  useEffect(() => {
+    const subscriptionTarget = site?.business?.id
+      ? { businessId: site.business.id }
+      : slug
+        ? { slug }
+        : null;
+
+    if (!subscriptionTarget) {
+      return undefined;
+    }
+
+    return subscribeToTenantUpdates(subscriptionTarget, {
+      onTenantUpdated(payload) {
+        if (payload?.slug && payload.slug !== slug) {
+          navigate(`/site/${payload.slug}`, { replace: true });
+          return;
+        }
+
+        reload();
+      },
+    });
+  }, [navigate, reload, site?.business?.id, slug]);
 
   function scrollToSection(sectionKey) {
     const element = document.getElementById(getSectionAnchor(sectionKey));
