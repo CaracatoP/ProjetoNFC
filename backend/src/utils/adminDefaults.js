@@ -106,17 +106,17 @@ export function buildCreatorSignatureCtaSection(overrides = {}) {
   const section = {
     key: 'cta',
     type: SECTION_TYPES.CTA,
-    title: 'Feito por Caraçato',
-    description: 'Entre em contato pelo Instagram @caracato_.',
+    title: '',
+    description: '',
     order: 100,
-    visible: true,
+    visible: false,
     variant: '',
     settings: {
       variant: 'footer-signature',
-      eyebrow: 'Criacao do site',
+      eyebrow: '',
       primaryAction: {
-        label: 'Instagram @caracato_',
-        href: 'https://instagram.com/caracato_',
+        label: '',
+        href: '',
       },
     },
     items: [],
@@ -145,7 +145,7 @@ export function normalizeCreatorSignatureCtaSection(section = {}) {
     ...section,
     title: isLegacyDefault ? '' : section.title,
     description: isLegacyDefault ? '' : section.description,
-    visible: section.visible !== false,
+    visible: isLegacyDefault ? false : section.visible === true,
     settings: section.settings || {},
     items: Array.isArray(section.items) ? section.items : [],
   });

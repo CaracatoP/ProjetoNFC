@@ -17,6 +17,8 @@ import {
   upsertNfcTagRecord,
   upsertThemeRecord,
 } from '../repositories/adminRepository.js';
+import { isBusinessSlugTaken } from '../repositories/businessRepository.js';
+import { ensureDefaultSubscriptionForBusiness } from './billingService.js';
 
 function normalizeCoordinate(value) {
   if (value === '' || value === null || value === undefined) {
@@ -57,6 +59,10 @@ function normalizeBusinessPayload(payload = {}) {
     badge: String(payload.badge || '').trim(),
     status: String(payload.status || 'draft').trim(),
     rating: String(payload.rating || '').trim(),
+    domains: {
+      subdomain: String(payload.domains?.subdomain || '').trim().toLowerCase(),
+      customDomain: String(payload.domains?.customDomain || '').trim().toLowerCase(),
+    },
     address: {
       display: String(payload.address?.display || '').trim(),
       mapUrl: String(payload.address?.mapUrl || '').trim(),
@@ -97,6 +103,20 @@ function normalizeBusinessPayload(payload = {}) {
       imagePublicId: String(payload.seo?.imagePublicId || '').trim(),
     },
   };
+}
+
+async function assertBusinessSlugAvailable(slug, excludedBusinessId = null) {
+  if (!slug) {
+    return;
+  }
+
+  const slugAlreadyTaken = await isBusinessSlugTaken(slug, excludedBusinessId);
+
+  if (slugAlreadyTaken) {
+    throw new AppError('Este slug ja esta em uso por outro tenant', 409, 'business_slug_conflict', [
+      { path: 'business.slug', message: 'Este slug ja esta em uso por outro tenant' },
+    ]);
+  }
 }
 
 function normalizeThemePayload(payload = {}) {
@@ -330,6 +350,7 @@ export async function createAdminBusiness(input) {
     ...defaults.business,
     ...(input.business || input),
   });
+  await assertBusinessSlugAvailable(businessPayload.slug);
   const linksPayload = synchronizeManagedLinks(
     normalizeLinksPayload(input.links || defaults.links),
     businessPayload,
@@ -340,12 +361,14 @@ export async function createAdminBusiness(input) {
   await replaceLinkRecords(business._id, linksPayload);
   await replaceSectionRecords(business._id, normalizeSectionsPayload(input.sections || defaults.sections));
   await upsertNfcTagRecord(business._id, normalizeTagPayload(input.nfcTag || defaults.nfcTag));
+  await ensureDefaultSubscriptionForBusiness(business._id);
 
   return hydrateEditorResponse(String(business._id));
 }
 
 export async function updateAdminBusiness(businessId, input) {
   const businessPayload = normalizeBusinessPayload(input.business || {});
+  await assertBusinessSlugAvailable(businessPayload.slug, businessId);
   const linksPayload = synchronizeManagedLinks(normalizeLinksPayload(input.links || []), businessPayload);
   const business = await updateBusinessRecord(businessId, businessPayload);
 

@@ -6,6 +6,8 @@ let app;
 let connectDatabase;
 let disconnectDatabase;
 let seedDemoData;
+let Subscription;
+let User;
 let mongoServer;
 let adminToken;
 
@@ -33,9 +35,12 @@ describe('Admin routes', () => {
     process.env.ADMIN_USERNAME = 'admin@nfc.local';
     process.env.ADMIN_PASSWORD = 'admin123456';
     process.env.ADMIN_TOKEN_SECRET = 'test-admin-secret';
+    process.env.AUTH_LOGIN_RATE_LIMIT_MAX = '100';
 
     ({ connectDatabase, disconnectDatabase } = await import('../config/database.js'));
     ({ seedDemoData } = await import('../utils/seedDemoData.js'));
+    ({ Subscription } = await import('../models/Subscription.js'));
+    ({ User } = await import('../models/User.js'));
     ({ default: app } = await import('../app.js'));
 
     await connectDatabase();
@@ -43,6 +48,7 @@ describe('Admin routes', () => {
 
   beforeEach(async () => {
     await seedDemoData({ reset: true });
+    await User.deleteMany({});
     const loginResponse = await request(app).post('/api/admin/auth/login').send({
       username: 'admin@nfc.local',
       password: 'admin123456',
@@ -64,6 +70,34 @@ describe('Admin routes', () => {
     expect(response.body.data.user.username).toBe('admin@nfc.local');
   });
 
+  it('bootstraps the admin user in the database and rejects invalid credentials', async () => {
+    const persistedAdmin = await User.findOne({ email: 'admin@nfc.local' }).lean();
+
+    expect(persistedAdmin).toBeTruthy();
+    expect(persistedAdmin.roles).toContain('superadmin');
+    expect(persistedAdmin.passwordHash).toBeTruthy();
+
+    const invalidLoginResponse = await request(app).post('/api/admin/auth/login').send({
+      username: 'admin@nfc.local',
+      password: 'senha-errada',
+    });
+
+    expect(invalidLoginResponse.status).toBe(401);
+    expect(invalidLoginResponse.body.error.code).toBe('admin_invalid_credentials');
+  });
+
+  it('rejects login for disabled admin users', async () => {
+    await User.updateOne({ email: 'admin@nfc.local' }, { status: 'disabled' });
+
+    const response = await request(app).post('/api/admin/auth/login').send({
+      email: 'admin@nfc.local',
+      password: 'admin123456',
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('admin_user_disabled');
+  });
+
   it('creates and lists businesses for the internal dashboard', async () => {
     const createResponse = await request(app)
       .post('/api/admin/businesses')
@@ -79,8 +113,14 @@ describe('Admin routes', () => {
     expect(createResponse.body.data.business.slug).toBe('restaurante-vista-boa');
     expect(createResponse.body.data.business.status).toBe('active');
 
+    const subscription = await Subscription.findOne({
+      businessId: createResponse.body.data.business.id,
+    }).lean();
+
     const publicResponse = await request(app).get('/api/public/site/restaurante-vista-boa');
 
+    expect(subscription).toBeTruthy();
+    expect(subscription.status).toBe('active');
     expect(publicResponse.status).toBe(200);
     expect(publicResponse.body.data.business.slug).toBe('restaurante-vista-boa');
 
@@ -90,6 +130,22 @@ describe('Admin routes', () => {
 
     expect(listResponse.status).toBe(200);
     expect(listResponse.body.data.some((item) => item.slug === 'restaurante-vista-boa')).toBe(true);
+  });
+
+  it('returns a clear conflict when trying to create a tenant with duplicate slug', async () => {
+    const response = await request(app)
+      .post('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        business: {
+          name: 'Barbearia Clone',
+          slug: 'barbearia-estilo-vivo',
+        },
+      });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('business_slug_conflict');
+    expect(response.body.error.details?.[0]?.path).toBe('business.slug');
   });
 
   it('updates an existing business editor payload', async () => {

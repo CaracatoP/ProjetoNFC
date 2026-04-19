@@ -9,7 +9,7 @@ export function AuthLandingPage() {
   const location = useLocation();
   const { login, status, error, isAuthenticated } = useAuth();
   const [form, setForm] = useState({
-    username: '',
+    email: '',
     password: '',
   });
   const [localError, setLocalError] = useState('');
@@ -26,14 +26,14 @@ export function AuthLandingPage() {
     event.preventDefault();
     setLocalError('');
 
-    if (!form.username.trim() || !form.password.trim()) {
-      setLocalError('Informe usuario e senha para entrar no painel.');
+    if (!form.email.trim() || !form.password.trim()) {
+      setLocalError('Informe e-mail e senha para entrar no painel.');
       return;
     }
 
     try {
       await login({
-        username: form.username.trim(),
+        email: form.email.trim(),
         password: form.password,
       });
     } catch (loginError) {
@@ -55,17 +55,18 @@ export function AuthLandingPage() {
           <div className="admin-panel-card__header">
             <div>
               <h2>Entrar no backoffice</h2>
-              <p>Use as credenciais administrativas configuradas no backend para abrir o painel interno.</p>
+              <p>Use um usuario admin persistido no backend para acessar o painel interno com sessao segura.</p>
             </div>
           </div>
 
           <form className="admin-form admin-form--stack" onSubmit={handleSubmit}>
             <label className="admin-field">
-              <span>Usuario</span>
+              <span>E-mail administrativo</span>
               <input
+                type="email"
                 autoComplete="username"
-                value={form.username}
-                onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))}
+                value={form.email}
+                onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
                 placeholder="seu-email@dominio.com"
               />
             </label>
@@ -113,7 +114,7 @@ export function AuthLandingPage() {
             <div className="admin-ranked-item">
               <div>
                 <strong>Uploads preparados</strong>
-                <span>Logo, banner e fotos sobem agora localmente com caminho pronto para storage cloud.</span>
+                <span>Logo, banner e fotos sobem pelo backend e seguem para o Cloudinary com organizacao por tenant.</span>
               </div>
             </div>
             <div className="admin-ranked-item">
@@ -125,7 +126,7 @@ export function AuthLandingPage() {
           </div>
 
           <p className="admin-muted-copy">
-            Use as credenciais administrativas configuradas no backend. Se quiser trocar isso depois, basta ajustar `ADMIN_USERNAME` e `ADMIN_PASSWORD` no ambiente.
+            O primeiro usuario admin pode ser bootstrapado pelo ambiente, mas depois fica persistido no banco para evoluir para multiplos acessos.
           </p>
         </Card>
       </div>

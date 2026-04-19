@@ -1,5 +1,5 @@
 import { AppError } from '../utils/appError.js';
-import { findBusinessBySlug, findPublicBusinessBySlug } from '../repositories/businessRepository.js';
+import { findBusinessBySlug, findPublicBusinessByTenantContext } from '../repositories/businessRepository.js';
 import { findThemeByBusinessId } from '../repositories/themeRepository.js';
 import { listVisibleSectionsByBusinessId } from '../repositories/sectionRepository.js';
 import { listVisibleLinksByBusinessId } from '../repositories/linkRepository.js';
@@ -189,6 +189,14 @@ function isPubliclyAccessibleStatus(status) {
   return status === BUSINESS_STATUS.ACTIVE || status === BUSINESS_STATUS.DRAFT;
 }
 
+function buildBusinessPublicSiteUrl(business) {
+  if (business?.domains?.customDomain) {
+    return `https://${business.domains.customDomain}`;
+  }
+
+  return `${env.publicSiteBaseUrl.replace(/\/$/, '')}/site/${business.slug}`;
+}
+
 function hydrateSection(section, business, links) {
   const settings = { ...(section.settings || {}) };
 
@@ -281,8 +289,9 @@ function hydrateSection(section, business, links) {
   }
 }
 
-export async function getPublicSiteBySlug(slug) {
-  const business = await findPublicBusinessBySlug(slug);
+export async function getPublicSiteBySlug(reference) {
+  const tenantReference = typeof reference === 'string' ? { slug: reference } : reference;
+  const business = await findPublicBusinessByTenantContext(tenantReference);
 
   if (!business) {
     throw new AppError('Negocio nao encontrado', 404, 'business_not_found');
@@ -314,6 +323,7 @@ export async function getPublicSiteBySlug(slug) {
       bannerUrl: business.bannerUrl,
       badge: business.badge,
       status: business.status,
+      domains: business.domains || {},
       address: business.address,
       hours: business.hours || [],
       rating: business.rating,
@@ -388,7 +398,7 @@ export async function resolveTagToSite(tagCode) {
     tagCode,
     businessId: business._id.toString(),
     slug: business.slug,
-    siteUrl: `${env.publicSiteBaseUrl.replace(/\/$/, '')}/site/${business.slug}`,
+    siteUrl: buildBusinessPublicSiteUrl(business),
   };
 }
 

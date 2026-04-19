@@ -241,7 +241,7 @@ export function DashboardHomePage() {
           <div>
             <h2>Workspace da operacao</h2>
             <p>
-              Logado como <strong>{user?.displayName || 'Admin'}</strong>. Os uploads estao preparados para storage cloud e o painel ja opera em cima da API multi-tenant.
+              Logado como <strong>{user?.displayName || 'Admin'}</strong>. Sessao protegida por token, uploads no Cloudinary e operacao multi-tenant centralizada.
             </p>
           </div>
           <div className="admin-editor-actions">

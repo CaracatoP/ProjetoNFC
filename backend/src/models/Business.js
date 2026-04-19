@@ -15,6 +15,11 @@ const businessSchema = new mongoose.Schema(
     badge: { type: String, trim: true },
     status: { type: String, enum: BUSINESS_STATUS_VALUES, default: 'draft', index: true },
     rating: { type: String, trim: true },
+    domains: {
+      subdomain: { type: String, trim: true, lowercase: true },
+      customDomain: { type: String, trim: true, lowercase: true },
+      customDomainVerifiedAt: Date,
+    },
     address: {
       display: { type: String, trim: true },
       mapUrl: { type: String, trim: true },

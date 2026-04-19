@@ -56,6 +56,12 @@ const businessBodySchema = z.object({
   badge: optionalString,
   status: z.enum(BUSINESS_STATUS_VALUES),
   rating: optionalString,
+  domains: z
+    .object({
+      subdomain: optionalString,
+      customDomain: optionalString,
+    })
+    .default({}),
   address: z
     .object({
       display: optionalString,
@@ -70,7 +76,7 @@ const businessBodySchema = z.object({
     .object({
       whatsapp: optionalString,
       phone: optionalString,
-      email: optionalString,
+      email: z.string().email().optional().or(z.literal('')),
       wifi: z
         .object({
           ssid: optionalString,

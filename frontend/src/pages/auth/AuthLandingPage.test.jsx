@@ -29,14 +29,14 @@ describe('AuthLandingPage', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByLabelText('Usuario')).toHaveValue('');
-    await user.type(screen.getByLabelText('Usuario'), 'joaogabrielcaracato@gmail.com');
+    expect(screen.getByLabelText('E-mail administrativo')).toHaveValue('');
+    await user.type(screen.getByLabelText('E-mail administrativo'), 'joaogabrielcaracato@gmail.com');
     await user.type(screen.getByLabelText('Senha'), 'Jo@o240107');
     await user.click(screen.getByRole('button', { name: /Entrar no painel/i }));
 
     await waitFor(() => {
       expect(login).toHaveBeenCalledWith({
-        username: 'joaogabrielcaracato@gmail.com',
+        email: 'joaogabrielcaracato@gmail.com',
         password: 'Jo@o240107',
       });
     });

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import { logger } from '../utils/logger.js';
 import { env } from './env.js';
 
 mongoose.set('strictQuery', true);
@@ -12,6 +13,7 @@ export async function connectDatabase() {
 
   try {
     await mongoose.connect(env.mongodbUri);
+    logger.info('Connected to MongoDB');
     return mongoose.connection;
   } catch (error) {
     const canFallbackToMemory = env.nodeEnv !== 'production';
@@ -20,10 +22,11 @@ export async function connectDatabase() {
       throw error;
     }
 
-    console.warn('Mongo local indisponível; iniciando Mongo em memória para desenvolvimento.');
+    logger.warn({ err: error }, 'MongoDB unavailable. Falling back to in-memory database for development');
 
     memoryServer = await MongoMemoryServer.create();
     await mongoose.connect(memoryServer.getUri());
+    logger.info('Connected to in-memory MongoDB');
     return mongoose.connection;
   }
 }
@@ -38,6 +41,7 @@ export async function disconnectDatabase() {
   }
 
   await mongoose.disconnect();
+  logger.info('Disconnected from MongoDB');
 
   if (memoryServer) {
     await memoryServer.stop();

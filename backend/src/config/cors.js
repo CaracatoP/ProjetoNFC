@@ -7,8 +7,7 @@ export const corsOptions = {
       return;
     }
 
-    callback(new Error(`Origin ${origin} não permitida pelo CORS`));
+    callback(new Error(`Origin ${origin} nao permitida pelo CORS`));
   },
   credentials: true,
 };
-

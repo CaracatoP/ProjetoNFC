@@ -152,11 +152,17 @@ const siteFixture = {
       id: 'cta-1',
       key: 'cta',
       type: 'cta',
-      title: '',
-      description: '',
+      title: 'Fale com nossa equipe',
+      description: 'Canal configurado pelo tenant.',
       order: 60,
       visible: true,
-      settings: {},
+      settings: {
+        eyebrow: 'Contato final',
+        primaryAction: {
+          label: 'Abrir Instagram',
+          href: 'https://instagram.com/tenant-oficial',
+        },
+      },
       items: [],
     },
   ],
@@ -194,10 +200,10 @@ describe('PublicSitePage', () => {
     expect(screen.getAllByText('Barbearia Estilo Vivo')).toHaveLength(1);
     expect(screen.getByText('Servicos')).toBeInTheDocument();
     expect(screen.getByText('Experiencia premium.')).toBeInTheDocument();
-    expect(screen.getByText('Feito por Caraçato')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Instagram @caracato_/i })).toHaveAttribute(
+    expect(screen.getByText('Fale com nossa equipe')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Abrir Instagram/i })).toHaveAttribute(
       'href',
-      'https://instagram.com/caracato_',
+      'https://instagram.com/tenant-oficial',
     );
     expect(screen.getByRole('button', { name: /Wi-Fi/i })).toBeInTheDocument();
     expect(screen.getByText('Instagram').closest('a')).toHaveAttribute(

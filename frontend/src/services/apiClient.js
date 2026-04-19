@@ -15,16 +15,22 @@ export async function apiRequest(url, options = {}, schema) {
     ...customHeaders,
   };
 
-  const response = await fetch(url, {
-    headers,
-    ...restOptions,
-  });
+  let response;
+
+  try {
+    response = await fetch(url, {
+      headers,
+      ...restOptions,
+    });
+  } catch (_networkError) {
+    throw new ApiClientError('Nao foi possivel conectar com a API', 0);
+  }
 
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok || payload.success === false) {
     throw new ApiClientError(
-      payload.error?.message || 'Falha ao processar a requisição',
+      payload.error?.message || 'Falha ao processar a requisicao',
       response.status,
       payload.error?.details,
     );

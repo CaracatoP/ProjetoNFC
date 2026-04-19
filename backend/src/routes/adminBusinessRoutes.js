@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { ADMIN_ROLES } from '../../../shared/constants/index.js';
 import {
   createAdminBusinessController,
   deleteAdminBusinessController,
@@ -7,6 +8,7 @@ import {
   updateAdminBusinessController,
 } from '../controllers/adminBusinessController.js';
 import { requireAdminAuth } from '../middlewares/requireAdminAuth.js';
+import { requireAdminRole } from '../middlewares/requireAdminRole.js';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import {
   adminBusinessCreateBodySchema,
@@ -25,6 +27,11 @@ router.put(
   validateRequest({ params: adminBusinessParamsSchema, body: adminBusinessEditorBodySchema }),
   updateAdminBusinessController,
 );
-router.delete('/:businessId', validateRequest({ params: adminBusinessParamsSchema }), deleteAdminBusinessController);
+router.delete(
+  '/:businessId',
+  requireAdminRole([ADMIN_ROLES.SUPERADMIN]),
+  validateRequest({ params: adminBusinessParamsSchema }),
+  deleteAdminBusinessController,
+);
 
 export default router;

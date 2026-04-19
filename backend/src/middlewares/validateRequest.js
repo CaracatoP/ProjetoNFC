@@ -33,7 +33,7 @@ export function validateRequest(schemas) {
       next();
     } catch (error) {
       if (isZodLikeError(error)) {
-        next(new AppError('Falha de validação', 400, 'validation_error', formatZodIssues(error)));
+        next(new AppError('Falha de validacao', 400, 'validation_error', formatZodIssues(error)));
         return;
       }
 

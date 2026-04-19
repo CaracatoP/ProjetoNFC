@@ -13,7 +13,7 @@ export async function loginAdminController(req, res, next) {
 
 export async function getAdminSessionController(_req, res, next) {
   try {
-    const session = await getAdminSession();
+    const session = await getAdminSession(_req.adminUser?.id);
     return successResponse(res, session);
   } catch (error) {
     return next(error);

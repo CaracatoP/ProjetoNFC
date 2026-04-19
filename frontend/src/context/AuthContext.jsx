@@ -23,6 +23,7 @@ export function AuthProvider({ children }) {
         if (active) {
           setStatus('guest');
           setUser(null);
+          setError('');
         }
         return;
       }
@@ -46,6 +47,7 @@ export function AuthProvider({ children }) {
         setToken('');
         setUser(null);
         setStatus('guest');
+        setError('Sua sessao expirou. Entre novamente para continuar.');
       }
     }
 

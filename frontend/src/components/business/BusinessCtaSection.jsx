@@ -1,36 +1,48 @@
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 
-function getCreatorSignatureFallback() {
+function normalizeAction(actionConfig) {
+  if (!actionConfig) {
+    return null;
+  }
+
+  const label = String(actionConfig.label || '').trim();
+  const href = String(actionConfig.href || '').trim();
+  const action = String(actionConfig.action || '').trim();
+
+  if (!label && !href && !action) {
+    return null;
+  }
+
   return {
-    title: 'Feito por Caraçato',
-    description: 'Entre em contato pelo Instagram @caracato_.',
-    settings: {
-      variant: 'footer-signature',
-      eyebrow: 'Criacao do site',
-      primaryAction: {
-        label: 'Instagram @caracato_',
-        href: 'https://instagram.com/caracato_',
-      },
-    },
+    ...actionConfig,
+    label,
+    href,
+    action,
   };
 }
 
 export function BusinessCtaSection({ section, onBusinessAction, onTrackAction }) {
-  const fallback = getCreatorSignatureFallback();
   const settings = {
-    ...fallback.settings,
     ...(section.settings || {}),
-    primaryAction: {
-      ...fallback.settings.primaryAction,
-      ...(section.settings?.primaryAction || {}),
-    },
+    primaryAction: normalizeAction(section.settings?.primaryAction),
+    secondaryAction: normalizeAction(section.settings?.secondaryAction),
   };
-  const title = section.title || fallback.title;
-  const description = section.description || fallback.description;
-  const eyebrow = settings.eyebrow || fallback.settings.eyebrow;
+  const title = String(section.title || '').trim();
+  const description = String(section.description || '').trim();
+  const eyebrow = String(settings.eyebrow || '').trim();
   const primaryAction = settings.primaryAction;
   const secondaryAction = settings.secondaryAction;
+  const hasVisibleContent =
+    Boolean(eyebrow) ||
+    Boolean(title) ||
+    Boolean(description) ||
+    Boolean(primaryAction?.label) ||
+    Boolean(secondaryAction?.label);
+
+  if (!hasVisibleContent) {
+    return null;
+  }
 
   function trackCtaClick(targetType, targetLabel) {
     onTrackAction?.({

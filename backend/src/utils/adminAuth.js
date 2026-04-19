@@ -1,64 +1,60 @@
-import crypto from 'node:crypto';
+import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
+import { AppError } from './appError.js';
 
-function encodeTokenPart(value) {
-  return Buffer.from(JSON.stringify(value)).toString('base64url');
+function assertAdminJwtSecret() {
+  if (String(env.adminTokenSecret || '').trim()) {
+    return;
+  }
+
+  throw new AppError(
+    'ADMIN_TOKEN_SECRET ou JWT_SECRET precisa estar configurado para autenticar o painel admin',
+    500,
+    'admin_auth_secret_missing',
+  );
 }
 
-function decodeTokenPart(value) {
-  return JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
-}
+export function buildAdminUserProfile(user) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
 
-function signPayload(payload) {
-  return crypto.createHmac('sha256', env.adminTokenSecret).update(payload).digest('base64url');
-}
-
-export function getAdminUserProfile() {
   return {
-    username: env.adminUsername,
-    displayName: env.adminDisplayName,
-    role: 'internal_admin',
+    id: String(user?._id || user?.id || ''),
+    email: user?.email || '',
+    username: user?.email || '',
+    displayName: user?.name || 'Admin',
+    roles,
+    role: roles[0] || 'admin',
+    status: user?.status || 'active',
   };
 }
 
-export function createAdminSessionToken() {
-  const expiresAt = Date.now() + env.adminSessionTtlHours * 60 * 60 * 1000;
-  const payload = encodeTokenPart({
-    sub: env.adminUsername,
-    role: 'internal_admin',
-    exp: expiresAt,
-  });
-  const signature = signPayload(payload);
+export function createAdminSessionToken(user) {
+  assertAdminJwtSecret();
 
-  return `${payload}.${signature}`;
+  return jwt.sign(
+    {
+      sub: String(user._id),
+      roles: user.roles || [],
+      email: user.email,
+    },
+    env.adminTokenSecret,
+    {
+      issuer: 'nfc-linktree-saas',
+      audience: 'admin-panel',
+      expiresIn: `${env.adminSessionTtlHours}h`,
+    },
+  );
 }
 
 export function verifyAdminSessionToken(token) {
-  const [payloadPart, signaturePart] = String(token || '').split('.');
+  assertAdminJwtSecret();
 
-  if (!payloadPart || !signaturePart) {
+  try {
+    return jwt.verify(String(token || ''), env.adminTokenSecret, {
+      issuer: 'nfc-linktree-saas',
+      audience: 'admin-panel',
+    });
+  } catch (_error) {
     return null;
   }
-
-  const expectedSignature = signPayload(payloadPart);
-  const providedBuffer = Buffer.from(signaturePart);
-  const expectedBuffer = Buffer.from(expectedSignature);
-
-  if (providedBuffer.length !== expectedBuffer.length) {
-    return null;
-  }
-
-  const validSignature = crypto.timingSafeEqual(providedBuffer, expectedBuffer);
-
-  if (!validSignature) {
-    return null;
-  }
-
-  const payload = decodeTokenPart(payloadPart);
-
-  if (!payload?.sub || payload.exp < Date.now()) {
-    return null;
-  }
-
-  return getAdminUserProfile();
 }

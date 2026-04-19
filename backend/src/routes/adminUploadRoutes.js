@@ -2,6 +2,7 @@ import multer from 'multer';
 import { Router } from 'express';
 import { env } from '../config/env.js';
 import { uploadAdminImageController } from '../controllers/adminUploadController.js';
+import { adminUploadRateLimiter } from '../middlewares/rateLimit.js';
 import { requireAdminAuth } from '../middlewares/requireAdminAuth.js';
 import { AppError } from '../utils/appError.js';
 
@@ -23,6 +24,6 @@ const upload = multer({
 });
 
 router.use(requireAdminAuth);
-router.post('/image', upload.single('file'), uploadAdminImageController);
+router.post('/image', adminUploadRateLimiter, upload.single('file'), uploadAdminImageController);
 
 export default router;
