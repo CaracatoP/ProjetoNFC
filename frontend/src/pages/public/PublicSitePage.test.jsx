@@ -235,4 +235,25 @@ describe('PublicSitePage', () => {
       expect(document.documentElement.style.getPropertyValue('--theme-primary')).toBe('#f97316');
     });
   });
+
+  it('shows a neutral message when the tenant is inactive', async () => {
+    publicSiteService.getPublicSiteBySlug.mockRejectedValueOnce({
+      status: 423,
+      code: 'business_inactive',
+      message: 'Este site esta temporariamente indisponivel.',
+    });
+
+    render(
+      <TenantProvider>
+        <MemoryRouter initialEntries={['/site/barbearia-estilo-vivo']}>
+          <Routes>
+            <Route path="/site/:slug" element={<PublicSitePage />} />
+          </Routes>
+        </MemoryRouter>
+      </TenantProvider>,
+    );
+
+    expect(await screen.findByText('Este site esta temporariamente indisponivel')).toBeInTheDocument();
+    expect(screen.getByText('Tente novamente mais tarde.')).toBeInTheDocument();
+  });
 });

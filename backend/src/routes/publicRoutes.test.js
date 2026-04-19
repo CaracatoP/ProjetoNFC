@@ -55,6 +55,16 @@ describe('Public routes', () => {
     expect(response.body.error.code).toBe('business_not_found');
   });
 
+  it('returns a neutral blocked response when the tenant is inactive', async () => {
+    await Business.findOneAndUpdate({ slug: 'barbearia-estilo-vivo' }, { status: 'inactive' });
+
+    const response = await request(app).get('/api/public/site/barbearia-estilo-vivo');
+
+    expect(response.status).toBe(423);
+    expect(response.body.success).toBe(false);
+    expect(response.body.error.code).toBe('business_inactive');
+  });
+
   it('allows public access for a draft tenant slug', async () => {
     await Business.findOneAndUpdate({ slug: 'barbearia-estilo-vivo' }, { status: 'draft' });
 
@@ -63,6 +73,32 @@ describe('Public routes', () => {
     expect(response.status).toBe(200);
     expect(response.body.data.business.slug).toBe('barbearia-estilo-vivo');
     expect(response.body.data.business.status).toBe('draft');
+  });
+
+  it('resolves the tenant by configured subdomain host', async () => {
+    await Business.findOneAndUpdate(
+      { slug: 'barbearia-estilo-vivo' },
+      { domains: { subdomain: 'estilo-vivo', customDomain: '' } },
+    );
+
+    const response = await request(app).get('/api/public/site').query({ host: 'estilo-vivo.tenant.local' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.business.slug).toBe('barbearia-estilo-vivo');
+    expect(response.body.meta.resolvedBy).toBe('host');
+  });
+
+  it('resolves the tenant by configured custom domain host', async () => {
+    await Business.findOneAndUpdate(
+      { slug: 'barbearia-estilo-vivo' },
+      { domains: { subdomain: '', customDomain: 'cliente-estilo-vivo.com.br' } },
+    );
+
+    const response = await request(app).get('/api/public/site').query({ host: 'cliente-estilo-vivo.com.br' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.business.slug).toBe('barbearia-estilo-vivo');
+    expect(response.body.meta.resolvedBy).toBe('host');
   });
 
   it('resolves an NFC tag to a business site', async () => {
@@ -80,6 +116,15 @@ describe('Public routes', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.slug).toBe('barbearia-estilo-vivo');
+  });
+
+  it('blocks NFC resolution when the tenant is inactive', async () => {
+    await Business.findOneAndUpdate({ slug: 'barbearia-estilo-vivo' }, { status: 'inactive' });
+
+    const response = await request(app).get('/api/public/tags/NFC-BARB-001/resolve');
+
+    expect(response.status).toBe(423);
+    expect(response.body.error.code).toBe('business_inactive');
   });
 
   it('records analytics events with validation', async () => {

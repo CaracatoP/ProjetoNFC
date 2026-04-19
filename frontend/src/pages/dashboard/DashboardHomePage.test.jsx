@@ -16,6 +16,7 @@ vi.mock('@/services/adminService.js', () => ({
   getAdminBusiness: vi.fn(),
   createAdminBusiness: vi.fn(),
   updateAdminBusiness: vi.fn(),
+  updateAdminBusinessStatus: vi.fn(),
   deleteAdminBusiness: vi.fn(),
   uploadAdminImage: vi.fn(),
 }));
@@ -55,6 +56,7 @@ const businessFixture = {
   name: 'Barbearia Estilo Vivo',
   slug: 'barbearia-estilo-vivo',
   status: 'active',
+  publicUrl: 'https://projeto-nfc-frontend.vercel.app/site/barbearia-estilo-vivo',
   analytics: {
     totalEvents: 24,
   },
@@ -70,7 +72,12 @@ const editorFixture = {
     bannerUrl: '',
     badge: 'Corte premium',
     status: 'active',
+    publicUrl: 'https://projeto-nfc-frontend.vercel.app/site/barbearia-estilo-vivo',
     rating: '4.9',
+    domains: {
+      subdomain: '',
+      customDomain: '',
+    },
     address: {
       display: 'Av. Paulista, 1000',
       mapUrl: 'https://maps.example.com',
@@ -235,8 +242,18 @@ describe('DashboardHomePage', () => {
       },
     });
     adminService.updateAdminBusiness.mockResolvedValue(editorFixture);
+    adminService.updateAdminBusinessStatus.mockResolvedValue({
+      ...editorFixture,
+      business: {
+        ...editorFixture.business,
+        status: 'inactive',
+      },
+    });
     adminService.deleteAdminBusiness.mockResolvedValue({ deleted: true });
-    adminService.uploadAdminImage.mockResolvedValue({ url: 'http://localhost:4000/uploads/teste.png' });
+    adminService.uploadAdminImage.mockResolvedValue({
+      url: 'https://res.cloudinary.com/demo/image/upload/v1/nfc-saas/barbearia-estilo-vivo/logo.png',
+      publicId: 'nfc-saas/barbearia-estilo-vivo/logo-demo',
+    });
   });
 
   it('loads admin overview and allows quick tenant onboarding', async () => {
@@ -343,5 +360,28 @@ describe('DashboardHomePage', () => {
       expect(saveCall?.[2]?.theme?.colors?.accent).toContain('34, 197, 94');
       expect(saveCall?.[2]?.theme?.buttons?.primary?.background).toContain('#22c55e');
     });
+  });
+
+  it('toggles the tenant status from the editor header', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+    expect(await screen.findByText('Analytics do tenant')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Inativar site/i }));
+
+    await waitFor(() => {
+      expect(adminService.updateAdminBusinessStatus).toHaveBeenCalledWith('admin-token', 'business-1', 'inactive');
+    });
+
+    expect(
+      await screen.findByText(/Site inativado com sucesso\. O publico agora ve uma mensagem neutra de indisponibilidade\./i),
+    ).toBeInTheDocument();
   });
 });

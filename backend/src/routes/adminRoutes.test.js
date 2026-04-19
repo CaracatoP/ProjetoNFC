@@ -70,6 +70,13 @@ describe('Admin routes', () => {
     expect(response.body.data.user.username).toBe('admin@nfc.local');
   });
 
+  it('protects admin routes when the bearer token is missing', async () => {
+    const response = await request(app).get('/api/admin/businesses');
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('admin_unauthorized');
+  });
+
   it('bootstraps the admin user in the database and rejects invalid credentials', async () => {
     const persistedAdmin = await User.findOne({ email: 'admin@nfc.local' }).lean();
 
@@ -174,6 +181,36 @@ describe('Admin routes', () => {
 
     expect(updateResponse.status).toBe(200);
     expect(updateResponse.body.data.business.name).toBe('Barbearia Estilo Vivo Premium');
+  });
+
+  it('toggles the tenant status and blocks public rendering while inactive', async () => {
+    const listResponse = await request(app)
+      .get('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const targetBusiness = listResponse.body.data.find((item) => item.slug === 'barbearia-estilo-vivo');
+    const targetId = targetBusiness.id;
+
+    const deactivateResponse = await request(app)
+      .patch(`/api/admin/businesses/${targetId}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'inactive' });
+
+    expect(deactivateResponse.status).toBe(200);
+    expect(deactivateResponse.body.data.business.status).toBe('inactive');
+
+    const publicWhileInactive = await request(app).get('/api/public/site/barbearia-estilo-vivo');
+
+    expect(publicWhileInactive.status).toBe(423);
+    expect(publicWhileInactive.body.error.code).toBe('business_inactive');
+
+    const reactivateResponse = await request(app)
+      .patch(`/api/admin/businesses/${targetId}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'active' });
+
+    expect(reactivateResponse.status).toBe(200);
+    expect(reactivateResponse.body.data.business.status).toBe('active');
   });
 
   it('sanitizes blank editor fields during update instead of rejecting the payload', async () => {
@@ -330,5 +367,20 @@ describe('Admin routes', () => {
     expect(uploadResponse.status).toBe(201);
     expect(uploadResponse.body.data.url).toContain('res.cloudinary.com');
     expect(uploadResponse.body.data.publicId).toBe('nfc-saas/barbearia-estilo-vivo/banner-demo');
+  });
+
+  it('rejects non-image files on the admin upload route', async () => {
+    const response = await request(app)
+      .post('/api/admin/uploads/image')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .field('tenantSlug', 'barbearia-estilo-vivo')
+      .field('assetType', 'banner')
+      .attach('file', Buffer.from('nao-e-imagem'), {
+        filename: 'arquivo.txt',
+        contentType: 'text/plain',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('upload_invalid_type');
   });
 });

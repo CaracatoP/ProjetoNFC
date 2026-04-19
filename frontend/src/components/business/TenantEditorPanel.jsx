@@ -135,6 +135,64 @@ function slugify(value, { preserveTrailingSeparator = false } = {}) {
   return preserveTrailingSeparator ? normalized : normalized.replace(/-+$/g, '');
 }
 
+function normalizeOptionalHost(value) {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/.*$/, '')
+    .replace(/\.$/, '');
+
+  return normalized || '';
+}
+
+function getEnvironmentOrigin(fallbackUrl = '') {
+  const browserOrigin = typeof window !== 'undefined' ? String(window.location.origin || '').replace(/\/$/, '') : '';
+
+  if (browserOrigin) {
+    return browserOrigin;
+  }
+
+  try {
+    return new URL(fallbackUrl).origin;
+  } catch {
+    return '';
+  }
+}
+
+function buildSubdomainPreviewUrl(subdomain, fallbackUrl = '') {
+  const normalizedSubdomain = slugify(subdomain);
+
+  if (!normalizedSubdomain) {
+    return '';
+  }
+
+  const baseOrigin = getEnvironmentOrigin(fallbackUrl);
+
+  try {
+    const baseUrl = new URL(baseOrigin || fallbackUrl);
+    return `${baseUrl.protocol}//${normalizedSubdomain}.${baseUrl.host}`;
+  } catch {
+    return `https://${normalizedSubdomain}.seu-dominio.com`;
+  }
+}
+
+function buildTenantPublicUrlPreview(business = {}, fallbackUrl = '') {
+  const slug = slugify(business.slug);
+  const customDomain = normalizeOptionalHost(business.domains?.customDomain);
+  const subdomain = slugify(business.domains?.subdomain);
+  const origin = getEnvironmentOrigin(fallbackUrl);
+  const slugUrl = slug && origin ? `${origin}/site/${slug}` : slug ? `/site/${slug}` : '';
+  const subdomainUrl = buildSubdomainPreviewUrl(subdomain, fallbackUrl);
+
+  return {
+    slugUrl,
+    subdomainUrl,
+    customDomainUrl: customDomain ? `https://${customDomain}` : '',
+    preferredUrl: customDomain ? `https://${customDomain}` : subdomainUrl || slugUrl || fallbackUrl || '',
+  };
+}
+
 function ensureSection(draft, key, fallbackType = 'custom') {
   const existing = draft.sections.find((section) => section.key === key);
 
@@ -373,9 +431,11 @@ export function TenantEditorPanel({
   editor,
   saving,
   deleting,
+  togglingStatus,
   onSave,
   onDelete,
   onUpload,
+  onToggleStatus,
 }) {
   const [draft, setDraft] = useState(editor ? cloneDeep(editor) : null);
   const [uploadingField, setUploadingField] = useState('');
@@ -405,6 +465,8 @@ export function TenantEditorPanel({
   const recentAnalyticsEvents = analyticsSummary?.recentEvents || [];
   const maxAnalyticsEventCount = Math.max(1, ...analyticsByEventType.map((item) => item.count || 0));
   const latestAnalyticsEvent = recentAnalyticsEvents[0] || null;
+  const isActive = draft.business.status === 'active';
+  const publicUrlPreview = buildTenantPublicUrlPreview(draft.business, editor?.business?.publicUrl);
   const quickLinks = [
     { href: '#tenant-identity', label: 'Identidade' },
     { href: '#tenant-media', label: 'Midia' },
@@ -426,7 +488,7 @@ export function TenantEditorPanel({
         <div className="admin-editor-header">
           <div>
             <h2>{draft.business.name}</h2>
-            <p>/site/{draft.business.slug}</p>
+            <p>{publicUrlPreview.preferredUrl || `/site/${draft.business.slug}`}</p>
             <div className="admin-editor-meta">
               <span className="admin-meta-pill">Status: {draft.business.status}</span>
               <span className="admin-meta-pill">Tag: {draft.nfcTag?.code || 'Sem codigo NFC'}</span>
@@ -434,6 +496,13 @@ export function TenantEditorPanel({
             </div>
           </div>
           <div className="admin-editor-actions">
+            <Button
+              variant="secondary"
+              onClick={() => onToggleStatus?.(draft.business.id, isActive ? 'inactive' : 'active')}
+              disabled={togglingStatus || deleting || saving}
+            >
+              {togglingStatus ? (isActive ? 'Inativando...' : 'Ativando...') : isActive ? 'Inativar site' : 'Ativar site'}
+            </Button>
             <Button variant="secondary" className="button--danger-tone" onClick={() => onDelete?.(draft.business.id)} disabled={deleting}>
               {deleting ? 'Excluindo...' : 'Excluir tenant'}
             </Button>
@@ -497,6 +566,54 @@ export function TenantEditorPanel({
                 <option value="inactive">inactive</option>
               </select>
             </AdminField>
+            <AdminField
+              label="Subdominio do cliente"
+              description="Opcional. Exemplo: studio-exemplo gera um preview como studio-exemplo.seu-dominio.com."
+            >
+              <input
+                value={draft.business.domains?.subdomain || ''}
+                onChange={(event) => setDraft((current) => ({
+                  ...current,
+                  business: {
+                    ...current.business,
+                    domains: {
+                      ...(current.business.domains || {}),
+                      subdomain: slugify(event.target.value, { preserveTrailingSeparator: true }),
+                    },
+                  },
+                }))}
+                onBlur={(event) => setDraft((current) => ({
+                  ...current,
+                  business: {
+                    ...current.business,
+                    domains: {
+                      ...(current.business.domains || {}),
+                      subdomain: slugify(event.target.value),
+                    },
+                  },
+                }))}
+                placeholder="studio-exemplo"
+              />
+            </AdminField>
+            <AdminField
+              label="Dominio customizado"
+              description="Opcional. Informe apenas o host, por exemplo cliente.com.br."
+            >
+              <input
+                value={draft.business.domains?.customDomain || ''}
+                onChange={(event) => setDraft((current) => ({
+                  ...current,
+                  business: {
+                    ...current.business,
+                    domains: {
+                      ...(current.business.domains || {}),
+                      customDomain: normalizeOptionalHost(event.target.value),
+                    },
+                  },
+                }))}
+                placeholder="cliente.com.br"
+              />
+            </AdminField>
             <AdminField label="Badge">
               <input
                 value={draft.business.badge || ''}
@@ -536,13 +653,33 @@ export function TenantEditorPanel({
               }))}
             />
           </AdminField>
+
+          <div className="admin-inline-note">
+            <strong>URL publica</strong>
+            <span>{publicUrlPreview.preferredUrl || 'Preencha slug, subdominio ou dominio customizado para gerar uma URL publica.'}</span>
+          </div>
+
+          <div className="admin-domain-preview-grid">
+            <div className="admin-domain-preview-card">
+              <strong>Slug atual</strong>
+              <span>{publicUrlPreview.slugUrl || 'Ainda nao definido'}</span>
+            </div>
+            <div className="admin-domain-preview-card">
+              <strong>Preview por subdominio</strong>
+              <span>{publicUrlPreview.subdomainUrl || 'Nenhum subdominio configurado'}</span>
+            </div>
+            <div className="admin-domain-preview-card">
+              <strong>Preview por dominio</strong>
+              <span>{publicUrlPreview.customDomainUrl || 'Nenhum dominio customizado configurado'}</span>
+            </div>
+          </div>
         </Card>
 
         <Card id="tenant-media" className="admin-panel-card">
           <div className="admin-panel-card__header">
             <div>
               <h2>Logo, banner e uploads</h2>
-              <p>Suba logo, icone do site e banner em armazenamento local preparado para trocar por cloud depois.</p>
+              <p>Suba logo, icone do site e banner com upload centralizado no Cloudinary e persistencia segura por tenant.</p>
             </div>
           </div>
 

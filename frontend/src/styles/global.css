@@ -906,7 +906,8 @@ img {
 .admin-form-grid,
 .admin-media-grid,
 .admin-split-grid,
-.admin-mini-stats {
+.admin-mini-stats,
+.admin-domain-preview-grid {
   display: grid;
   gap: var(--layout-card-gap);
 }
@@ -1013,9 +1014,33 @@ img {
 .admin-stat-card,
 .admin-section-summary,
 .admin-ranked-item > div,
-.admin-event-item > div {
+.admin-event-item > div,
+.admin-inline-note,
+.admin-domain-preview-card {
   display: grid;
   gap: 0.35rem;
+}
+
+.admin-inline-note,
+.admin-domain-preview-card {
+  padding: 0.95rem 1rem;
+  border-radius: calc(var(--radius-md) - 0.2rem);
+  border: 1px solid var(--theme-border);
+  background: color-mix(in srgb, var(--theme-surface-alt) 50%, transparent);
+}
+
+.admin-inline-note strong,
+.admin-domain-preview-card strong {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+}
+
+.admin-inline-note span,
+.admin-domain-preview-card span {
+  color: var(--theme-text-muted);
+  line-height: 1.6;
+  word-break: break-word;
 }
 
 .admin-editor-actions,
@@ -1138,7 +1163,8 @@ img {
 
 .admin-media-grid,
 .admin-split-grid,
-.admin-mini-stats {
+.admin-mini-stats,
+.admin-domain-preview-grid {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
