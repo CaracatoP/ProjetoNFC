@@ -500,6 +500,10 @@ function AdminField({ label, children, description, error }) {
   );
 }
 
+function SectionEyebrow({ children }) {
+  return <span className="admin-editor-kicker">{children}</span>;
+}
+
 function SensitiveInput({ label, value, onChange, placeholder, error }) {
   const [revealed, setRevealed] = useState(false);
 
@@ -680,17 +684,18 @@ export function TenantEditorPanel({
   return (
     <div className="admin-editor-stack">
       <Card className="admin-panel-card admin-panel-card--hero">
-        <div className="admin-editor-header">
+        <div className="admin-editor-header admin-editor-header--hero">
           <div>
+            <SectionEyebrow>Tenant em edicao</SectionEyebrow>
             <h2>{draft.business.name}</h2>
-            <p>{publicUrlPreview.preferredUrl || `/site/${draft.business.slug}`}</p>
-            <div className="admin-editor-meta">
+            <p className="admin-editor-public-url">{publicUrlPreview.preferredUrl || `/site/${draft.business.slug}`}</p>
+            <div className="admin-editor-meta admin-editor-meta--hero">
               <span className="admin-meta-pill">Status: {draft.business.status}</span>
               <span className="admin-meta-pill">Tag: {draft.nfcTag?.code || 'Sem codigo NFC'}</span>
               <span className="admin-meta-pill">Eventos: {analyticsSummary?.totalEvents || 0}</span>
             </div>
           </div>
-          <div className="admin-toolbar">
+          <div className="admin-toolbar admin-toolbar--editor">
             <div className="admin-toolbar__group">
               <Button variant="secondary" onClick={onCopyPublicLink} disabled={!publicUrlPreview.preferredUrl}>
                 Copiar link
@@ -727,6 +732,7 @@ export function TenantEditorPanel({
         <div className="admin-card-stack admin-card-stack--airy">
           <div className="admin-panel-card__header">
             <div>
+              <SectionEyebrow>Fluxo</SectionEyebrow>
               <h2>Fluxo do editor</h2>
               <p>Navegue por etapas para ajustar o tenant com mais foco e menos densidade visual.</p>
             </div>
@@ -756,7 +762,7 @@ export function TenantEditorPanel({
           </div>
 
           <div className="admin-stepper-footer">
-            <div className="admin-inline-note">
+            <div className="admin-inline-note admin-inline-note--step">
               <strong>{EDITOR_STEPS[activeStepIndex]?.label}</strong>
               <span>{EDITOR_STEPS[activeStepIndex]?.description}</span>
             </div>
@@ -784,6 +790,7 @@ export function TenantEditorPanel({
         <Card id="tenant-identity" className="admin-panel-card">
           <div className="admin-panel-card__header">
             <div>
+              <SectionEyebrow>Base</SectionEyebrow>
               <h2>Identidade do tenant</h2>
               <p>Dados basicos, slug, status e apresentacao da pagina.</p>
             </div>
@@ -947,6 +954,7 @@ export function TenantEditorPanel({
         <Card id="tenant-media" className="admin-panel-card">
           <div className="admin-panel-card__header">
             <div>
+              <SectionEyebrow>Visual</SectionEyebrow>
               <h2>Logo, banner e uploads</h2>
               <p>Suba logo, icone do site e banner com upload centralizado no Cloudinary e persistencia segura por tenant.</p>
             </div>
@@ -1099,6 +1107,7 @@ export function TenantEditorPanel({
         <Card id="tenant-contact" className="admin-panel-card">
           <div className="admin-panel-card__header">
             <div>
+              <SectionEyebrow>Operacao</SectionEyebrow>
               <h2>Contato e atendimento</h2>
               <p>Canais principais, endereco e horario resumido do tenant.</p>
             </div>
@@ -1176,6 +1185,7 @@ export function TenantEditorPanel({
         <Card id="tenant-payments" className="admin-panel-card">
           <div className="admin-panel-card__header">
             <div>
+              <SectionEyebrow>Operacao</SectionEyebrow>
               <h2>Pagamentos</h2>
               <p>Configure o PIX do site principal e o Wi-Fi usado no atalho rapido.</p>
             </div>
@@ -1286,6 +1296,7 @@ export function TenantEditorPanel({
         <Card id="tenant-links" className="admin-panel-card">
           <div className="admin-panel-card__header">
             <div>
+              <SectionEyebrow>Atalhos</SectionEyebrow>
               <h2>Links e atalhos</h2>
               <p>Edite os botoes de acesso rapido e outros links agrupados do tenant.</p>
             </div>
@@ -1393,6 +1404,7 @@ export function TenantEditorPanel({
         <Card id="tenant-services-gallery" className="admin-panel-card">
           <div className="admin-panel-card__header">
             <div>
+              <SectionEyebrow>Conteudo</SectionEyebrow>
               <h2>Servicos e galeria</h2>
               <p>Conteudo principal da pagina publica do negocio.</p>
             </div>
@@ -1614,6 +1626,7 @@ export function TenantEditorPanel({
         <Card id="tenant-content" className="admin-panel-card admin-panel-card--span-2">
           <div className="admin-panel-card__header">
             <div>
+              <SectionEyebrow>Advanced</SectionEyebrow>
               <h2>Conteudo, SEO e secoes</h2>
               <p>Controle visibilidade, mensagem institucional e cores do tenant.</p>
             </div>
@@ -1853,6 +1866,7 @@ export function TenantEditorPanel({
         <Card className="admin-panel-card admin-panel-card--span-2">
           <div className="admin-panel-card__header">
             <div>
+              <SectionEyebrow>Historico</SectionEyebrow>
               <h2>Historico de alteracoes</h2>
               <p>Registro leve das ultimas mudancas salvas para este tenant.</p>
             </div>
@@ -1882,6 +1896,7 @@ export function TenantEditorPanel({
         <Card id="tenant-analytics" className="admin-panel-card admin-panel-card--span-2">
           <div className="admin-panel-card__header">
             <div>
+              <SectionEyebrow>Observabilidade</SectionEyebrow>
               <h2>Analytics do tenant</h2>
               <p>Mostre valor rapidamente com volume de acessos e interacoes.</p>
             </div>
