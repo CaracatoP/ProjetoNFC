@@ -723,48 +723,60 @@ export function TenantEditorPanel({
         </div>
       </Card>
 
-      <div className="admin-stepper">
-        {EDITOR_STEPS.map((step, index) => (
-          <button
-            key={step.id}
-            type="button"
-            className={`admin-stepper__item ${activeStep === step.id ? 'admin-stepper__item--active' : ''}`}
-            aria-label={step.label}
-            aria-current={activeStep === step.id ? 'step' : undefined}
-            title={step.label}
-            onClick={() => setActiveStep(step.id)}
-          >
-            <span className="admin-stepper__index">{index + 1}</span>
-            <span className="admin-stepper__copy">
-              <strong>{step.label}</strong>
-              <small>{step.description}</small>
+      <Card className="admin-panel-card admin-panel-card--controls">
+        <div className="admin-card-stack admin-card-stack--airy">
+          <div className="admin-panel-card__header">
+            <div>
+              <h2>Fluxo do editor</h2>
+              <p>Navegue por etapas para ajustar o tenant com mais foco e menos densidade visual.</p>
+            </div>
+            <span className="admin-section-chip admin-section-chip--accent">
+              Etapa {activeStepIndex + 1} de {EDITOR_STEPS.length}
             </span>
-          </button>
-        ))}
-      </div>
+          </div>
 
-      <div className="admin-stepper-footer">
-        <div className="admin-inline-note">
-          <strong>
-            Etapa {activeStepIndex + 1} de {EDITOR_STEPS.length}
-          </strong>
-          <span>{EDITOR_STEPS[activeStepIndex]?.description}</span>
-        </div>
-        <div className="admin-inline-actions">
-          <Button variant="secondary" disabled={activeStepIndex <= 0} onClick={() => setActiveStep(EDITOR_STEPS[Math.max(0, activeStepIndex - 1)].id)}>
-            Voltar
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={activeStepIndex >= EDITOR_STEPS.length - 1}
-            onClick={() => setActiveStep(EDITOR_STEPS[Math.min(EDITOR_STEPS.length - 1, activeStepIndex + 1)].id)}
-          >
-            Proxima etapa
-          </Button>
-        </div>
-      </div>
+          <div className="admin-stepper">
+            {EDITOR_STEPS.map((step, index) => (
+              <button
+                key={step.id}
+                type="button"
+                className={`admin-stepper__item ${activeStep === step.id ? 'admin-stepper__item--active' : ''}`}
+                aria-label={step.label}
+                aria-current={activeStep === step.id ? 'step' : undefined}
+                title={step.label}
+                onClick={() => setActiveStep(step.id)}
+              >
+                <span className="admin-stepper__index">{index + 1}</span>
+                <span className="admin-stepper__copy">
+                  <strong>{step.label}</strong>
+                  <small>{step.description}</small>
+                </span>
+              </button>
+            ))}
+          </div>
 
-      {localError ? <p className="admin-status-banner admin-status-banner--error">{localError}</p> : null}
+          <div className="admin-stepper-footer">
+            <div className="admin-inline-note">
+              <strong>{EDITOR_STEPS[activeStepIndex]?.label}</strong>
+              <span>{EDITOR_STEPS[activeStepIndex]?.description}</span>
+            </div>
+            <div className="admin-inline-actions">
+              <Button variant="secondary" disabled={activeStepIndex <= 0} onClick={() => setActiveStep(EDITOR_STEPS[Math.max(0, activeStepIndex - 1)].id)}>
+                Voltar
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={activeStepIndex >= EDITOR_STEPS.length - 1}
+                onClick={() => setActiveStep(EDITOR_STEPS[Math.min(EDITOR_STEPS.length - 1, activeStepIndex + 1)].id)}
+              >
+                Proxima etapa
+              </Button>
+            </div>
+          </div>
+
+          {localError ? <p className="admin-status-banner admin-status-banner--error">{localError}</p> : null}
+        </div>
+      </Card>
 
       <div className="admin-editor-grid">
         {activeStep === 'basic' ? (
@@ -777,6 +789,7 @@ export function TenantEditorPanel({
             </div>
           </div>
 
+          <div className="admin-card-stack admin-card-stack--airy">
           <div className="admin-form-grid">
             <AdminField label="Nome do comercio" error={validationErrors['business.name']}>
               <input
@@ -924,6 +937,7 @@ export function TenantEditorPanel({
               <span>{publicUrlPreview.customDomainUrl || 'Nenhum dominio customizado configurado'}</span>
             </div>
           </div>
+          </div>
         </Card>
 
           </>
@@ -938,6 +952,7 @@ export function TenantEditorPanel({
             </div>
           </div>
 
+          <div className="admin-card-stack">
           <div className="admin-media-grid">
             <div className="admin-media-card">
               <PreviewImage src={draft.business.logoUrl} alt={draft.business.name} />
@@ -1075,6 +1090,7 @@ export function TenantEditorPanel({
               {uploadingField === 'banner' ? <small>Enviando banner...</small> : null}
             </div>
           </div>
+          </div>
         </Card>
         ) : null}
 
@@ -1088,6 +1104,7 @@ export function TenantEditorPanel({
             </div>
           </div>
 
+          <div className="admin-card-stack">
           <div className="admin-form-grid">
             <AdminField label="WhatsApp" error={validationErrors['business.contact.whatsapp']}>
               <input
@@ -1153,6 +1170,7 @@ export function TenantEditorPanel({
               />
             </AdminField>
           </div>
+          </div>
         </Card>
 
         <Card id="tenant-payments" className="admin-panel-card">
@@ -1163,6 +1181,7 @@ export function TenantEditorPanel({
             </div>
           </div>
 
+          <div className="admin-card-stack">
           <div className="admin-split-grid">
             <div className="admin-subpanel">
               <h3>PIX</h3>
@@ -1258,6 +1277,7 @@ export function TenantEditorPanel({
               </div>
             </div>
           </div>
+          </div>
         </Card>
           </>
         ) : null}
@@ -1274,6 +1294,7 @@ export function TenantEditorPanel({
             </Button>
           </div>
 
+          <div className="admin-card-stack">
           <div className="admin-repeater-list">
             {draft.links.map((link, index) => (
               <div key={link.id || index} className="admin-repeater-card">
@@ -1364,6 +1385,7 @@ export function TenantEditorPanel({
               </div>
             ))}
           </div>
+          </div>
         </Card>
         ) : null}
 
@@ -1376,6 +1398,8 @@ export function TenantEditorPanel({
             </div>
           </div>
 
+          <div className="admin-card-stack admin-card-stack--airy">
+          <section className="admin-form-block admin-form-block--soft">
           <div className="admin-visibility-toggle">
             <label>
               <input
@@ -1468,7 +1492,9 @@ export function TenantEditorPanel({
               </div>
             ))}
           </div>
+          </section>
 
+          <section className="admin-form-block admin-form-block--soft">
           <div className="admin-visibility-toggle">
             <label>
               <input
@@ -1578,6 +1604,8 @@ export function TenantEditorPanel({
               </div>
             ))}
           </div>
+          </section>
+          </div>
         </Card>
         ) : null}
 
@@ -1591,6 +1619,7 @@ export function TenantEditorPanel({
             </div>
           </div>
 
+          <div className="admin-card-stack admin-card-stack--airy">
           <AdminField label="Texto Sobre nos">
             <textarea
               rows="4"
@@ -1817,6 +1846,7 @@ export function TenantEditorPanel({
                 </div>
               </div>
             ))}
+          </div>
           </div>
         </Card>
 

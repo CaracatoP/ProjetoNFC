@@ -456,69 +456,71 @@ export function DashboardHomePage() {
         </div>
       </Card>
 
-      {message ? <p className="admin-status-banner admin-status-banner--success">{message}</p> : null}
-      {error ? <p className="admin-status-banner admin-status-banner--error">{error}</p> : null}
+      <div className="admin-dashboard-flow">
+        {message ? <p className="admin-status-banner admin-status-banner--success">{message}</p> : null}
+        {error ? <p className="admin-status-banner admin-status-banner--error">{error}</p> : null}
 
-      {loadingWorkspace && !overview ? (
-        <EmptyState title="Carregando dashboard" description="Buscando tenants, analytics e configuracoes da operacao." />
-      ) : (
-        <>
-          <DashboardOverviewGrid overview={overview} />
+        {loadingWorkspace && !overview ? (
+          <EmptyState title="Carregando dashboard" description="Buscando tenants, analytics e configuracoes da operacao." />
+        ) : (
+          <div className="admin-dashboard-main">
+            <DashboardOverviewGrid overview={overview} />
 
-          <div className="admin-workspace">
-            <div className="admin-sidebar-stack">
-              <TenantOnboardingForm creating={creating} onCreate={handleCreate} />
-              <TenantListPanel
-                businesses={filteredBusinesses}
-                selectedBusinessId={selectedBusinessId}
-                loading={loadingWorkspace}
-                onSelect={setSelectedBusinessId}
-                searchValue={tenantSearchInput}
-                onSearchChange={setTenantSearchInput}
-                sortValue={tenantSort}
-                onSortChange={setTenantSort}
-                statusFilter={tenantStatusFilter}
-                onStatusFilterChange={setTenantStatusFilter}
-              />
-            </div>
-
-            <div className="admin-editor-column">
-              <div className="admin-editor-layout">
-                <div className="admin-editor-pane">
-                  {loadingEditor ? (
-                    <Card className="admin-panel-card">
-                      <p className="admin-muted-copy">Carregando editor do tenant...</p>
-                    </Card>
-                  ) : (
-                    <TenantEditorPanel
-                      editor={editor}
-                      saving={saving}
-                      togglingStatus={togglingStatus}
-                      deleting={deleting}
-                      duplicating={duplicating}
-                      onSave={handleSave}
-                      onToggleStatus={handleToggleStatus}
-                      onDelete={handleDelete}
-                      onUpload={handleUpload}
-                      onDuplicate={handleDuplicate}
-                      onCopyPublicLink={handleCopyPublicLink}
-                    />
-                  )}
-                </div>
-
-                <TenantPreviewPanel
-                  previewUrl={previewUrl}
-                  publicUrl={selectedSummary?.publicUrl || ''}
-                  businessName={selectedSummary?.name || ''}
-                  status={selectedSummary?.status || ''}
-                  previewKey={previewRefreshKey}
-                  onRefresh={() => setPreviewRefreshKey((current) => current + 1)}
+            <div className="admin-workspace">
+              <div className="admin-sidebar-stack">
+                <TenantOnboardingForm creating={creating} onCreate={handleCreate} />
+                <TenantListPanel
+                  businesses={filteredBusinesses}
+                  selectedBusinessId={selectedBusinessId}
+                  loading={loadingWorkspace}
+                  onSelect={setSelectedBusinessId}
+                  searchValue={tenantSearchInput}
+                  onSearchChange={setTenantSearchInput}
+                  sortValue={tenantSort}
+                  onSortChange={setTenantSort}
+                  statusFilter={tenantStatusFilter}
+                  onStatusFilterChange={setTenantStatusFilter}
                 />
+              </div>
+
+              <div className="admin-editor-column">
+                <div className="admin-editor-layout">
+                  <div className="admin-editor-pane">
+                    {loadingEditor ? (
+                      <Card className="admin-panel-card">
+                        <p className="admin-muted-copy">Carregando editor do tenant...</p>
+                      </Card>
+                    ) : (
+                      <TenantEditorPanel
+                        editor={editor}
+                        saving={saving}
+                        togglingStatus={togglingStatus}
+                        deleting={deleting}
+                        duplicating={duplicating}
+                        onSave={handleSave}
+                        onToggleStatus={handleToggleStatus}
+                        onDelete={handleDelete}
+                        onUpload={handleUpload}
+                        onDuplicate={handleDuplicate}
+                        onCopyPublicLink={handleCopyPublicLink}
+                      />
+                    )}
+                  </div>
+
+                  <TenantPreviewPanel
+                    previewUrl={previewUrl}
+                    publicUrl={selectedSummary?.publicUrl || ''}
+                    businessName={selectedSummary?.name || ''}
+                    status={selectedSummary?.status || ''}
+                    previewKey={previewRefreshKey}
+                    onRefresh={() => setPreviewRefreshKey((current) => current + 1)}
+                  />
+                </div>
               </div>
             </div>
           </div>
-        </>
-      )}
+        )}
+      </div>
     </AppShell>
   );
 }
