@@ -1,13 +1,13 @@
 :root {
-  --theme-primary: #f97316;
-  --theme-secondary: #fb7185;
-  --theme-background: #140d09;
-  --theme-surface: rgba(31, 20, 16, 0.92);
-  --theme-surface-alt: rgba(48, 32, 24, 0.86);
-  --theme-text: #fff8f2;
-  --theme-text-muted: #f4d5c3;
+  --theme-primary: #6f31ff;
+  --theme-secondary: #ff3a93;
+  --theme-background: #07070d;
+  --theme-surface: rgba(18, 16, 32, 0.92);
+  --theme-surface-alt: rgba(29, 24, 46, 0.88);
+  --theme-text: #f8f5ff;
+  --theme-text-muted: #cdbfe8;
   --theme-border: rgba(255, 255, 255, 0.12);
-  --theme-accent: rgba(249, 115, 22, 0.18);
+  --theme-accent: rgba(111, 49, 255, 0.18);
   --theme-success: #22c55e;
   --theme-danger: #ef4444;
   --font-heading: 'Space Grotesk', sans-serif;
@@ -29,11 +29,11 @@
   --layout-page-padding: clamp(1rem, 3vw, 2rem);
   --layout-section-gap: 1.5rem;
   --layout-card-gap: 1rem;
-  --button-primary-bg: linear-gradient(135deg, #f97316, #fb7185);
+  --button-primary-bg: linear-gradient(135deg, #6f31ff, #ff3a93);
   --button-primary-color: #ffffff;
   --button-primary-border: none;
   --button-secondary-bg: rgba(255, 255, 255, 0.06);
-  --button-secondary-color: #fff8f2;
+  --button-secondary-color: #f8f5ff;
   --button-secondary-border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
@@ -91,6 +91,36 @@ img {
 
 .app-shell__hero {
   padding: clamp(2rem, 6vw, 4rem) 0 2rem;
+}
+
+.app-shell__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 0.8rem;
+}
+
+.app-shell__brand-mark {
+  width: 62px;
+  height: 62px;
+  border-radius: 18px;
+  box-shadow: 0 18px 36px rgba(111, 49, 255, 0.22);
+}
+
+.app-shell__brand-copy {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.app-shell__brand-copy strong {
+  font-family: var(--font-heading);
+  font-size: clamp(1.5rem, 2.4vw, 1.8rem);
+  letter-spacing: -0.03em;
+}
+
+.app-shell__brand-copy span {
+  color: var(--theme-text-muted);
+  font-size: 0.92rem;
 }
 
 .app-shell__hero h1,
@@ -1429,9 +1459,9 @@ img {
 
 .dashboard-shell .button--primary {
   background:
-    linear-gradient(135deg, rgba(249, 115, 22, 0.92), rgba(251, 113, 133, 0.84)),
-    #f97316;
-  box-shadow: 0 14px 28px rgba(249, 115, 22, 0.18);
+    linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 94%, white), color-mix(in srgb, var(--theme-secondary) 88%, white)),
+    var(--theme-primary);
+  box-shadow: 0 14px 28px color-mix(in srgb, var(--theme-primary) 24%, transparent);
 }
 
 .dashboard-shell .button--secondary {
@@ -1479,16 +1509,16 @@ img {
 .admin-panel-card,
 .admin-stat-card {
   background:
-    radial-gradient(circle at top right, rgba(251, 113, 133, 0.06), transparent 36%),
-    linear-gradient(180deg, rgba(36, 22, 17, 0.96), rgba(28, 16, 12, 0.96));
+    radial-gradient(circle at top right, color-mix(in srgb, var(--theme-secondary) 16%, transparent), transparent 36%),
+    linear-gradient(180deg, rgba(22, 18, 35, 0.96), rgba(12, 10, 22, 0.96));
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.16);
 }
 
 .admin-panel-card--hero {
   background:
-    radial-gradient(circle at top right, rgba(251, 113, 133, 0.14), transparent 30%),
-    radial-gradient(circle at top left, rgba(249, 115, 22, 0.12), transparent 26%),
-    linear-gradient(145deg, rgba(22, 14, 10, 0.98), rgba(36, 21, 16, 0.88));
+    radial-gradient(circle at top right, color-mix(in srgb, var(--theme-secondary) 24%, transparent), transparent 30%),
+    radial-gradient(circle at top left, color-mix(in srgb, var(--theme-primary) 20%, transparent), transparent 26%),
+    linear-gradient(145deg, rgba(12, 10, 22, 0.98), rgba(24, 18, 40, 0.88));
 }
 
 .admin-editor-grid {
@@ -1520,7 +1550,7 @@ img {
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.05);
-  color: #ffd9c4;
+  color: color-mix(in srgb, var(--theme-text) 84%, var(--theme-secondary));
   font-size: 0.87rem;
   font-weight: 700;
 }
@@ -1551,7 +1581,7 @@ img {
   padding: 0.7rem 0.95rem;
   border: 0;
   border-radius: 12px;
-  background: linear-gradient(135deg, rgba(249, 115, 22, 0.9), rgba(251, 113, 133, 0.85));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 94%, white), color-mix(in srgb, var(--theme-secondary) 88%, white));
   color: #fff;
   cursor: pointer;
   font: inherit;

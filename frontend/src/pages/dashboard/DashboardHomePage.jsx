@@ -252,19 +252,20 @@ export function DashboardHomePage() {
 
   return (
     <AppShell
-      eyebrow="Admin Interno"
-      title="Operacao central para paginas NFC multi-tenant"
-      description="Cadastre comercios, gerencie tenants, ajuste branding, controle conteudo e use analytics para mostrar valor mensal ao cliente."
+      eyebrow="TapLink Admin"
+      title="Operacao central do TapLink"
+      description="Cadastre comercios, gerencie tenants, ajuste branding, controle conteudo e acompanhe analytics em uma operacao multi-tenant centralizada."
       shellClassName="dashboard-shell"
       heroClassName="dashboard-shell__hero"
       contentClassName="dashboard-shell__content"
+      pageTitle="TapLink | Dashboard"
     >
       <Card className="admin-panel-card admin-panel-card--hero">
         <div className="admin-editor-header">
           <div>
             <h2>Workspace da operacao</h2>
             <p>
-              Logado como <strong>{user?.displayName || 'Admin'}</strong>. Sessao protegida por token, uploads no Cloudinary e operacao multi-tenant centralizada.
+              Logado como <strong>{user?.displayName || 'Admin'}</strong>. Sessao protegida por token, uploads no Cloudinary e operacao centralizada do TapLink.
             </p>
           </div>
           <div className="admin-editor-actions">

@@ -1,19 +1,22 @@
 import { appConfig } from '@/config/appConfig.js';
 import { apiRequest } from '@/services/apiClient.js';
 
-const ADMIN_TOKEN_KEY = 'nfc_admin_session_token';
+const ADMIN_TOKEN_KEY = 'taplink_admin_session_token';
+const LEGACY_ADMIN_TOKEN_KEY = 'nfc_admin_session_token';
 
 export function getStoredAdminToken() {
-  return window.localStorage.getItem(ADMIN_TOKEN_KEY) || '';
+  return window.localStorage.getItem(ADMIN_TOKEN_KEY) || window.localStorage.getItem(LEGACY_ADMIN_TOKEN_KEY) || '';
 }
 
 export function setStoredAdminToken(token) {
   if (!token) {
     window.localStorage.removeItem(ADMIN_TOKEN_KEY);
+    window.localStorage.removeItem(LEGACY_ADMIN_TOKEN_KEY);
     return;
   }
 
   window.localStorage.setItem(ADMIN_TOKEN_KEY, token);
+  window.localStorage.removeItem(LEGACY_ADMIN_TOKEN_KEY);
 }
 
 export function buildAdminAuthHeaders(token) {

@@ -43,19 +43,20 @@ export function AuthLandingPage() {
 
   return (
     <AppShell
-      eyebrow="Operacao Interna"
-      title="Painel admin para gerenciar tenants"
-      description="Acesso reservado para sua operacao. Cadastre novos comercios, ajuste conteudo, suba imagens e acompanhe analytics em um unico fluxo."
+      eyebrow="TapLink Admin"
+      title="Painel interno para operar tenants"
+      description="Acesso reservado para sua operacao no TapLink. Cadastre comercios, ajuste conteudo, suba imagens e acompanhe analytics em um unico fluxo."
       shellClassName="dashboard-shell dashboard-shell--auth"
       heroClassName="dashboard-shell__hero"
       contentClassName="dashboard-shell__content"
+      pageTitle="TapLink | Entrar"
     >
       <div className="admin-login-grid">
         <Card className="admin-panel-card admin-panel-card--hero">
           <div className="admin-panel-card__header">
             <div>
               <h2>Entrar no backoffice</h2>
-              <p>Use um usuario admin persistido no backend para acessar o painel interno com sessao segura.</p>
+              <p>Use um usuario admin persistido no backend para acessar o painel TapLink com sessao segura.</p>
             </div>
           </div>
 
