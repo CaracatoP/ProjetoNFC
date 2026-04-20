@@ -40,6 +40,28 @@ export async function updateBusinessRecord(businessId, payload) {
   });
 }
 
+export async function appendBusinessHistoryEntries(businessId, entries = []) {
+  if (!entries.length) {
+    return null;
+  }
+
+  return Business.findByIdAndUpdate(
+    businessId,
+    {
+      $push: {
+        history: {
+          $each: entries,
+          $slice: -120,
+        },
+      },
+    },
+    {
+      new: true,
+      runValidators: true,
+    },
+  );
+}
+
 export async function upsertThemeRecord(businessId, payload) {
   return BusinessTheme.findOneAndUpdate(
     { businessId },

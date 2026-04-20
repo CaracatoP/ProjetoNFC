@@ -56,9 +56,20 @@ const businessFixture = {
   name: 'Barbearia Estilo Vivo',
   slug: 'barbearia-estilo-vivo',
   status: 'active',
-  publicUrl: 'https://projeto-nfc-frontend.vercel.app/site/barbearia-estilo-vivo',
+  publicUrl: 'https://taplinkapp.vercel.app/site/barbearia-estilo-vivo',
   analytics: {
     totalEvents: 24,
+  },
+};
+
+const secondaryBusinessFixture = {
+  id: 'business-2',
+  name: 'Loja Central',
+  slug: 'loja-central',
+  status: 'inactive',
+  publicUrl: 'https://taplinkapp.vercel.app/site/loja-central',
+  analytics: {
+    totalEvents: 4,
   },
 };
 
@@ -72,7 +83,7 @@ const editorFixture = {
     bannerUrl: '',
     badge: 'Corte premium',
     status: 'active',
-    publicUrl: 'https://projeto-nfc-frontend.vercel.app/site/barbearia-estilo-vivo',
+    publicUrl: 'https://taplinkapp.vercel.app/site/barbearia-estilo-vivo',
     rating: '4.9',
     domains: {
       subdomain: '',
@@ -223,9 +234,11 @@ const editorFixture = {
 
 describe('DashboardHomePage', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+
     useAuth.mockReturnValue({
       token: 'admin-token',
-      user: { displayName: 'Operacao NFC' },
+      user: { displayName: 'Operacao TapLink' },
       logout: vi.fn(),
     });
 
@@ -266,7 +279,7 @@ describe('DashboardHomePage', () => {
     );
 
     expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
-    expect(await screen.findByText('Analytics do tenant')).toBeInTheDocument();
+    expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
 
     const onboardingCard = screen.getByText('Novo comercio').closest('section');
     const onboardingScope = within(onboardingCard);
@@ -304,7 +317,7 @@ describe('DashboardHomePage', () => {
     );
 
     expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
-    expect(await screen.findByText('Analytics do tenant')).toBeInTheDocument();
+    expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Salvar alteracoes/i }));
 
@@ -321,7 +334,7 @@ describe('DashboardHomePage', () => {
     );
 
     expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
-    expect(await screen.findByText('Analytics do tenant')).toBeInTheDocument();
+    expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
 
     const editorCard = screen.getByText('Identidade do tenant').closest('section');
     const slugInput = within(editorCard).getByLabelText('Slug publico');
@@ -339,6 +352,8 @@ describe('DashboardHomePage', () => {
   });
 
   it('rebuilds derived theme tokens when the admin changes the palette', async () => {
+    const user = userEvent.setup();
+
     render(
       <MemoryRouter>
         <DashboardHomePage />
@@ -346,7 +361,8 @@ describe('DashboardHomePage', () => {
     );
 
     expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
-    expect(await screen.findByText('Analytics do tenant')).toBeInTheDocument();
+    expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /SEO \/ Advanced/i }));
     const primaryColorInput = screen.getByLabelText('Cor primaria');
     fireEvent.change(primaryColorInput, { target: { value: '#22c55e' } });
     fireEvent.click(screen.getByRole('button', { name: /Salvar alteracoes/i }));
@@ -372,7 +388,7 @@ describe('DashboardHomePage', () => {
     );
 
     expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
-    expect(await screen.findByText('Analytics do tenant')).toBeInTheDocument();
+    expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Inativar site/i }));
 
@@ -383,5 +399,80 @@ describe('DashboardHomePage', () => {
     expect(
       await screen.findByText(/Site inativado com sucesso\. O publico agora ve uma mensagem neutra de indisponibilidade\./i),
     ).toBeInTheDocument();
+  });
+
+  it('filters tenants by search term without reloading the dashboard', async () => {
+    const user = userEvent.setup();
+    adminService.listAdminBusinesses.mockResolvedValue([businessFixture, secondaryBusinessFixture]);
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+    const tenantListCard = await screen.findByText('Tenants');
+    const tenantListScope = within(tenantListCard.closest('section'));
+    expect(tenantListScope.getByRole('button', { name: /Loja Central/i })).toBeInTheDocument();
+
+    await user.type(tenantListScope.getByLabelText('Buscar tenant'), 'barbearia');
+
+    await waitFor(() => {
+      expect(tenantListScope.queryByRole('button', { name: /Loja Central/i })).not.toBeInTheDocument();
+    });
+
+    expect(tenantListScope.getByRole('button', { name: /Barbearia Estilo Vivo/i })).toBeInTheDocument();
+  });
+
+  it('duplicates the current tenant with unique name and slug', async () => {
+    const user = userEvent.setup();
+    adminService.createAdminBusiness.mockClear();
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+    expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Duplicar tenant/i }));
+
+    await waitFor(() => {
+      expect(adminService.createAdminBusiness).toHaveBeenCalledWith(
+        'admin-token',
+        expect.objectContaining({
+          business: expect.objectContaining({
+            name: 'Barbearia Estilo Vivo (copy)',
+            slug: 'barbearia-estilo-vivo-copy',
+          }),
+          nfcTag: expect.objectContaining({
+            code: '',
+          }),
+        }),
+      );
+    });
+  });
+
+  it('blocks save when inline validation finds an invalid whatsapp', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+    expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
+    const contactCard = screen.getByText('Contato e atendimento').closest('section');
+    const whatsappInput = within(contactCard).getByLabelText('WhatsApp');
+    await user.clear(whatsappInput);
+    await user.type(whatsappInput, '123');
+    await user.click(screen.getByRole('button', { name: /Salvar alteracoes/i }));
+
+    expect(await screen.findByText(/Corrija os campos destacados antes de salvar\./i)).toBeInTheDocument();
+    expect(adminService.updateAdminBusiness).not.toHaveBeenCalled();
   });
 });

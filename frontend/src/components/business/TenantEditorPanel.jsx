@@ -290,6 +290,16 @@ const ANALYTICS_EVENT_LABELS = {
   modal_open: 'Abertura de modal',
 };
 
+const EDITOR_STEPS = [
+  { id: 'basic', label: 'Basic Info', description: 'Identidade, contato e operacao.' },
+  { id: 'visual', label: 'Visual', description: 'Logo, banner e favicon.' },
+  { id: 'content', label: 'Content', description: 'Servicos, galeria e texto principal.' },
+  { id: 'links', label: 'Links', description: 'Acessos rapidos e atalhos.' },
+  { id: 'seo', label: 'SEO / Advanced', description: 'SEO, secoes, assinatura, historico e analytics.' },
+];
+
+const customDomainPattern = /^(?!:\/\/)(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
+
 function humanizeToken(value) {
   return String(value || '')
     .replace(/[_-]+/g, ' ')
@@ -331,13 +341,183 @@ function getAnalyticsTargetSummary(event) {
   return pieces.join(' • ') || 'Sem alvo detalhado';
 }
 
-function AdminField({ label, children, description }) {
+function normalizePhoneDigits(value) {
+  return String(value || '').replace(/\D+/g, '').slice(0, 13);
+}
+
+function formatWhatsappValue(value) {
+  const digits = normalizePhoneDigits(value);
+
+  if (!digits) {
+    return '';
+  }
+
+  const hasCountryCode = digits.startsWith('55') && digits.length > 11;
+  const countryCode = hasCountryCode ? digits.slice(0, 2) : '';
+  const localDigits = hasCountryCode ? digits.slice(2) : digits;
+  const areaCode = localDigits.slice(0, 2);
+  const prefixLength = localDigits.length > 10 ? 5 : 4;
+  const prefix = localDigits.slice(2, 2 + prefixLength);
+  const suffix = localDigits.slice(2 + prefixLength, 2 + prefixLength + 4);
+
+  return [
+    countryCode ? `+${countryCode}` : '',
+    areaCode ? `(${areaCode})` : '',
+    prefix,
+    suffix ? `-${suffix}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .replace(' -', '-');
+}
+
+function isValidHttpUrl(value) {
+  if (!String(value || '').trim()) {
+    return true;
+  }
+
+  try {
+    const url = new URL(String(value).trim());
+    return ['http:', 'https:'].includes(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
+function isValidLinkUrl(value) {
+  const normalized = String(value || '').trim();
+
+  if (!normalized) {
+    return true;
+  }
+
+  if (normalized.startsWith('mailto:') || normalized.startsWith('tel:')) {
+    return true;
+  }
+
+  return isValidHttpUrl(normalized);
+}
+
+function formatHistoryValue(value) {
+  if (value === undefined || value === null || value === '') {
+    return 'vazio';
+  }
+
+  if (typeof value === 'string') {
+    return value.length > 72 ? `${value.slice(0, 69)}...` : value;
+  }
+
+  const serialized = JSON.stringify(value);
+  return serialized.length > 72 ? `${serialized.slice(0, 69)}...` : serialized;
+}
+
+function getFieldStep(path) {
+  if (path.startsWith('business.logoUrl') || path.startsWith('business.bannerUrl') || path.startsWith('business.seo.imageUrl')) {
+    return 'visual';
+  }
+
+  if (path.startsWith('links.') || path.includes('primaryAction.href')) {
+    return 'links';
+  }
+
+  if (path.startsWith('sections.gallery') || path.startsWith('theme.') || path.startsWith('sections.services')) {
+    return 'content';
+  }
+
+  if (path.startsWith('business.seo.') || path.startsWith('history.')) {
+    return 'seo';
+  }
+
+  return 'basic';
+}
+
+function buildValidationErrors(draft) {
+  const errors = {};
+  const whatsappDigits = normalizePhoneDigits(draft.business.contact?.whatsapp);
+  const ctaLink = draft.sections.find((section) => section.key === 'cta')?.settings?.primaryAction?.href;
+
+  if (!String(draft.business.name || '').trim()) {
+    errors['business.name'] = 'Nome do comercio e obrigatorio.';
+  }
+
+  if (!slugify(draft.business.slug)) {
+    errors['business.slug'] = 'Slug obrigatorio, em minusculas e sem espacos.';
+  }
+
+  if (whatsappDigits && (whatsappDigits.length < 10 || whatsappDigits.length > 13)) {
+    errors['business.contact.whatsapp'] = 'Informe um WhatsApp valido com DDI e numero.';
+  }
+
+  if (draft.business.domains?.customDomain && !customDomainPattern.test(draft.business.domains.customDomain)) {
+    errors['business.domains.customDomain'] = 'Informe um dominio customizado valido.';
+  }
+
+  [
+    ['business.logoUrl', draft.business.logoUrl, 'Logo'],
+    ['business.bannerUrl', draft.business.bannerUrl, 'Banner'],
+    ['business.seo.imageUrl', draft.business.seo?.imageUrl, 'Icone do site'],
+    ['cta.primaryAction.href', ctaLink, 'Link da assinatura'],
+  ].forEach(([path, value, label]) => {
+    if (value && !isValidHttpUrl(value)) {
+      errors[path] = `${label} precisa ser uma URL valida.`;
+    }
+  });
+
+  draft.links.forEach((link, index) => {
+    if (link.url && !isValidLinkUrl(link.url)) {
+      errors[`links.${index}.url`] = 'Use uma URL valida para este atalho.';
+    }
+  });
+
+  draft.sections
+    .filter((section) => section.key === 'gallery')
+    .forEach((section) => {
+      (section.items || []).forEach((item, index) => {
+        if (item.imageUrl && !isValidHttpUrl(item.imageUrl)) {
+          errors[`sections.gallery.${index}.imageUrl`] = 'A imagem da galeria precisa ser uma URL valida.';
+        }
+      });
+    });
+
+  return errors;
+}
+
+function getInputState(error) {
+  return {
+    className: error ? 'admin-input--invalid' : '',
+    'aria-invalid': Boolean(error),
+  };
+}
+
+function AdminField({ label, children, description, error }) {
   return (
-    <label className="admin-field">
+    <label className={`admin-field ${error ? 'admin-field--invalid' : ''}`}>
       <span>{label}</span>
       {children}
+      {error ? <small className="admin-field__error">{error}</small> : null}
       {description ? <small>{description}</small> : null}
     </label>
+  );
+}
+
+function SensitiveInput({ label, value, onChange, placeholder, error }) {
+  const [revealed, setRevealed] = useState(false);
+
+  return (
+    <AdminField label={label} error={error}>
+      <div className="admin-sensitive-input">
+        <input
+          type={revealed ? 'text' : 'password'}
+          value={value || ''}
+          onChange={onChange}
+          placeholder={placeholder}
+          {...getInputState(error)}
+        />
+        <button type="button" className="admin-sensitive-toggle" onClick={() => setRevealed((current) => !current)}>
+          {revealed ? 'Ocultar' : 'Mostrar'}
+        </button>
+      </div>
+    </AdminField>
   );
 }
 
@@ -432,19 +612,35 @@ export function TenantEditorPanel({
   saving,
   deleting,
   togglingStatus,
+  duplicating,
   onSave,
   onDelete,
   onUpload,
   onToggleStatus,
+  onDuplicate,
+  onCopyPublicLink,
 }) {
   const [draft, setDraft] = useState(editor ? cloneDeep(editor) : null);
   const [uploadingField, setUploadingField] = useState('');
+  const [activeStep, setActiveStep] = useState('basic');
+  const [localError, setLocalError] = useState('');
 
   useEffect(() => {
     setDraft(editor ? cloneDeep(editor) : null);
+    setActiveStep('basic');
+    setLocalError('');
   }, [editor]);
 
   const analyticsSummary = useMemo(() => draft?.analytics || null, [draft]);
+  const validationErrors = useMemo(() => (draft ? buildValidationErrors(draft) : {}), [draft]);
+  const hasBlockingErrors = Object.keys(validationErrors).length > 0;
+  const activeStepIndex = EDITOR_STEPS.findIndex((step) => step.id === activeStep);
+
+  useEffect(() => {
+    if (!hasBlockingErrors && localError) {
+      setLocalError('');
+    }
+  }, [hasBlockingErrors, localError]);
 
   if (!draft) {
     return (
@@ -467,18 +663,17 @@ export function TenantEditorPanel({
   const latestAnalyticsEvent = recentAnalyticsEvents[0] || null;
   const isActive = draft.business.status === 'active';
   const publicUrlPreview = buildTenantPublicUrlPreview(draft.business, editor?.business?.publicUrl);
-  const quickLinks = [
-    { href: '#tenant-identity', label: 'Identidade' },
-    { href: '#tenant-media', label: 'Midia' },
-    { href: '#tenant-contact', label: 'Contato' },
-    { href: '#tenant-payments', label: 'Pagamentos' },
-    { href: '#tenant-links', label: 'Acessos' },
-    { href: '#tenant-content', label: 'Conteudo' },
-    { href: '#tenant-footer-signature', label: 'Rodape' },
-    { href: '#tenant-analytics', label: 'Analytics' },
-  ];
+  const historyEntries = draft.history || [];
 
   const handleSave = async () => {
+    if (hasBlockingErrors) {
+      const [firstInvalidPath] = Object.keys(validationErrors);
+      setActiveStep(getFieldStep(firstInvalidPath));
+      setLocalError('Corrija os campos destacados antes de salvar.');
+      return;
+    }
+
+    setLocalError('');
     await onSave?.(draft);
   };
 
@@ -496,14 +691,25 @@ export function TenantEditorPanel({
             </div>
           </div>
           <div className="admin-editor-actions">
+            <Button variant="secondary" onClick={onCopyPublicLink} disabled={!publicUrlPreview.preferredUrl}>
+              Copiar link
+            </Button>
+            <Button variant="secondary" onClick={onDuplicate} disabled={duplicating || deleting || saving}>
+              {duplicating ? 'Duplicando...' : 'Duplicar tenant'}
+            </Button>
             <Button
               variant="secondary"
               onClick={() => onToggleStatus?.(draft.business.id, isActive ? 'inactive' : 'active')}
-              disabled={togglingStatus || deleting || saving}
+              disabled={togglingStatus || deleting || saving || duplicating}
             >
               {togglingStatus ? (isActive ? 'Inativando...' : 'Ativando...') : isActive ? 'Inativar site' : 'Ativar site'}
             </Button>
-            <Button variant="secondary" className="button--danger-tone" onClick={() => onDelete?.(draft.business.id)} disabled={deleting}>
+            <Button
+              variant="secondary"
+              className="button--danger-tone"
+              onClick={() => onDelete?.(draft.business.id)}
+              disabled={deleting || duplicating}
+            >
               {deleting ? 'Excluindo...' : 'Excluir tenant'}
             </Button>
             <Button onClick={handleSave} disabled={saving}>
@@ -513,15 +719,52 @@ export function TenantEditorPanel({
         </div>
       </Card>
 
-      <div className="admin-editor-quicknav">
-        {quickLinks.map((link) => (
-          <Button key={link.href} href={link.href} variant="secondary" className="admin-quicklink">
-            {link.label}
-          </Button>
+      <div className="admin-stepper">
+        {EDITOR_STEPS.map((step, index) => (
+          <button
+            key={step.id}
+            type="button"
+            className={`admin-stepper__item ${activeStep === step.id ? 'admin-stepper__item--active' : ''}`}
+            aria-label={step.label}
+            aria-current={activeStep === step.id ? 'step' : undefined}
+            title={step.label}
+            onClick={() => setActiveStep(step.id)}
+          >
+            <span className="admin-stepper__index">{index + 1}</span>
+            <span className="admin-stepper__copy">
+              <strong>{step.label}</strong>
+              <small>{step.description}</small>
+            </span>
+          </button>
         ))}
       </div>
 
+      <div className="admin-stepper-footer">
+        <div className="admin-inline-note">
+          <strong>
+            Etapa {activeStepIndex + 1} de {EDITOR_STEPS.length}
+          </strong>
+          <span>{EDITOR_STEPS[activeStepIndex]?.description}</span>
+        </div>
+        <div className="admin-inline-actions">
+          <Button variant="secondary" disabled={activeStepIndex <= 0} onClick={() => setActiveStep(EDITOR_STEPS[Math.max(0, activeStepIndex - 1)].id)}>
+            Voltar
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={activeStepIndex >= EDITOR_STEPS.length - 1}
+            onClick={() => setActiveStep(EDITOR_STEPS[Math.min(EDITOR_STEPS.length - 1, activeStepIndex + 1)].id)}
+          >
+            Proxima etapa
+          </Button>
+        </div>
+      </div>
+
+      {localError ? <p className="admin-status-banner admin-status-banner--error">{localError}</p> : null}
+
       <div className="admin-editor-grid">
+        {activeStep === 'basic' ? (
+          <>
         <Card id="tenant-identity" className="admin-panel-card">
           <div className="admin-panel-card__header">
             <div>
@@ -531,16 +774,17 @@ export function TenantEditorPanel({
           </div>
 
           <div className="admin-form-grid">
-            <AdminField label="Nome do comercio">
+            <AdminField label="Nome do comercio" error={validationErrors['business.name']}>
               <input
                 value={draft.business.name}
                 onChange={(event) => setDraft((current) => ({
                   ...current,
                   business: { ...current.business, name: event.target.value },
                 }))}
+                {...getInputState(validationErrors['business.name'])}
               />
             </AdminField>
-            <AdminField label="Slug publico">
+            <AdminField label="Slug publico" error={validationErrors['business.slug']}>
               <input
                 value={draft.business.slug}
                 onChange={(event) => setDraft((current) => ({
@@ -551,6 +795,7 @@ export function TenantEditorPanel({
                   ...current,
                   business: { ...current.business, slug: slugify(event.target.value) },
                 }))}
+                {...getInputState(validationErrors['business.slug'])}
               />
             </AdminField>
             <AdminField label="Status">
@@ -598,6 +843,7 @@ export function TenantEditorPanel({
             <AdminField
               label="Dominio customizado"
               description="Opcional. Informe apenas o host, por exemplo cliente.com.br."
+              error={validationErrors['business.domains.customDomain']}
             >
               <input
                 value={draft.business.domains?.customDomain || ''}
@@ -612,6 +858,7 @@ export function TenantEditorPanel({
                   },
                 }))}
                 placeholder="cliente.com.br"
+                {...getInputState(validationErrors['business.domains.customDomain'])}
               />
             </AdminField>
             <AdminField label="Badge">
@@ -632,15 +879,15 @@ export function TenantEditorPanel({
                 }))}
               />
             </AdminField>
-            <AdminField label="Codigo da tag NFC">
-              <input
-                value={draft.nfcTag?.code || ''}
-                onChange={(event) => setDraft((current) => ({
-                  ...current,
-                  nfcTag: { ...(current.nfcTag || {}), code: event.target.value, status: current.nfcTag?.status || 'active' },
-                }))}
-              />
-            </AdminField>
+            <SensitiveInput
+              label="Codigo da tag NFC"
+              value={draft.nfcTag?.code || ''}
+              onChange={(event) => setDraft((current) => ({
+                ...current,
+                nfcTag: { ...(current.nfcTag || {}), code: event.target.value, status: current.nfcTag?.status || 'active' },
+              }))}
+              placeholder="Codigo interno da tag"
+            />
           </div>
 
           <AdminField label="Descricao principal">
@@ -675,6 +922,10 @@ export function TenantEditorPanel({
           </div>
         </Card>
 
+          </>
+        ) : null}
+
+        {activeStep === 'visual' ? (
         <Card id="tenant-media" className="admin-panel-card">
           <div className="admin-panel-card__header">
             <div>
@@ -686,7 +937,7 @@ export function TenantEditorPanel({
           <div className="admin-media-grid">
             <div className="admin-media-card">
               <PreviewImage src={draft.business.logoUrl} alt={draft.business.name} />
-              <AdminField label="Logo URL">
+              <AdminField label="Logo URL" error={validationErrors['business.logoUrl']}>
                 <input
                   value={draft.business.logoUrl || ''}
                   onChange={(event) => setDraft((current) => ({
@@ -697,6 +948,7 @@ export function TenantEditorPanel({
                       logoPublicId: '',
                     },
                   }))}
+                  {...getInputState(validationErrors['business.logoUrl'])}
                 />
               </AdminField>
               <input
@@ -727,7 +979,11 @@ export function TenantEditorPanel({
 
             <div className="admin-media-card">
               <PreviewImage src={draft.business.seo?.imageUrl} alt={`Icone ${draft.business.name}`} />
-              <AdminField label="Icone do site" description="Usado como icone da aba do navegador e identidade curta do site.">
+              <AdminField
+                label="Icone do site"
+                description="Usado como icone da aba do navegador e identidade curta do site."
+                error={validationErrors['business.seo.imageUrl']}
+              >
                 <input
                   value={draft.business.seo?.imageUrl || ''}
                   onChange={(event) => setDraft((current) => ({
@@ -741,6 +997,7 @@ export function TenantEditorPanel({
                       },
                     },
                   }))}
+                  {...getInputState(validationErrors['business.seo.imageUrl'])}
                 />
               </AdminField>
               <input
@@ -774,7 +1031,7 @@ export function TenantEditorPanel({
 
             <div className="admin-media-card">
               <PreviewImage src={draft.business.bannerUrl} alt={draft.business.name} />
-              <AdminField label="Banner URL">
+              <AdminField label="Banner URL" error={validationErrors['business.bannerUrl']}>
                 <input
                   value={draft.business.bannerUrl || ''}
                   onChange={(event) => setDraft((current) => ({
@@ -785,6 +1042,7 @@ export function TenantEditorPanel({
                       bannerPublicId: '',
                     },
                   }))}
+                  {...getInputState(validationErrors['business.bannerUrl'])}
                 />
               </AdminField>
               <input
@@ -814,7 +1072,10 @@ export function TenantEditorPanel({
             </div>
           </div>
         </Card>
+        ) : null}
 
+        {activeStep === 'basic' ? (
+          <>
         <Card id="tenant-contact" className="admin-panel-card">
           <div className="admin-panel-card__header">
             <div>
@@ -824,16 +1085,18 @@ export function TenantEditorPanel({
           </div>
 
           <div className="admin-form-grid">
-            <AdminField label="WhatsApp">
+            <AdminField label="WhatsApp" error={validationErrors['business.contact.whatsapp']}>
               <input
-                value={draft.business.contact?.whatsapp || ''}
+                value={formatWhatsappValue(draft.business.contact?.whatsapp || '')}
                 onChange={(event) => setDraft((current) => ({
                   ...current,
                   business: {
                     ...current.business,
-                    contact: { ...current.business.contact, whatsapp: event.target.value },
+                    contact: { ...current.business.contact, whatsapp: normalizePhoneDigits(event.target.value) },
                   },
                 }))}
+                placeholder="+55 (11) 99999-9999"
+                {...getInputState(validationErrors['business.contact.whatsapp'])}
               />
             </AdminField>
             <AdminField label="Telefone">
@@ -922,21 +1185,21 @@ export function TenantEditorPanel({
                     <option value="aleatoria">aleatoria</option>
                   </select>
                 </AdminField>
-                <AdminField label="Chave PIX">
-                  <input
-                    value={draft.business.contact?.pix?.key || ''}
-                    onChange={(event) => setDraft((current) => ({
-                      ...current,
-                      business: {
-                        ...current.business,
-                        contact: {
-                          ...current.business.contact,
-                          pix: { ...(current.business.contact?.pix || {}), key: event.target.value },
-                        },
+                <SensitiveInput
+                  label="Chave PIX"
+                  value={draft.business.contact?.pix?.key || ''}
+                  onChange={(event) => setDraft((current) => ({
+                    ...current,
+                    business: {
+                      ...current.business,
+                      contact: {
+                        ...current.business.contact,
+                        pix: { ...(current.business.contact?.pix || {}), key: event.target.value },
                       },
-                    }))}
-                  />
-                </AdminField>
+                    },
+                  }))}
+                  placeholder="Chave PIX do recebedor"
+                />
                 <AdminField label="Recebedor">
                   <input
                     value={draft.business.contact?.pix?.receiverName || ''}
@@ -973,26 +1236,29 @@ export function TenantEditorPanel({
                     }))}
                   />
                 </AdminField>
-                <AdminField label="Senha">
-                  <input
-                    value={draft.business.contact?.wifi?.password || ''}
-                    onChange={(event) => setDraft((current) => ({
-                      ...current,
-                      business: {
-                        ...current.business,
-                        contact: {
-                          ...current.business.contact,
-                          wifi: { ...(current.business.contact?.wifi || {}), password: event.target.value },
-                        },
+                <SensitiveInput
+                  label="Senha"
+                  value={draft.business.contact?.wifi?.password || ''}
+                  onChange={(event) => setDraft((current) => ({
+                    ...current,
+                    business: {
+                      ...current.business,
+                      contact: {
+                        ...current.business.contact,
+                        wifi: { ...(current.business.contact?.wifi || {}), password: event.target.value },
                       },
-                    }))}
-                  />
-                </AdminField>
+                    },
+                  }))}
+                  placeholder="Senha do Wi-Fi"
+                />
               </div>
             </div>
           </div>
         </Card>
+          </>
+        ) : null}
 
+        {activeStep === 'links' ? (
         <Card id="tenant-links" className="admin-panel-card">
           <div className="admin-panel-card__header">
             <div>
@@ -1054,7 +1320,7 @@ export function TenantEditorPanel({
                       })}
                     />
                   </AdminField>
-                  <AdminField label="URL">
+                  <AdminField label="URL" error={validationErrors[`links.${index}.url`]}>
                     <input
                       value={link.url || ''}
                       onChange={(event) => setDraft((current) => {
@@ -1062,6 +1328,7 @@ export function TenantEditorPanel({
                         links[index] = { ...links[index], url: event.target.value };
                         return { ...current, links };
                       })}
+                      {...getInputState(validationErrors[`links.${index}.url`])}
                     />
                   </AdminField>
                   <AdminField label="Acao interna">
@@ -1094,7 +1361,9 @@ export function TenantEditorPanel({
             ))}
           </div>
         </Card>
+        ) : null}
 
+        {activeStep === 'content' ? (
         <Card className="admin-panel-card">
           <div className="admin-panel-card__header">
             <div>
@@ -1230,7 +1499,7 @@ export function TenantEditorPanel({
               <div key={image.id || index} className="admin-repeater-card">
                 <PreviewImage src={image.imageUrl} alt={image.alt || draft.business.name} />
                 <div className="admin-form-grid">
-                  <AdminField label="Imagem URL">
+                  <AdminField label="Imagem URL" error={validationErrors[`sections.gallery.${index}.imageUrl`]}>
                     <input
                       value={image.imageUrl || ''}
                       onChange={(event) => setDraft((current) => {
@@ -1244,6 +1513,7 @@ export function TenantEditorPanel({
                         });
                         return nextDraft;
                       })}
+                      {...getInputState(validationErrors[`sections.gallery.${index}.imageUrl`])}
                     />
                   </AdminField>
                   <AdminField label="Alt">
@@ -1305,7 +1575,10 @@ export function TenantEditorPanel({
             ))}
           </div>
         </Card>
+        ) : null}
 
+        {activeStep === 'seo' ? (
+          <>
         <Card id="tenant-content" className="admin-panel-card admin-panel-card--span-2">
           <div className="admin-panel-card__header">
             <div>
@@ -1462,7 +1735,7 @@ export function TenantEditorPanel({
                   })}
                 />
               </AdminField>
-              <AdminField label="Link do Instagram">
+              <AdminField label="Link do Instagram" error={validationErrors['cta.primaryAction.href']}>
                 <input
                   value={ctaSection?.settings?.primaryAction?.href || ''}
                   onChange={(event) => setDraft((current) => {
@@ -1479,6 +1752,7 @@ export function TenantEditorPanel({
                     });
                     return nextDraft;
                   })}
+                  {...getInputState(validationErrors['cta.primaryAction.href'])}
                 />
               </AdminField>
             </div>
@@ -1539,6 +1813,35 @@ export function TenantEditorPanel({
                 </div>
               </div>
             ))}
+          </div>
+        </Card>
+
+        <Card className="admin-panel-card admin-panel-card--span-2">
+          <div className="admin-panel-card__header">
+            <div>
+              <h2>Historico de alteracoes</h2>
+              <p>Registro leve das ultimas mudancas salvas para este tenant.</p>
+            </div>
+            <span className="admin-section-chip admin-section-chip--accent">{historyEntries.length} item(ns)</span>
+          </div>
+
+          <div className="admin-event-list admin-event-list--scroll">
+            {historyEntries.length ? (
+              historyEntries.slice(0, 16).map((entry, index) => (
+                <div key={`${entry.field}-${entry.changedAt || index}`} className="admin-event-item admin-event-item--analytics">
+                  <div>
+                    <span className="admin-section-chip admin-section-chip--muted">{entry.field}</span>
+                    <strong>
+                      {formatHistoryValue(entry.oldValue)} {'->'} {formatHistoryValue(entry.newValue)}
+                    </strong>
+                    <span>Mudanca registrada no ultimo salvamento disponivel.</span>
+                  </div>
+                  <time dateTime={entry.changedAt}>{formatAnalyticsTimestamp(entry.changedAt)}</time>
+                </div>
+              ))
+            ) : (
+              <p className="admin-muted-copy">Ainda nao existem alteracoes salvas para este tenant.</p>
+            )}
           </div>
         </Card>
 
@@ -1630,6 +1933,8 @@ export function TenantEditorPanel({
             </div>
           </div>
         </Card>
+          </>
+        ) : null}
       </div>
     </div>
   );

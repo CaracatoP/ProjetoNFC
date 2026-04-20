@@ -1,18 +1,15 @@
 import { useEffect } from 'react';
 import taplinkMarkUrl from '@/assets/taplink-mark.svg';
 
-function upsertHeadLink(attributes) {
-  const selector = Object.entries(attributes)
-    .map(([name, value]) => `[${name}="${value}"]`)
-    .join('');
-
-  let element = document.head.querySelector(selector);
+function upsertHeadLink(rel, attributes = {}) {
+  let element = document.head.querySelector(`link[rel="${rel}"]`);
 
   if (!element) {
     element = document.createElement('link');
     document.head.appendChild(element);
   }
 
+  element.setAttribute('rel', rel);
   Object.entries(attributes).forEach(([name, value]) => element.setAttribute(name, value));
   return element;
 }
@@ -29,9 +26,10 @@ export function AppShell({
 }) {
   useEffect(() => {
     document.title = pageTitle;
-    upsertHeadLink({ rel: 'icon' }).setAttribute('href', taplinkMarkUrl);
-    upsertHeadLink({ rel: 'alternate icon' }).setAttribute('href', taplinkMarkUrl);
-    upsertHeadLink({ rel: 'shortcut icon' }).setAttribute('href', taplinkMarkUrl);
+    upsertHeadLink('icon', { href: taplinkMarkUrl, type: 'image/svg+xml', sizes: 'any' });
+    upsertHeadLink('alternate icon', { href: taplinkMarkUrl });
+    upsertHeadLink('shortcut icon', { href: taplinkMarkUrl });
+    upsertHeadLink('apple-touch-icon', { href: taplinkMarkUrl });
   }, [pageTitle]);
 
   return (

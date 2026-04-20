@@ -62,6 +62,15 @@ const businessSchema = new mongoose.Schema(
       imageUrl: { type: String, trim: true },
       imagePublicId: { type: String, trim: true },
     },
+    history: [
+      {
+        field: { type: String, required: true, trim: true },
+        oldValue: { type: mongoose.Schema.Types.Mixed },
+        newValue: { type: mongoose.Schema.Types.Mixed },
+        changedAt: { type: Date, default: Date.now },
+        _id: false,
+      },
+    ],
   },
   baseSchemaOptions,
 );

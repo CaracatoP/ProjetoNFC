@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 import { EmptyState } from '@/components/common/EmptyState.jsx';
@@ -7,7 +7,9 @@ import { DashboardOverviewGrid } from '@/components/business/DashboardOverviewGr
 import { TenantEditorPanel } from '@/components/business/TenantEditorPanel.jsx';
 import { TenantListPanel } from '@/components/business/TenantListPanel.jsx';
 import { TenantOnboardingForm } from '@/components/business/TenantOnboardingForm.jsx';
+import { TenantPreviewPanel } from '@/components/business/TenantPreviewPanel.jsx';
 import { useAuth } from '@/context/AuthContext.jsx';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue.js';
 import {
   createAdminBusiness,
   deleteAdminBusiness,
@@ -18,6 +20,51 @@ import {
   updateAdminBusinessStatus,
   uploadAdminImage,
 } from '@/services/adminService.js';
+
+function slugify(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-');
+}
+
+function buildUniqueSuffix(baseValue, existingValues = [], formatter) {
+  const existing = new Set(existingValues.filter(Boolean).map((item) => String(item).trim().toLowerCase()));
+  let attempt = 1;
+  let candidate = formatter(baseValue, attempt);
+
+  while (existing.has(candidate.trim().toLowerCase())) {
+    attempt += 1;
+    candidate = formatter(baseValue, attempt);
+  }
+
+  return candidate;
+}
+
+function buildDuplicatePayload(editor, businesses = []) {
+  const nextName = buildUniqueSuffix(editor.business.name || 'Novo tenant', businesses.map((business) => business.name), (value, attempt) =>
+    attempt === 1 ? `${value} (copy)` : `${value} (copy ${attempt})`,
+  );
+  const nextSlug = buildUniqueSuffix(editor.business.slug || slugify(nextName), businesses.map((business) => business.slug), (value, attempt) => {
+    const base = slugify(`${value}-copy`);
+    return attempt === 1 ? base : `${base}-${attempt}`;
+  });
+
+  return {
+    business: {
+      ...editor.business,
+      name: nextName,
+      slug: nextSlug,
+    },
+    theme: editor.theme,
+    links: editor.links,
+    sections: editor.sections,
+    nfcTag: editor.nfcTag ? { ...editor.nfcTag, code: '' } : null,
+  };
+}
 
 function formatValidationDetails(details = []) {
   return details
@@ -46,8 +93,14 @@ export function DashboardHomePage() {
   const [saving, setSaving] = useState(false);
   const [togglingStatus, setTogglingStatus] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [tenantSearchInput, setTenantSearchInput] = useState('');
+  const [tenantSort, setTenantSort] = useState('newest');
+  const [tenantStatusFilter, setTenantStatusFilter] = useState('all');
+  const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
+  const debouncedTenantSearch = useDebouncedValue(tenantSearchInput, 300);
 
   useEffect(() => {
     let active = true;
@@ -167,6 +220,7 @@ export function DashboardHomePage() {
       const createdEditor = await createAdminBusiness(token, payload);
       setEditor(createdEditor);
       await refreshCollections(createdEditor.business.id);
+      setPreviewRefreshKey((current) => current + 1);
       setMessage('Tenant criado com sucesso. Agora voce pode completar o conteudo no editor.');
     } catch (createError) {
       setError(getErrorMessage(createError));
@@ -184,6 +238,7 @@ export function DashboardHomePage() {
       const updatedEditor = await updateAdminBusiness(token, draft.business.id, draft);
       setEditor(updatedEditor);
       await refreshCollections(draft.business.id);
+      setPreviewRefreshKey((current) => current + 1);
       setMessage('Alteracoes salvas e analytics atualizados.');
     } catch (saveError) {
       setError(getErrorMessage(saveError));
@@ -205,6 +260,7 @@ export function DashboardHomePage() {
       await deleteAdminBusiness(token, businessId);
       setEditor(null);
       await refreshCollections('');
+      setPreviewRefreshKey((current) => current + 1);
       setMessage('Tenant removido com sucesso.');
     } catch (deleteError) {
       setError(getErrorMessage(deleteError));
@@ -222,6 +278,7 @@ export function DashboardHomePage() {
       const updatedEditor = await updateAdminBusinessStatus(token, businessId, nextStatus);
       setEditor(updatedEditor);
       await refreshCollections(businessId);
+      setPreviewRefreshKey((current) => current + 1);
       setMessage(
         nextStatus === 'active'
           ? 'Site ativado com sucesso. A pagina publica voltou a ficar disponivel.'
@@ -248,7 +305,86 @@ export function DashboardHomePage() {
     }
   }
 
+  async function handleDuplicate() {
+    if (!editor) {
+      return;
+    }
+
+    setDuplicating(true);
+    setMessage('');
+    setError('');
+
+    try {
+      const duplicatedEditor = await createAdminBusiness(token, buildDuplicatePayload(editor, businesses));
+      setEditor(duplicatedEditor);
+      await refreshCollections(duplicatedEditor.business.id);
+      setPreviewRefreshKey((current) => current + 1);
+      setMessage('Tenant duplicado com sucesso. O codigo NFC foi limpo para evitar conflito no clone.');
+    } catch (duplicateError) {
+      setError(getErrorMessage(duplicateError));
+    } finally {
+      setDuplicating(false);
+    }
+  }
+
+  async function handleCopyPublicLink() {
+    const urlToCopy = editor?.business?.publicUrl || selectedSummary?.publicUrl;
+
+    if (!urlToCopy) {
+      setError('Nao foi possivel gerar o link publico deste tenant.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(urlToCopy);
+      setMessage('Link publico copiado!');
+    } catch {
+      setError('Nao foi possivel copiar o link publico.');
+    }
+  }
+
+  const filteredBusinesses = useMemo(() => {
+    const searchTerm = debouncedTenantSearch.trim().toLowerCase();
+    const nextBusinesses = businesses.filter((business) => {
+      const matchesFilter = tenantStatusFilter === 'all' ? true : business.status === tenantStatusFilter;
+      const matchesSearch =
+        !searchTerm ||
+        business.name.toLowerCase().includes(searchTerm) ||
+        business.slug.toLowerCase().includes(searchTerm);
+
+      return matchesFilter && matchesSearch;
+    });
+
+    return nextBusinesses.sort((first, second) => {
+      if (tenantSort === 'alphabetical') {
+        return first.name.localeCompare(second.name, 'pt-BR');
+      }
+
+      if (tenantSort === 'active') {
+        if (first.status === second.status) {
+          return first.name.localeCompare(second.name, 'pt-BR');
+        }
+
+        if (first.status === 'active') {
+          return -1;
+        }
+
+        if (second.status === 'active') {
+          return 1;
+        }
+
+        return first.name.localeCompare(second.name, 'pt-BR');
+      }
+
+      return new Date(second.createdAt || 0).getTime() - new Date(first.createdAt || 0).getTime();
+    });
+  }, [businesses, debouncedTenantSearch, tenantSort, tenantStatusFilter]);
+
   const selectedSummary = businesses.find((business) => business.id === selectedBusinessId) || null;
+  const previewUrl =
+    selectedSummary?.slug && typeof window !== 'undefined'
+      ? `${window.location.origin}/site/${selectedSummary.slug}`
+      : selectedSummary?.publicUrl || '';
 
   return (
     <AppShell
@@ -277,24 +413,43 @@ export function DashboardHomePage() {
                 Abrir pagina publica
               </Button>
             ) : null}
+            {selectedSummary ? (
+              <Button variant="secondary" onClick={handleCopyPublicLink}>
+                Copiar link publico
+              </Button>
+            ) : null}
             <Button variant="secondary" onClick={logout}>
               Sair
             </Button>
           </div>
         </div>
 
-        {overview?.uploadConfig ? (
-          <div className="admin-mini-stats">
-            <div>
-              <span>Uploads preparados</span>
-              <strong>{overview.uploadConfig.maxFileSizeMb} MB por arquivo</strong>
-            </div>
-            <div>
-              <span>Formatos aceitos</span>
-              <strong>{overview.uploadConfig.acceptedMimeTypes.join(', ')}</strong>
-            </div>
+        <div className="admin-mini-stats">
+          <div className="admin-mini-stat-card">
+            <span>Tenant em foco</span>
+            <strong>{selectedSummary?.name || 'Nenhum tenant selecionado'}</strong>
+            <small>{selectedSummary ? `/site/${selectedSummary.slug}` : 'Selecione um tenant na coluna lateral para editar.'}</small>
           </div>
-        ) : null}
+          <div className="admin-mini-stat-card">
+            <span>Status operacional</span>
+            <strong>{selectedSummary?.status || 'Sem status'}</strong>
+            <small>{selectedSummary ? 'Controle manual de disponibilidade da pagina publica.' : 'Status aparece assim que houver um tenant ativo na area.'}</small>
+          </div>
+          {overview?.uploadConfig ? (
+            <>
+              <div className="admin-mini-stat-card">
+                <span>Uploads preparados</span>
+                <strong>{overview.uploadConfig.maxFileSizeMb} MB por arquivo</strong>
+                <small>Cloudinary pelo backend com validacao de imagem.</small>
+              </div>
+              <div className="admin-mini-stat-card">
+                <span>Formatos aceitos</span>
+                <strong>{overview.uploadConfig.acceptedMimeTypes.join(', ')}</strong>
+                <small>Fluxo pronto para logo, banner, favicon e galerias.</small>
+              </div>
+            </>
+          ) : null}
+        </div>
       </Card>
 
       {message ? <p className="admin-status-banner admin-status-banner--success">{message}</p> : null}
@@ -310,30 +465,52 @@ export function DashboardHomePage() {
             <div className="admin-sidebar-stack">
               <TenantOnboardingForm creating={creating} onCreate={handleCreate} />
               <TenantListPanel
-                businesses={businesses}
+                businesses={filteredBusinesses}
                 selectedBusinessId={selectedBusinessId}
                 loading={loadingWorkspace}
                 onSelect={setSelectedBusinessId}
+                searchValue={tenantSearchInput}
+                onSearchChange={setTenantSearchInput}
+                sortValue={tenantSort}
+                onSortChange={setTenantSort}
+                statusFilter={tenantStatusFilter}
+                onStatusFilterChange={setTenantStatusFilter}
               />
             </div>
 
             <div className="admin-editor-column">
-              {loadingEditor ? (
-                <Card className="admin-panel-card">
-                  <p className="admin-muted-copy">Carregando editor do tenant...</p>
-                </Card>
-              ) : (
-                <TenantEditorPanel
-                  editor={editor}
-                  saving={saving}
-                  togglingStatus={togglingStatus}
-                  deleting={deleting}
-                  onSave={handleSave}
-                  onToggleStatus={handleToggleStatus}
-                  onDelete={handleDelete}
-                  onUpload={handleUpload}
+              <div className="admin-editor-layout">
+                <div className="admin-editor-pane">
+                  {loadingEditor ? (
+                    <Card className="admin-panel-card">
+                      <p className="admin-muted-copy">Carregando editor do tenant...</p>
+                    </Card>
+                  ) : (
+                    <TenantEditorPanel
+                      editor={editor}
+                      saving={saving}
+                      togglingStatus={togglingStatus}
+                      deleting={deleting}
+                      duplicating={duplicating}
+                      onSave={handleSave}
+                      onToggleStatus={handleToggleStatus}
+                      onDelete={handleDelete}
+                      onUpload={handleUpload}
+                      onDuplicate={handleDuplicate}
+                      onCopyPublicLink={handleCopyPublicLink}
+                    />
+                  )}
+                </div>
+
+                <TenantPreviewPanel
+                  previewUrl={previewUrl}
+                  publicUrl={selectedSummary?.publicUrl || ''}
+                  businessName={selectedSummary?.name || ''}
+                  status={selectedSummary?.status || ''}
+                  previewKey={previewRefreshKey}
+                  onRefresh={() => setPreviewRefreshKey((current) => current + 1)}
                 />
-              )}
+              </div>
             </div>
           </div>
         </>

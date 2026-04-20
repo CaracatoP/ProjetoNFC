@@ -6,6 +6,7 @@ import {
 } from '../utils/adminDefaults.js';
 import { env } from '../config/env.js';
 import {
+  appendBusinessHistoryEntries,
   createBusinessRecord,
   deleteBusinessGraphRecords,
   findBusinessGraphForAdmin,
@@ -46,6 +47,106 @@ function normalizeHost(value) {
     .replace(/^https?:\/\//, '')
     .replace(/\/.*$/, '')
     .replace(/\.$/, '');
+}
+
+function isPlainObject(value) {
+  return Object.prototype.toString.call(value) === '[object Object]';
+}
+
+function normalizeHistoryValue(value) {
+  if (value === undefined) {
+    return '';
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeHistoryValue(item));
+  }
+
+  if (isPlainObject(value)) {
+    return Object.keys(value)
+      .sort()
+      .reduce((accumulator, key) => {
+        accumulator[key] = normalizeHistoryValue(value[key]);
+        return accumulator;
+      }, {});
+  }
+
+  return value;
+}
+
+function flattenHistorySnapshot(snapshot, prefix = '') {
+  const entries = new Map();
+
+  function visit(currentValue, path) {
+    if (currentValue === undefined) {
+      return;
+    }
+
+    if (Array.isArray(currentValue)) {
+      if (!currentValue.length) {
+        entries.set(path, []);
+        return;
+      }
+
+      currentValue.forEach((item, index) => visit(item, path ? `${path}[${index}]` : `[${index}]`));
+      return;
+    }
+
+    if (isPlainObject(currentValue)) {
+      const keys = Object.keys(currentValue).sort();
+
+      if (!keys.length && path) {
+        entries.set(path, {});
+        return;
+      }
+
+      keys.forEach((key) => visit(currentValue[key], path ? `${path}.${key}` : key));
+      return;
+    }
+
+    entries.set(path, normalizeHistoryValue(currentValue));
+  }
+
+  visit(snapshot, prefix);
+  return entries;
+}
+
+function areHistoryValuesEqual(previousValue, nextValue) {
+  return JSON.stringify(previousValue) === JSON.stringify(nextValue);
+}
+
+function buildHistoryEntries(previousSnapshot, nextSnapshot, changedAt = new Date()) {
+  const previousEntries = flattenHistorySnapshot(previousSnapshot);
+  const nextEntries = flattenHistorySnapshot(nextSnapshot);
+  const paths = new Set([...previousEntries.keys(), ...nextEntries.keys()]);
+
+  return [...paths]
+    .sort((first, second) => first.localeCompare(second))
+    .reduce((historyEntries, path) => {
+      const previousValue = previousEntries.get(path);
+      const nextValue = nextEntries.get(path);
+
+      if (areHistoryValuesEqual(previousValue, nextValue)) {
+        return historyEntries;
+      }
+
+      historyEntries.push({
+        field: path,
+        oldValue: previousValue,
+        newValue: nextValue,
+        changedAt,
+      });
+
+      return historyEntries;
+    }, []);
 }
 
 function buildBusinessPublicUrl(business = {}) {
@@ -438,6 +539,14 @@ async function hydrateEditorResponse(businessId) {
         occurredAt: event.occurredAt,
       })),
     },
+    history: [...(graph.business.history || [])]
+      .sort((first, second) => new Date(second.changedAt || 0).getTime() - new Date(first.changedAt || 0).getTime())
+      .map((entry) => ({
+        field: entry.field,
+        oldValue: entry.oldValue,
+        newValue: entry.newValue,
+        changedAt: entry.changedAt,
+      })),
   };
 }
 
@@ -472,6 +581,14 @@ export async function createAdminBusiness(input) {
   await replaceSectionRecords(business._id, normalizeSectionsPayload(input.sections || defaults.sections));
   await upsertNfcTagRecord(business._id, normalizeTagPayload(input.nfcTag || defaults.nfcTag));
   await ensureDefaultSubscriptionForBusiness(business._id);
+  await appendBusinessHistoryEntries(String(business._id), [
+    {
+      field: 'system.operation',
+      oldValue: null,
+      newValue: 'created',
+      changedAt: new Date(),
+    },
+  ]);
   const editor = await hydrateEditorResponse(String(business._id));
   publishBusinessRealtimeUpdate(editor, { operation: 'created' });
   return editor;
@@ -480,9 +597,27 @@ export async function createAdminBusiness(input) {
 export async function updateAdminBusiness(businessId, input) {
   const existingGraph = await findBusinessGraphForAdmin(businessId);
   const businessPayload = normalizeBusinessPayload(input.business || {});
+  const themePayload = normalizeThemePayload(input.theme || {});
+  const sectionsPayload = normalizeSectionsPayload(input.sections || []);
+  const tagPayload = normalizeTagPayload(input.nfcTag || null);
   await assertBusinessSlugAvailable(businessPayload.slug, businessId);
   await assertBusinessDomainsAvailable(businessPayload.domains, businessId);
   const linksPayload = synchronizeManagedLinks(normalizeLinksPayload(input.links || []), businessPayload);
+  const previousSnapshot = {
+    business: normalizeBusinessPayload(existingGraph.business || {}),
+    theme: normalizeThemePayload(existingGraph.theme || buildDefaultTenantSetup(existingGraph.business || {}).theme),
+    links: normalizeLinksPayload(existingGraph.links || []),
+    sections: normalizeSectionsPayload(existingGraph.sections || []),
+    nfcTag: normalizeTagPayload(existingGraph.nfcTag || null),
+  };
+  const nextSnapshot = {
+    business: businessPayload,
+    theme: themePayload,
+    links: linksPayload,
+    sections: sectionsPayload,
+    nfcTag: tagPayload,
+  };
+  const historyEntries = buildHistoryEntries(previousSnapshot, nextSnapshot);
   const business = await updateBusinessRecord(businessId, businessPayload);
 
   if (!business) {
@@ -490,10 +625,11 @@ export async function updateAdminBusiness(businessId, input) {
   }
 
   await Promise.all([
-    upsertThemeRecord(businessId, normalizeThemePayload(input.theme || {})),
+    upsertThemeRecord(businessId, themePayload),
     replaceLinkRecords(businessId, linksPayload),
-    replaceSectionRecords(businessId, normalizeSectionsPayload(input.sections || [])),
-    upsertNfcTagRecord(businessId, normalizeTagPayload(input.nfcTag || null)),
+    replaceSectionRecords(businessId, sectionsPayload),
+    upsertNfcTagRecord(businessId, tagPayload),
+    appendBusinessHistoryEntries(businessId, historyEntries),
   ]);
 
   const editor = await hydrateEditorResponse(businessId);
@@ -513,6 +649,15 @@ export async function updateAdminBusinessStatus(businessId, status) {
   if (!business) {
     throw new AppError('Negocio nao encontrado', 404, 'business_not_found');
   }
+
+  await appendBusinessHistoryEntries(businessId, [
+    {
+      field: 'business.status',
+      oldValue: existingGraph.business?.status || null,
+      newValue: status,
+      changedAt: new Date(),
+    },
+  ]);
 
   const editor = await hydrateEditorResponse(businessId);
   publishBusinessRealtimeUpdate(editor, {

@@ -27,6 +27,9 @@ export function TenantOnboardingForm({ creating, onCreate }) {
   const [slugTouched, setSlugTouched] = useState(false);
 
   const suggestedSlug = useMemo(() => slugify(form.name), [form.name]);
+  const previewSlug = form.slug || suggestedSlug || 'seu-negocio';
+  const publicPreviewUrl =
+    typeof window !== 'undefined' ? `${window.location.origin}/site/${previewSlug}` : `/site/${previewSlug}`;
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -62,6 +65,7 @@ export function TenantOnboardingForm({ creating, onCreate }) {
           <h2>Novo comercio</h2>
           <p>Cadastre um tenant novo em poucos campos e depois refine no editor.</p>
         </div>
+        <span className="admin-section-chip admin-section-chip--accent">Ativo ao criar</span>
       </div>
 
       <form className="admin-form admin-form--stack" onSubmit={handleSubmit}>
@@ -92,6 +96,12 @@ export function TenantOnboardingForm({ creating, onCreate }) {
             placeholder={suggestedSlug || 'restaurante-vista-boa'}
           />
         </label>
+
+        <div className="admin-inline-note admin-inline-note--preview">
+          <strong>URL inicial do tenant</strong>
+          <span className="admin-inline-note__value">{publicPreviewUrl}</span>
+          <span>O tenant ja nasce ativo e voce cai direto no editor para completar branding, secoes e links.</span>
+        </div>
 
         <label className="admin-field">
           <span>WhatsApp</span>

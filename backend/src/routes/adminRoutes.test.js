@@ -181,6 +181,7 @@ describe('Admin routes', () => {
 
     expect(updateResponse.status).toBe(200);
     expect(updateResponse.body.data.business.name).toBe('Barbearia Estilo Vivo Premium');
+    expect(updateResponse.body.data.history.some((entry) => entry.field === 'business.name')).toBe(true);
   });
 
   it('toggles the tenant status and blocks public rendering while inactive', async () => {
@@ -198,6 +199,7 @@ describe('Admin routes', () => {
 
     expect(deactivateResponse.status).toBe(200);
     expect(deactivateResponse.body.data.business.status).toBe('inactive');
+    expect(deactivateResponse.body.data.history.some((entry) => entry.field === 'business.status')).toBe(true);
 
     const publicWhileInactive = await request(app).get('/api/public/site/barbearia-estilo-vivo');
 
