@@ -258,6 +258,14 @@ function newGalleryItem() {
   };
 }
 
+function newHourItem() {
+  return {
+    id: `hour-${Date.now()}`,
+    label: '',
+    value: '',
+  };
+}
+
 const SECTION_LABELS = {
   'hero-main': 'Hero principal',
   'quick-actions': 'Acesso rapido',
@@ -1169,20 +1177,98 @@ export function TenantEditorPanel({
                 }))}
               />
             </AdminField>
-            <AdminField label="Horario principal" description="Use o bloco de horarios do editor para detalhar mais linhas.">
-              <input
-                value={draft.business.hours?.[0]?.value || ''}
-                onChange={(event) => setDraft((current) => {
-                  const hours = current.business.hours?.length ? [...current.business.hours] : [{ id: 'weekday', label: 'Horario', value: '' }];
-                  hours[0] = { ...hours[0], value: event.target.value };
-                  return {
-                    ...current,
-                    business: { ...current.business, hours },
-                  };
-                })}
-              />
-            </AdminField>
           </div>
+
+          <section className="admin-form-block admin-form-block--soft">
+            <div className="admin-panel-card__header admin-panel-card__header--compact">
+              <div>
+                <h2>Horarios exibidos no site</h2>
+                <p>Cadastre os dias ou periodos exatamente como deseja mostrar na pagina publica.</p>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  setDraft((current) => ({
+                    ...current,
+                    business: {
+                      ...current.business,
+                      hours: [...(current.business.hours || []), newHourItem()],
+                    },
+                  }))
+                }
+              >
+                Adicionar horario
+              </Button>
+            </div>
+
+            {draft.business.hours?.length ? (
+              <div className="admin-repeater-list admin-repeater-list--hours">
+                {draft.business.hours.map((hour, index) => (
+                  <div key={hour.id || index} className="admin-repeater-card admin-repeater-card--hour">
+                    <div className="admin-form-grid">
+                      <AdminField label="Dia ou periodo">
+                        <input
+                          value={hour.label || ''}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              business: {
+                                ...current.business,
+                                hours: current.business.hours.map((item, itemIndex) =>
+                                  itemIndex === index ? { ...item, label: event.target.value } : item,
+                                ),
+                              },
+                            }))
+                          }
+                          placeholder="Seg-Sex"
+                        />
+                      </AdminField>
+                      <AdminField label="Faixa de horario">
+                        <input
+                          value={hour.value || ''}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              business: {
+                                ...current.business,
+                                hours: current.business.hours.map((item, itemIndex) =>
+                                  itemIndex === index ? { ...item, value: event.target.value } : item,
+                                ),
+                              },
+                            }))
+                          }
+                          placeholder="09:00 - 18:00 ou Fechado"
+                        />
+                      </AdminField>
+                    </div>
+
+                    <div className="admin-inline-actions">
+                      <Button
+                        variant="secondary"
+                        className="button--danger-tone"
+                        onClick={() =>
+                          setDraft((current) => ({
+                            ...current,
+                            business: {
+                              ...current.business,
+                              hours: current.business.hours.filter((_, itemIndex) => itemIndex !== index),
+                            },
+                          }))
+                        }
+                      >
+                        Remover horario
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="admin-inline-note">
+                <strong>Sem horarios configurados</strong>
+                <span>Adicione linhas com os dias e faixas que devem aparecer no site. Exemplo: Seg-Sex, Sabado ou Domingo.</span>
+              </div>
+            )}
+          </section>
           </div>
         </Card>
 

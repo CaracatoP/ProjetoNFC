@@ -351,6 +351,42 @@ describe('DashboardHomePage', () => {
     });
   });
 
+  it('allows editing multiple business hours before saving', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+    expect(await screen.findByText('Contato e atendimento')).toBeInTheDocument();
+
+    const contactCard = screen.getByText('Contato e atendimento').closest('section');
+    const contactScope = within(contactCard);
+
+    await user.click(contactScope.getByRole('button', { name: /Adicionar horario/i }));
+
+    const periodInputs = contactScope.getAllByLabelText('Dia ou periodo');
+    const rangeInputs = contactScope.getAllByLabelText('Faixa de horario');
+
+    await user.type(periodInputs[1], 'Sabado');
+    await user.type(rangeInputs[1], '09:00 - 17:00');
+    await user.click(screen.getByRole('button', { name: /Salvar alteracoes/i }));
+
+    await waitFor(() => {
+      const saveCall = adminService.updateAdminBusiness.mock.calls
+        .filter((call) => call[0] === 'admin-token' && call[1] === 'business-1')
+        .at(-1);
+
+      expect(saveCall?.[2]?.business?.hours).toEqual([
+        { id: 'weekday', label: 'Seg-Sex', value: '09:00 - 19:00' },
+        expect.objectContaining({ label: 'Sabado', value: '09:00 - 17:00' }),
+      ]);
+    });
+  });
+
   it('rebuilds derived theme tokens when the admin changes the palette', async () => {
     const user = userEvent.setup();
 

@@ -2767,6 +2767,11 @@ img {
   border-bottom: 1px solid color-mix(in srgb, var(--theme-border) 82%, transparent);
 }
 
+.dashboard-shell .admin-panel-card__header--compact {
+  padding-bottom: 0.9rem;
+  margin-bottom: 0;
+}
+
 .dashboard-shell .admin-panel-card__header h2,
 .dashboard-shell .admin-editor-header h2 {
   font-size: clamp(1.35rem, 1.25rem + 0.45vw, 1.75rem);
@@ -2954,6 +2959,7 @@ img {
 }
 
 .dashboard-shell .admin-repeater-list--links,
+.dashboard-shell .admin-repeater-list--hours,
 .dashboard-shell .admin-repeater-list--services,
 .dashboard-shell .admin-repeater-list--gallery {
   display: grid;
@@ -2961,8 +2967,16 @@ img {
   gap: 1.2rem;
 }
 
+.dashboard-shell .admin-repeater-list--hours {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
 .dashboard-shell .admin-repeater-list--gallery {
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.dashboard-shell .admin-repeater-card--hour .admin-form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .dashboard-shell .admin-analytics-summary {
@@ -3052,6 +3066,7 @@ img {
   }
 
   .dashboard-shell .admin-stepper--dashboard,
+  .dashboard-shell .admin-repeater-list--hours,
   .dashboard-shell .admin-repeater-list--links,
   .dashboard-shell .admin-repeater-list--services,
   .dashboard-shell .admin-repeater-list--gallery {
