@@ -32,7 +32,7 @@ export function TenantListPanel({
             placeholder="Buscar por nome ou slug"
           />
         </label>
-        <div className="admin-form-grid admin-form-grid--compact">
+        <div className="admin-sidebar-filters__grid">
           <label className="admin-field">
             <span>Ordenar por</span>
             <select value={sortValue} onChange={(event) => onSortChange?.(event.target.value)}>

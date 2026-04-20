@@ -9,15 +9,17 @@ export function TenantPreviewPanel({ previewUrl, publicUrl, businessName, previe
           <h2>Preview publico</h2>
           <p>Visualize o estado salvo do site sem sair do backoffice.</p>
         </div>
-        <div className="admin-inline-actions">
-          <Button variant="secondary" onClick={onRefresh}>
-            Atualizar preview
-          </Button>
-          {publicUrl ? (
-            <Button href={publicUrl} target="_blank" rel="noreferrer">
-              Abrir em nova aba
+        <div className="admin-toolbar admin-toolbar--compact">
+          <div className="admin-toolbar__group admin-toolbar__group--end">
+            <Button variant="secondary" onClick={onRefresh}>
+              Atualizar preview
             </Button>
-          ) : null}
+            {publicUrl ? (
+              <Button href={publicUrl} target="_blank" rel="noreferrer">
+                Abrir em nova aba
+              </Button>
+            ) : null}
+          </div>
         </div>
       </div>
 

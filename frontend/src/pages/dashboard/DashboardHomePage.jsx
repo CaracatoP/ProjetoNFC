@@ -404,23 +404,27 @@ export function DashboardHomePage() {
               Logado como <strong>{user?.displayName || 'Admin'}</strong>. Sessao protegida por token, uploads no Cloudinary e operacao centralizada do TapLink.
             </p>
           </div>
-          <div className="admin-editor-actions">
-            <Button variant="secondary" onClick={() => refreshCollections(selectedBusinessId)} disabled={loadingWorkspace}>
-              {loadingWorkspace ? 'Atualizando...' : 'Atualizar dados'}
-            </Button>
-            {selectedSummary ? (
-              <Button href={selectedSummary.publicUrl || `/site/${selectedSummary.slug}`} target="_blank" rel="noreferrer">
-                Abrir pagina publica
+          <div className="admin-toolbar">
+            <div className="admin-toolbar__group">
+              <Button variant="secondary" onClick={() => refreshCollections(selectedBusinessId)} disabled={loadingWorkspace}>
+                {loadingWorkspace ? 'Atualizando...' : 'Atualizar dados'}
               </Button>
-            ) : null}
-            {selectedSummary ? (
-              <Button variant="secondary" onClick={handleCopyPublicLink}>
-                Copiar link publico
+              {selectedSummary ? (
+                <Button href={selectedSummary.publicUrl || `/site/${selectedSummary.slug}`} target="_blank" rel="noreferrer">
+                  Abrir pagina publica
+                </Button>
+              ) : null}
+              {selectedSummary ? (
+                <Button variant="secondary" onClick={handleCopyPublicLink}>
+                  Copiar link publico
+                </Button>
+              ) : null}
+            </div>
+            <div className="admin-toolbar__group admin-toolbar__group--end">
+              <Button variant="secondary" onClick={logout}>
+                Sair
               </Button>
-            ) : null}
-            <Button variant="secondary" onClick={logout}>
-              Sair
-            </Button>
+            </div>
           </div>
         </div>
 

@@ -69,33 +69,35 @@ export function TenantOnboardingForm({ creating, onCreate }) {
       </div>
 
       <form className="admin-form admin-form--stack" onSubmit={handleSubmit}>
-        <label className="admin-field">
-          <span>Nome do comercio</span>
-          <input
-            value={form.name}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                name: event.target.value,
-                slug: slugTouched ? current.slug : slugify(event.target.value),
-              }))
-            }
-            placeholder="Ex.: Restaurante Vista Boa"
-          />
-        </label>
+        <div className="admin-form-grid">
+          <label className="admin-field">
+            <span>Nome do comercio</span>
+            <input
+              value={form.name}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  name: event.target.value,
+                  slug: slugTouched ? current.slug : slugify(event.target.value),
+                }))
+              }
+              placeholder="Ex.: Restaurante Vista Boa"
+            />
+          </label>
 
-        <label className="admin-field">
-          <span>Slug publico</span>
-          <input
-            value={form.slug}
-            onChange={(event) => {
-              setSlugTouched(true);
-              setForm((current) => ({ ...current, slug: slugify(event.target.value, { preserveTrailingSeparator: true }) }));
-            }}
-            onBlur={(event) => setForm((current) => ({ ...current, slug: slugify(event.target.value) }))}
-            placeholder={suggestedSlug || 'restaurante-vista-boa'}
-          />
-        </label>
+          <label className="admin-field">
+            <span>Slug publico</span>
+            <input
+              value={form.slug}
+              onChange={(event) => {
+                setSlugTouched(true);
+                setForm((current) => ({ ...current, slug: slugify(event.target.value, { preserveTrailingSeparator: true }) }));
+              }}
+              onBlur={(event) => setForm((current) => ({ ...current, slug: slugify(event.target.value) }))}
+              placeholder={suggestedSlug || 'restaurante-vista-boa'}
+            />
+          </label>
+        </div>
 
         <div className="admin-inline-note admin-inline-note--preview">
           <strong>URL inicial do tenant</strong>
@@ -103,23 +105,25 @@ export function TenantOnboardingForm({ creating, onCreate }) {
           <span>O tenant ja nasce ativo e voce cai direto no editor para completar branding, secoes e links.</span>
         </div>
 
-        <label className="admin-field">
-          <span>WhatsApp</span>
-          <input
-            value={form.whatsapp}
-            onChange={(event) => setForm((current) => ({ ...current, whatsapp: event.target.value }))}
-            placeholder="5511999999999"
-          />
-        </label>
+        <div className="admin-form-grid">
+          <label className="admin-field">
+            <span>WhatsApp</span>
+            <input
+              value={form.whatsapp}
+              onChange={(event) => setForm((current) => ({ ...current, whatsapp: event.target.value }))}
+              placeholder="5511999999999"
+            />
+          </label>
 
-        <label className="admin-field">
-          <span>Endereco</span>
-          <input
-            value={form.addressDisplay}
-            onChange={(event) => setForm((current) => ({ ...current, addressDisplay: event.target.value }))}
-            placeholder="Rua, numero, bairro, cidade"
-          />
-        </label>
+          <label className="admin-field">
+            <span>Endereco</span>
+            <input
+              value={form.addressDisplay}
+              onChange={(event) => setForm((current) => ({ ...current, addressDisplay: event.target.value }))}
+              placeholder="Rua, numero, bairro, cidade"
+            />
+          </label>
+        </div>
 
         <label className="admin-field">
           <span>Descricao inicial</span>

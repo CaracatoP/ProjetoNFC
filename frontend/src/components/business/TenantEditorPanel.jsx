@@ -690,31 +690,35 @@ export function TenantEditorPanel({
               <span className="admin-meta-pill">Eventos: {analyticsSummary?.totalEvents || 0}</span>
             </div>
           </div>
-          <div className="admin-editor-actions">
-            <Button variant="secondary" onClick={onCopyPublicLink} disabled={!publicUrlPreview.preferredUrl}>
-              Copiar link
-            </Button>
-            <Button variant="secondary" onClick={onDuplicate} disabled={duplicating || deleting || saving}>
-              {duplicating ? 'Duplicando...' : 'Duplicar tenant'}
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => onToggleStatus?.(draft.business.id, isActive ? 'inactive' : 'active')}
-              disabled={togglingStatus || deleting || saving || duplicating}
-            >
-              {togglingStatus ? (isActive ? 'Inativando...' : 'Ativando...') : isActive ? 'Inativar site' : 'Ativar site'}
-            </Button>
-            <Button
-              variant="secondary"
-              className="button--danger-tone"
-              onClick={() => onDelete?.(draft.business.id)}
-              disabled={deleting || duplicating}
-            >
-              {deleting ? 'Excluindo...' : 'Excluir tenant'}
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? 'Salvando...' : 'Salvar alteracoes'}
-            </Button>
+          <div className="admin-toolbar">
+            <div className="admin-toolbar__group">
+              <Button variant="secondary" onClick={onCopyPublicLink} disabled={!publicUrlPreview.preferredUrl}>
+                Copiar link
+              </Button>
+              <Button variant="secondary" onClick={onDuplicate} disabled={duplicating || deleting || saving}>
+                {duplicating ? 'Duplicando...' : 'Duplicar tenant'}
+              </Button>
+            </div>
+            <div className="admin-toolbar__group admin-toolbar__group--end">
+              <Button
+                variant="secondary"
+                onClick={() => onToggleStatus?.(draft.business.id, isActive ? 'inactive' : 'active')}
+                disabled={togglingStatus || deleting || saving || duplicating}
+              >
+                {togglingStatus ? (isActive ? 'Inativando...' : 'Ativando...') : isActive ? 'Inativar site' : 'Ativar site'}
+              </Button>
+              <Button
+                variant="secondary"
+                className="button--danger-tone"
+                onClick={() => onDelete?.(draft.business.id)}
+                disabled={deleting || duplicating}
+              >
+                {deleting ? 'Excluindo...' : 'Excluir tenant'}
+              </Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? 'Salvando...' : 'Salvar alteracoes'}
+              </Button>
+            </div>
           </div>
         </div>
       </Card>
