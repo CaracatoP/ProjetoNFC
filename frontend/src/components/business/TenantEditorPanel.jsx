@@ -685,7 +685,7 @@ export function TenantEditorPanel({
     <div className="admin-editor-stack">
       <Card className="admin-panel-card admin-panel-card--hero">
         <div className="admin-editor-header admin-editor-header--hero">
-          <div>
+          <div className="admin-editor-hero-main">
             <SectionEyebrow>Tenant em edicao</SectionEyebrow>
             <h2>{draft.business.name}</h2>
             <p className="admin-editor-public-url">{publicUrlPreview.preferredUrl || `/site/${draft.business.slug}`}</p>
@@ -695,34 +695,38 @@ export function TenantEditorPanel({
               <span className="admin-meta-pill">Eventos: {analyticsSummary?.totalEvents || 0}</span>
             </div>
           </div>
-          <div className="admin-toolbar admin-toolbar--editor">
-            <div className="admin-toolbar__group">
-              <Button variant="secondary" onClick={onCopyPublicLink} disabled={!publicUrlPreview.preferredUrl}>
-                Copiar link
-              </Button>
-              <Button variant="secondary" onClick={onDuplicate} disabled={duplicating || deleting || saving}>
-                {duplicating ? 'Duplicando...' : 'Duplicar tenant'}
-              </Button>
-            </div>
-            <div className="admin-toolbar__group admin-toolbar__group--end">
-              <Button
-                variant="secondary"
-                onClick={() => onToggleStatus?.(draft.business.id, isActive ? 'inactive' : 'active')}
-                disabled={togglingStatus || deleting || saving || duplicating}
-              >
-                {togglingStatus ? (isActive ? 'Inativando...' : 'Ativando...') : isActive ? 'Inativar site' : 'Ativar site'}
-              </Button>
-              <Button
-                variant="secondary"
-                className="button--danger-tone"
-                onClick={() => onDelete?.(draft.business.id)}
-                disabled={deleting || duplicating}
-              >
-                {deleting ? 'Excluindo...' : 'Excluir tenant'}
-              </Button>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? 'Salvando...' : 'Salvar alteracoes'}
-              </Button>
+          <div className="admin-editor-hero-actions">
+            <div className="admin-toolbar admin-toolbar--editor">
+              <div className="admin-toolbar__group admin-toolbar__group--utility">
+                <Button variant="secondary" onClick={onCopyPublicLink} disabled={!publicUrlPreview.preferredUrl}>
+                  Copiar link
+                </Button>
+                <Button variant="secondary" onClick={onDuplicate} disabled={duplicating || deleting || saving}>
+                  {duplicating ? 'Duplicando...' : 'Duplicar tenant'}
+                </Button>
+              </div>
+              <div className="admin-toolbar__group admin-toolbar__group--danger">
+                <Button
+                  variant="secondary"
+                  onClick={() => onToggleStatus?.(draft.business.id, isActive ? 'inactive' : 'active')}
+                  disabled={togglingStatus || deleting || saving || duplicating}
+                >
+                  {togglingStatus ? (isActive ? 'Inativando...' : 'Ativando...') : isActive ? 'Inativar site' : 'Ativar site'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="button--danger-tone"
+                  onClick={() => onDelete?.(draft.business.id)}
+                  disabled={deleting || duplicating}
+                >
+                  {deleting ? 'Excluindo...' : 'Excluir tenant'}
+                </Button>
+              </div>
+              <div className="admin-toolbar__group admin-toolbar__group--primary">
+                <Button onClick={handleSave} disabled={saving}>
+                  {saving ? 'Salvando...' : 'Salvar alteracoes'}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -741,7 +745,7 @@ export function TenantEditorPanel({
             </span>
           </div>
 
-          <div className="admin-stepper">
+          <div className="admin-stepper admin-stepper--dashboard">
             {EDITOR_STEPS.map((step, index) => (
               <button
                 key={step.id}
@@ -787,7 +791,7 @@ export function TenantEditorPanel({
       <div className="admin-editor-grid">
         {activeStep === 'basic' ? (
           <>
-        <Card id="tenant-identity" className="admin-panel-card">
+        <Card id="tenant-identity" className="admin-panel-card admin-panel-card--span-2">
           <div className="admin-panel-card__header">
             <div>
               <SectionEyebrow>Base</SectionEyebrow>
@@ -951,7 +955,7 @@ export function TenantEditorPanel({
         ) : null}
 
         {activeStep === 'visual' ? (
-        <Card id="tenant-media" className="admin-panel-card">
+        <Card id="tenant-media" className="admin-panel-card admin-panel-card--span-2">
           <div className="admin-panel-card__header">
             <div>
               <SectionEyebrow>Visual</SectionEyebrow>
@@ -1293,7 +1297,7 @@ export function TenantEditorPanel({
         ) : null}
 
         {activeStep === 'links' ? (
-        <Card id="tenant-links" className="admin-panel-card">
+        <Card id="tenant-links" className="admin-panel-card admin-panel-card--span-2">
           <div className="admin-panel-card__header">
             <div>
               <SectionEyebrow>Atalhos</SectionEyebrow>
@@ -1306,7 +1310,7 @@ export function TenantEditorPanel({
           </div>
 
           <div className="admin-card-stack">
-          <div className="admin-repeater-list">
+          <div className="admin-repeater-list admin-repeater-list--links">
             {draft.links.map((link, index) => (
               <div key={link.id || index} className="admin-repeater-card">
                 <div className="admin-form-grid">
@@ -1401,7 +1405,7 @@ export function TenantEditorPanel({
         ) : null}
 
         {activeStep === 'content' ? (
-        <Card id="tenant-services-gallery" className="admin-panel-card">
+        <Card id="tenant-services-gallery" className="admin-panel-card admin-panel-card--span-2">
           <div className="admin-panel-card__header">
             <div>
               <SectionEyebrow>Conteudo</SectionEyebrow>
@@ -1441,7 +1445,7 @@ export function TenantEditorPanel({
             </Button>
           </div>
 
-          <div className="admin-repeater-list">
+          <div className="admin-repeater-list admin-repeater-list--services">
             {(servicesSection?.items || []).map((service, index) => (
               <div key={service.id || index} className="admin-repeater-card admin-repeater-card--service">
                 <div className="admin-form-grid">
@@ -1536,7 +1540,7 @@ export function TenantEditorPanel({
             </Button>
           </div>
 
-          <div className="admin-repeater-list">
+          <div className="admin-repeater-list admin-repeater-list--gallery">
             {(gallerySection?.items || []).map((image, index) => (
               <div key={image.id || index} className="admin-repeater-card admin-repeater-card--gallery">
                 <PreviewImage src={image.imageUrl} alt={image.alt || draft.business.name} />
