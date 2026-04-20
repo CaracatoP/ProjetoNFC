@@ -2831,6 +2831,7 @@ img {
 
 .dashboard-shell .admin-toolbar--editor .admin-toolbar__group {
   align-items: stretch;
+  min-width: 0;
 }
 
 .dashboard-shell .admin-toolbar--editor .admin-toolbar__group--utility,
@@ -2984,6 +2985,28 @@ img {
 .dashboard-shell .admin-event-list--scroll,
 .dashboard-shell .admin-ranked-list--scroll {
   padding-right: 0.2rem;
+}
+
+@media (max-width: 1360px) {
+  .dashboard-shell .admin-editor-header--hero {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .dashboard-shell .admin-editor-hero-actions {
+    width: 100%;
+  }
+
+  .dashboard-shell .admin-toolbar--editor {
+    grid-template-columns: repeat(2, minmax(0, max-content));
+    justify-content: start;
+    gap: 0.9rem 1rem;
+  }
+
+  .dashboard-shell .admin-toolbar--editor .admin-toolbar__group--primary {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 1100px) {
