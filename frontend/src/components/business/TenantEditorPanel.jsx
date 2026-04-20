@@ -953,7 +953,7 @@ export function TenantEditorPanel({
           </div>
 
           <div className="admin-card-stack">
-          <div className="admin-media-grid">
+          <div className="admin-media-grid admin-media-grid--assets">
             <div className="admin-media-card">
               <PreviewImage src={draft.business.logoUrl} alt={draft.business.name} />
               <AdminField label="Logo URL" error={validationErrors['business.logoUrl']}>
@@ -1182,8 +1182,8 @@ export function TenantEditorPanel({
           </div>
 
           <div className="admin-card-stack">
-          <div className="admin-split-grid">
-            <div className="admin-subpanel">
+          <div className="admin-split-grid admin-split-grid--payments">
+            <div className="admin-subpanel admin-subpanel--payment">
               <h3>PIX</h3>
               <div className="admin-form-grid">
                 <AdminField label="Tipo de chave">
@@ -1241,7 +1241,7 @@ export function TenantEditorPanel({
               </div>
             </div>
 
-            <div className="admin-subpanel">
+            <div className="admin-subpanel admin-subpanel--payment">
               <h3>Wi-Fi do atalho rapido</h3>
               <div className="admin-form-grid">
                 <AdminField label="SSID">
@@ -1390,7 +1390,7 @@ export function TenantEditorPanel({
         ) : null}
 
         {activeStep === 'content' ? (
-        <Card className="admin-panel-card">
+        <Card id="tenant-services-gallery" className="admin-panel-card">
           <div className="admin-panel-card__header">
             <div>
               <h2>Servicos e galeria</h2>
@@ -1431,7 +1431,7 @@ export function TenantEditorPanel({
 
           <div className="admin-repeater-list">
             {(servicesSection?.items || []).map((service, index) => (
-              <div key={service.id || index} className="admin-repeater-card">
+              <div key={service.id || index} className="admin-repeater-card admin-repeater-card--service">
                 <div className="admin-form-grid">
                   <AdminField label="Nome">
                     <input
@@ -1526,7 +1526,7 @@ export function TenantEditorPanel({
 
           <div className="admin-repeater-list">
             {(gallerySection?.items || []).map((image, index) => (
-              <div key={image.id || index} className="admin-repeater-card">
+              <div key={image.id || index} className="admin-repeater-card admin-repeater-card--gallery">
                 <PreviewImage src={image.imageUrl} alt={image.alt || draft.business.name} />
                 <div className="admin-form-grid">
                   <AdminField label="Imagem URL" error={validationErrors[`sections.gallery.${index}.imageUrl`]}>

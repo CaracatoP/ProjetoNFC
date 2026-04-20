@@ -2514,3 +2514,228 @@ img {
     padding-right: 0;
   }
 }
+
+/* Dashboard density relief: wider editor, calmer spacing, safer internal grids */
+.dashboard-shell {
+  max-width: min(1920px, calc(100vw - 1rem));
+  padding-inline: clamp(0.65rem, 1.2vw, 1.4rem);
+}
+
+.dashboard-shell__content {
+  gap: 1.75rem;
+}
+
+.dashboard-shell .admin-workspace {
+  grid-template-columns: minmax(340px, 395px) minmax(0, 1fr);
+  gap: clamp(1.35rem, 2vw, 1.95rem);
+}
+
+.dashboard-shell .admin-editor-layout {
+  grid-template-columns: minmax(0, 1.48fr) minmax(350px, 0.82fr);
+  gap: clamp(1.35rem, 2vw, 1.95rem);
+  align-items: start;
+}
+
+.dashboard-shell .admin-panel-card,
+.dashboard-shell .admin-stat-card {
+  padding: clamp(1.35rem, 1.9vw, 2rem);
+}
+
+.dashboard-shell .admin-panel-card__header,
+.dashboard-shell .admin-editor-header {
+  gap: 1.35rem;
+  margin-bottom: 0.2rem;
+}
+
+.dashboard-shell .admin-panel-card__header > div,
+.dashboard-shell .admin-editor-header > div {
+  gap: 0.58rem;
+}
+
+.dashboard-shell .admin-toolbar,
+.dashboard-shell .admin-toolbar__group,
+.dashboard-shell .admin-inline-actions {
+  gap: 0.9rem 1rem;
+}
+
+.dashboard-shell .admin-card-stack {
+  gap: 1.25rem;
+}
+
+.dashboard-shell .admin-card-stack--airy {
+  gap: 1.6rem;
+}
+
+.dashboard-shell .admin-form-block {
+  gap: 1.2rem;
+  padding: 1.35rem 1.45rem;
+}
+
+.dashboard-shell .admin-form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.1rem 1.15rem;
+}
+
+.dashboard-shell .admin-field {
+  min-width: 0;
+}
+
+.dashboard-shell .admin-field input,
+.dashboard-shell .admin-field select,
+.dashboard-shell .admin-field textarea {
+  width: 100%;
+  min-width: 0;
+}
+
+.dashboard-shell .admin-stepper {
+  gap: 1.1rem;
+  grid-auto-columns: minmax(228px, 1fr);
+  padding-bottom: 0.35rem;
+}
+
+.dashboard-shell .admin-stepper__item {
+  min-height: 118px;
+  padding: 1.15rem 1.2rem;
+}
+
+.dashboard-shell .admin-stepper-footer {
+  gap: 1.25rem;
+  padding-top: 0.35rem;
+}
+
+.dashboard-shell .admin-visibility-toggle {
+  gap: 1rem 1.25rem;
+  align-items: start;
+  justify-content: space-between;
+}
+
+.dashboard-shell .admin-media-grid--assets {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+
+.dashboard-shell .admin-media-card,
+.dashboard-shell .admin-subpanel,
+.dashboard-shell .admin-repeater-card {
+  gap: 1.1rem;
+  padding: 1.25rem;
+}
+
+.dashboard-shell .admin-media-card,
+.dashboard-shell .admin-subpanel,
+.dashboard-shell .admin-repeater-card,
+.dashboard-shell .admin-media-card > *,
+.dashboard-shell .admin-subpanel > *,
+.dashboard-shell .admin-repeater-card > * {
+  min-width: 0;
+}
+
+.dashboard-shell .admin-image-preview {
+  min-height: 220px;
+  aspect-ratio: 1 / 0.82;
+}
+
+.dashboard-shell .admin-media-card input[type='file'],
+.dashboard-shell .admin-repeater-card input[type='file'] {
+  width: 100%;
+  min-width: 0;
+  padding: 0.65rem;
+}
+
+.dashboard-shell input[type='file']::file-selector-button {
+  margin-right: 0.65rem;
+  padding: 0.72rem 0.9rem;
+  white-space: nowrap;
+}
+
+.dashboard-shell .admin-split-grid--payments {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.2rem;
+}
+
+.dashboard-shell .admin-subpanel--payment {
+  height: 100%;
+  padding: 1.25rem;
+}
+
+.dashboard-shell .admin-subpanel--payment .admin-form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
+.dashboard-shell .admin-sensitive-input {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.dashboard-shell .admin-sensitive-toggle {
+  justify-self: start;
+  min-width: 116px;
+}
+
+.dashboard-shell #tenant-services-gallery .admin-repeater-list {
+  gap: 1.25rem;
+}
+
+.dashboard-shell .admin-repeater-card--service .admin-form-grid,
+.dashboard-shell .admin-repeater-card--gallery .admin-form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.dashboard-shell .admin-preview-panel {
+  top: 1rem;
+}
+
+.dashboard-shell .admin-preview-panel__meta {
+  gap: 1rem;
+}
+
+.dashboard-shell .admin-preview-panel__frame {
+  min-height: 920px;
+  padding: 0.55rem;
+}
+
+.dashboard-shell .admin-preview-panel__frame iframe {
+  min-height: 884px;
+}
+
+@media (max-width: 1600px) {
+  .dashboard-shell .admin-editor-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-shell .admin-preview-panel {
+    position: static;
+  }
+
+  .dashboard-shell .admin-preview-panel__frame {
+    min-height: 720px;
+  }
+
+  .dashboard-shell .admin-preview-panel__frame iframe {
+    min-height: 684px;
+  }
+}
+
+@media (max-width: 1440px) {
+  .dashboard-shell .admin-workspace {
+    grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
+  }
+
+  .dashboard-shell .admin-media-grid--assets,
+  .dashboard-shell .admin-split-grid--payments {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .dashboard-shell .admin-form-block {
+    padding: 1.2rem 1.1rem;
+  }
+
+  .dashboard-shell .admin-media-grid--assets,
+  .dashboard-shell .admin-split-grid--payments,
+  .dashboard-shell .admin-repeater-card--service .admin-form-grid,
+  .dashboard-shell .admin-repeater-card--gallery .admin-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
