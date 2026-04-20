@@ -2780,7 +2780,7 @@ img {
 
 .dashboard-shell .admin-editor-header--hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(420px, 0.9fr);
+  grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
   gap: 1.4rem 1.75rem;
   align-items: end;
 }
@@ -2811,6 +2811,7 @@ img {
 .dashboard-shell .admin-editor-hero-actions {
   display: grid;
   align-self: stretch;
+  justify-items: end;
 }
 
 .dashboard-shell .admin-meta-pill {
@@ -2822,16 +2823,18 @@ img {
 }
 
 .dashboard-shell .admin-toolbar--editor {
-  display: grid;
-  grid-template-columns: repeat(3, max-content);
-  justify-content: end;
-  align-content: end;
-  gap: 0.95rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-end;
+  gap: 0.95rem 1rem;
+  width: 100%;
 }
 
 .dashboard-shell .admin-toolbar--editor .admin-toolbar__group {
   align-items: stretch;
   min-width: 0;
+  justify-content: flex-end;
 }
 
 .dashboard-shell .admin-toolbar--editor .admin-toolbar__group--utility,
@@ -2846,6 +2849,10 @@ img {
 
 .dashboard-shell .admin-toolbar--editor .admin-toolbar__group--primary .button {
   min-width: 188px;
+}
+
+.dashboard-shell .admin-toolbar--editor .button {
+  flex: 0 0 auto;
 }
 
 .dashboard-shell .admin-toolbar--editor .button:last-child {
@@ -2995,16 +3002,15 @@ img {
 
   .dashboard-shell .admin-editor-hero-actions {
     width: 100%;
+    justify-items: stretch;
   }
 
   .dashboard-shell .admin-toolbar--editor {
-    grid-template-columns: repeat(2, minmax(0, max-content));
-    justify-content: start;
+    justify-content: flex-start;
     gap: 0.9rem 1rem;
   }
 
   .dashboard-shell .admin-toolbar--editor .admin-toolbar__group--primary {
-    grid-column: 1 / -1;
     justify-content: flex-start;
   }
 }
@@ -3015,7 +3021,6 @@ img {
   }
 
   .dashboard-shell .admin-toolbar--editor {
-    grid-template-columns: 1fr;
     justify-content: stretch;
   }
 
@@ -3025,14 +3030,13 @@ img {
     border-right: 0;
   }
 
-  .dashboard-shell .admin-toolbar--editor .admin-toolbar__group--primary .button {
-    min-width: 0;
+  .dashboard-shell .admin-toolbar--editor .admin-toolbar__group {
+    width: 100%;
+    justify-content: flex-start;
   }
 
-  .dashboard-shell .admin-toolbar--editor .admin-toolbar__group--end {
-    margin-left: 0;
-    padding-left: 0;
-    border-left: 0;
+  .dashboard-shell .admin-toolbar--editor .admin-toolbar__group--primary .button {
+    min-width: 0;
   }
 }
 
@@ -3043,6 +3047,10 @@ img {
 }
 
 @media (max-width: 900px) {
+  .dashboard-shell .admin-editor-header--hero {
+    grid-template-columns: 1fr;
+  }
+
   .dashboard-shell .admin-stepper--dashboard,
   .dashboard-shell .admin-repeater-list--links,
   .dashboard-shell .admin-repeater-list--services,
