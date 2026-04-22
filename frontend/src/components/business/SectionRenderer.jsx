@@ -28,7 +28,7 @@ const componentMap = {
 };
 
 export function SectionRenderer(props) {
-  const Component = componentMap[props.section.type];
+  const Component = componentMap[props.section.type] || componentMap[props.section.key];
 
   if (!Component || props.section.visible === false || props.section.settings?.displayMode === 'modal') {
     return null;

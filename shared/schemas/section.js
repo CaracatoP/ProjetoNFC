@@ -8,6 +8,7 @@ export const serviceItemSchema = z.object({
   description: z.string().optional(),
   price: z.number().nonnegative().optional(),
   ctaLabel: z.string().optional(),
+  imageUrl: z.string().nullable().optional(),
 });
 
 export const galleryItemSchema = z.object({
@@ -45,4 +46,3 @@ export const businessSectionSchema = z.object({
 });
 
 export const businessSectionArraySchema = z.array(businessSectionSchema);
-

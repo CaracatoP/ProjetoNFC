@@ -20,7 +20,7 @@ function normalizePublicSiteMedia(site = {}) {
         : site.business?.seo,
     },
     sections: (site.sections || []).map((section) => {
-      if (section.type !== 'gallery') {
+      if (section.type !== 'gallery' && section.type !== 'services') {
         return section;
       }
 
@@ -28,7 +28,7 @@ function normalizePublicSiteMedia(site = {}) {
         ...section,
         items: (section.items || []).map((item) => ({
           ...item,
-          imageUrl: resolveMediaUrl(item.imageUrl),
+          imageUrl: item.imageUrl ? resolveMediaUrl(item.imageUrl) : item.imageUrl,
         })),
       };
     }),

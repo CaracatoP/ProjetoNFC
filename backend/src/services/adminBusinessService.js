@@ -49,6 +49,21 @@ function normalizeHost(value) {
     .replace(/\.$/, '');
 }
 
+const CANONICAL_SECTION_TYPES_BY_KEY = {
+  'hero-main': 'hero',
+  'quick-actions': 'links',
+  services: 'services',
+  contact: 'contact',
+  gallery: 'gallery',
+  about: 'custom',
+  pix: 'pix',
+  cta: 'cta',
+};
+
+function getCanonicalSectionType(key, fallbackType) {
+  return CANONICAL_SECTION_TYPES_BY_KEY[key] || fallbackType;
+}
+
 function isPlainObject(value) {
   return Object.prototype.toString.call(value) === '[object Object]';
 }
@@ -444,17 +459,22 @@ function normalizeSectionItems(items = [], section = {}) {
 
 function normalizeSectionsPayload(sections = []) {
   return sections
-    .map((section, index) => ({
-      key: String(section.key || '').trim(),
-      type: String(section.type || '').trim(),
-      title: String(section.title || '').trim(),
-      description: String(section.description || '').trim(),
-      order: Number(section.order ?? index + 1),
-      visible: section.visible !== false,
-      variant: String(section.variant || '').trim(),
-      settings: section.settings || {},
-      items: normalizeSectionItems(section.items, section),
-    }))
+    .map((section, index) => {
+      const key = String(section.key || '').trim();
+      const type = getCanonicalSectionType(key, String(section.type || '').trim());
+
+      return {
+        key,
+        type,
+        title: String(section.title || '').trim(),
+        description: String(section.description || '').trim(),
+        order: Number(section.order ?? index + 1),
+        visible: section.visible !== false,
+        variant: String(section.variant || '').trim(),
+        settings: section.settings || {},
+        items: normalizeSectionItems(section.items, { ...section, key, type }),
+      };
+    })
     .map((section) => {
       if (section.key === 'about') {
         return {

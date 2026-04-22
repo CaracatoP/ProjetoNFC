@@ -8,6 +8,7 @@ let disconnectDatabase;
 let seedDemoData;
 let AnalyticsEvent;
 let Business;
+let BusinessSection;
 let mongoServer;
 
 describe('Public routes', () => {
@@ -22,6 +23,7 @@ describe('Public routes', () => {
     ({ seedDemoData } = await import('../utils/seedDemoData.js'));
     ({ AnalyticsEvent } = await import('../models/AnalyticsEvent.js'));
     ({ Business } = await import('../models/Business.js'));
+    ({ BusinessSection } = await import('../models/BusinessSection.js'));
     ({ default: app } = await import('../app.js'));
 
     await connectDatabase();
@@ -45,6 +47,56 @@ describe('Public routes', () => {
     expect(response.body.data.business.slug).toBe('barbearia-estilo-vivo');
     expect(response.body.data.sections[0].type).toBe('hero');
     expect(response.body.data.sections.some((section) => section.type === 'pix')).toBe(true);
+  });
+
+  it('returns enabled services with optional images on the public site', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' }).lean();
+
+    await BusinessSection.findOneAndUpdate(
+      { businessId: business._id, key: 'services' },
+      {
+        type: 'custom',
+        visible: true,
+        title: 'Servicos',
+        description: 'Catalogo atualizado',
+        items: [
+          {
+            id: 'service-cut',
+            name: 'Corte masculino',
+            price: 45,
+            description: 'Corte classico',
+            imageUrl: 'https://cdn.example.com/services/corte.jpg',
+          },
+          {
+            id: 'service-beard',
+            name: 'Barba',
+            price: 30,
+            description: 'Acabamento completo',
+          },
+        ],
+      },
+    );
+
+    const response = await request(app).get('/api/public/site/barbearia-estilo-vivo');
+    const servicesSection = response.body.data.sections.find((section) => section.key === 'services');
+
+    expect(response.status).toBe(200);
+    expect(servicesSection).toMatchObject({
+      type: 'services',
+      visible: true,
+      title: 'Servicos',
+    });
+    expect(servicesSection.items).toEqual([
+      expect.objectContaining({
+        id: 'service-cut',
+        name: 'Corte masculino',
+        imageUrl: 'https://cdn.example.com/services/corte.jpg',
+      }),
+      expect.objectContaining({
+        id: 'service-beard',
+        name: 'Barba',
+      }),
+    ]);
   });
 
   it('returns 404 when the slug does not exist', async () => {

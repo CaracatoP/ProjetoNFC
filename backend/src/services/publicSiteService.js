@@ -161,6 +161,21 @@ function sanitizePublicSectionItem(item, fallbackId) {
   return nextItem;
 }
 
+const CANONICAL_SECTION_TYPES_BY_KEY = {
+  'hero-main': 'hero',
+  'quick-actions': 'links',
+  services: 'services',
+  contact: 'contact',
+  gallery: 'gallery',
+  about: 'custom',
+  pix: 'pix',
+  cta: 'cta',
+};
+
+function getPublicSectionType(section) {
+  return CANONICAL_SECTION_TYPES_BY_KEY[section.key] || section.type;
+}
+
 function isPubliclyAccessibleStatus(status) {
   return status === BUSINESS_STATUS.ACTIVE || status === BUSINESS_STATUS.DRAFT;
 }
@@ -183,12 +198,17 @@ function buildBusinessPublicSiteUrl(business) {
 }
 
 function hydrateSection(section, business, links) {
+  const sectionType = getPublicSectionType(section);
+  const normalizedSection = {
+    ...section,
+    type: sectionType,
+  };
   const settings = { ...(section.settings || {}) };
 
-  switch (section.type) {
+  switch (sectionType) {
     case 'hero':
       return {
-        ...section,
+        ...normalizedSection,
         title: business.name || section.title,
         description: business.description || '',
         settings: {
@@ -203,7 +223,7 @@ function hydrateSection(section, business, links) {
       };
     case 'links':
       return {
-        ...section,
+        ...normalizedSection,
         items:
           (settings.group || 'primary') === 'primary'
             ? mergePrimaryLinks(links, business)
@@ -219,7 +239,7 @@ function hydrateSection(section, business, links) {
       }
 
       return {
-        ...section,
+        ...normalizedSection,
         items,
         settings: {
           ...settings,
@@ -235,7 +255,7 @@ function hydrateSection(section, business, links) {
       }
 
       return {
-        ...section,
+        ...normalizedSection,
         settings: {
           ...settings,
           ...business.contact.pix,
@@ -247,7 +267,7 @@ function hydrateSection(section, business, links) {
       }
 
       return {
-        ...section,
+        ...normalizedSection,
         settings: {
           ...settings,
           ...business.address,
@@ -255,18 +275,18 @@ function hydrateSection(section, business, links) {
       };
     case 'custom':
       return {
-        ...section,
+        ...normalizedSection,
         description: section.key === 'about' ? '' : section.description,
         settings,
       };
     case 'cta':
       return normalizeCreatorSignatureCtaSection({
-        ...section,
+        ...normalizedSection,
         settings,
       });
     default:
       return {
-        ...section,
+        ...normalizedSection,
         settings,
       };
   }

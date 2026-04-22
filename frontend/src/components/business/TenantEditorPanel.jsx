@@ -894,11 +894,13 @@ export function TenantEditorPanel({
             <label>
               <input
                 type="checkbox"
-                checked={servicesSection?.visible !== false}
+                checked={servicesSection?.visible === true}
                 onChange={(event) => setDraft((current) => {
                   const nextDraft = cloneDeep(current);
                   updateSectionDraft(nextDraft, 'services', 'services', (section) => {
                     section.visible = event.target.checked;
+                    section.title = section.title || 'Servicos';
+                    section.description = section.description || 'Catalogo de servicos do negocio.';
                   });
                   return nextDraft;
                 })}
@@ -910,6 +912,9 @@ export function TenantEditorPanel({
               onClick={() => setDraft((current) => {
                 const nextDraft = cloneDeep(current);
                 updateSectionDraft(nextDraft, 'services', 'services', (section) => {
+                  section.visible = true;
+                  section.title = section.title || 'Servicos';
+                  section.description = section.description || 'Catalogo de servicos do negocio.';
                   section.items = [...(section.items || []), newServiceItem()];
                 });
                 return nextDraft;

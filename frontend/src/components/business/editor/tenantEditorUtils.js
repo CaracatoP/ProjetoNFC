@@ -140,6 +140,21 @@ export function normalizeOptionalHost(value) {
   return normalized || '';
 }
 
+const CANONICAL_SECTION_TYPES_BY_KEY = {
+  'hero-main': 'hero',
+  'quick-actions': 'links',
+  services: 'services',
+  contact: 'contact',
+  gallery: 'gallery',
+  about: 'custom',
+  pix: 'pix',
+  cta: 'cta',
+};
+
+function getCanonicalSectionType(key, fallbackType = 'custom') {
+  return CANONICAL_SECTION_TYPES_BY_KEY[key] || fallbackType;
+}
+
 function getEnvironmentOrigin(fallbackUrl = '') {
   const browserOrigin = typeof window !== 'undefined' ? String(window.location.origin || '').replace(/\/$/, '') : '';
 
@@ -189,15 +204,17 @@ export function buildTenantPublicUrlPreview(business = {}, fallbackUrl = '') {
 
 export function ensureSection(draft, key, fallbackType = 'custom') {
   const existing = draft.sections.find((section) => section.key === key);
+  const type = getCanonicalSectionType(key, fallbackType);
 
   if (existing) {
+    existing.type = type;
     return existing;
   }
 
   const nextSection = {
     id: key,
     key,
-    type: fallbackType,
+    type,
     title: '',
     description: '',
     order: draft.sections.length + 1,
