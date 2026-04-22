@@ -264,8 +264,8 @@ describe('DashboardHomePage', () => {
     });
     adminService.deleteAdminBusiness.mockResolvedValue({ deleted: true });
     adminService.uploadAdminImage.mockResolvedValue({
-      url: 'https://res.cloudinary.com/demo/image/upload/v1/nfc-saas/barbearia-estilo-vivo/logo.png',
-      publicId: 'nfc-saas/barbearia-estilo-vivo/logo-demo',
+      url: 'https://res.cloudinary.com/demo/image/upload/v1/taplink/barbearia-estilo-vivo/logo.png',
+      publicId: 'taplink/barbearia-estilo-vivo/logo-demo',
     });
   });
 
@@ -463,6 +463,17 @@ describe('DashboardHomePage', () => {
 
   it('duplicates the current tenant with unique name and slug', async () => {
     const user = userEvent.setup();
+    adminService.getAdminBusiness.mockResolvedValueOnce({
+      ...editorFixture,
+      business: {
+        ...editorFixture.business,
+        domains: {
+          subdomain: 'estilo-vivo',
+          customDomain: 'cliente-estilo-vivo.com.br',
+          customDomainVerifiedAt: '2026-04-20T10:00:00.000Z',
+        },
+      },
+    });
     adminService.createAdminBusiness.mockClear();
 
     render(
@@ -482,6 +493,10 @@ describe('DashboardHomePage', () => {
           business: expect.objectContaining({
             name: 'Barbearia Estilo Vivo (copy)',
             slug: 'barbearia-estilo-vivo-copy',
+            domains: expect.objectContaining({
+              subdomain: '',
+              customDomain: '',
+            }),
           }),
           nfcTag: expect.objectContaining({
             code: '',

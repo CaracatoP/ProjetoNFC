@@ -30,14 +30,14 @@ describe('AuthLandingPage', () => {
     );
 
     expect(screen.getByLabelText('E-mail administrativo')).toHaveValue('');
-    await user.type(screen.getByLabelText('E-mail administrativo'), 'joaogabrielcaracato@gmail.com');
-    await user.type(screen.getByLabelText('Senha'), 'Jo@o240107');
+    await user.type(screen.getByLabelText('E-mail administrativo'), 'admin@example.test');
+    await user.type(screen.getByLabelText('Senha'), 'senha-forte-teste');
     await user.click(screen.getByRole('button', { name: /Entrar no painel/i }));
 
     await waitFor(() => {
       expect(login).toHaveBeenCalledWith({
-        email: 'joaogabrielcaracato@gmail.com',
-        password: 'Jo@o240107',
+        email: 'admin@example.test',
+        password: 'senha-forte-teste',
       });
     });
   });

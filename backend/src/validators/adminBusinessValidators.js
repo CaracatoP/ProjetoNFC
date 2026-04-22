@@ -6,38 +6,49 @@ import {
   LINK_TYPE_VALUES,
   SECTION_TYPE_VALUES,
 } from '../../../shared/constants/index.js';
+import { normalizeHost, slugify } from '../../../shared/utils/tenantIdentity.js';
 
 const optionalString = z.string().optional().or(z.literal(''));
-const optionalNullableString = z.string().nullable().optional().or(z.literal(''));
 const slugPattern = /^[a-z0-9-]+$/;
 const subdomainPattern = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/;
 const customDomainPattern = /^(?!:\/\/)(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
 
-function slugify(value) {
-  if (value === undefined || value === null) {
-    return value;
+function isValidHttpUrl(value) {
+  try {
+    const url = new URL(String(value || '').trim());
+    return ['http:', 'https:'].includes(url.protocol);
+  } catch {
+    return false;
   }
-
-  return String(value)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
 }
 
-function normalizeHost(value) {
-  if (value === undefined || value === null || value === '') {
-    return '';
+function isValidActionUrl(value) {
+  const normalized = String(value || '').trim();
+
+  if (!normalized) {
+    return true;
   }
 
-  return String(value)
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .replace(/\/.*$/, '')
-    .replace(/\.$/, '');
+  if (normalized.startsWith('/') || normalized.startsWith('mailto:') || normalized.startsWith('tel:')) {
+    return true;
+  }
+
+  return isValidHttpUrl(normalized);
 }
+
+function optionalHttpUrlSchema(message) {
+  return z.preprocess(
+    (value) => (value === null || value === undefined ? value : String(value).trim()),
+    z
+      .union([z.string().refine((value) => !value || isValidHttpUrl(value), message), z.literal(''), z.null()])
+      .optional(),
+  );
+}
+
+const optionalActionUrlSchema = z.preprocess(
+  (value) => (value === null || value === undefined ? value : String(value).trim()),
+  z.string().refine((value) => !value || isValidActionUrl(value), 'Use uma URL valida para este link').optional().or(z.literal('')),
+);
 
 function normalizeSubdomain(value) {
   if (value === undefined || value === null || value === '') {
@@ -95,9 +106,9 @@ const businessBodySchema = z.object({
   legalName: optionalString,
   slug: slugSchema,
   description: optionalString,
-  logoUrl: optionalString,
+  logoUrl: optionalHttpUrlSchema('Logo precisa ser uma URL http/https valida'),
   logoPublicId: optionalString,
-  bannerUrl: optionalString,
+  bannerUrl: optionalHttpUrlSchema('Banner precisa ser uma URL http/https valida'),
   bannerPublicId: optionalString,
   badge: optionalString,
   status: z.enum(BUSINESS_STATUS_VALUES),
@@ -111,8 +122,8 @@ const businessBodySchema = z.object({
   address: z
     .object({
       display: optionalString,
-      mapUrl: optionalString,
-      embedUrl: optionalString,
+      mapUrl: optionalHttpUrlSchema('Mapa precisa ser uma URL http/https valida'),
+      embedUrl: optionalHttpUrlSchema('Mapa incorporado precisa ser uma URL http/https valida'),
       latitude: optionalNumber,
       longitude: optionalNumber,
     })
@@ -148,7 +159,7 @@ const businessBodySchema = z.object({
   seo: z.object({
     title: optionalString,
     description: optionalString,
-    imageUrl: optionalString,
+    imageUrl: optionalHttpUrlSchema('Imagem de SEO precisa ser uma URL http/https valida'),
     imagePublicId: optionalString,
   }),
 });
@@ -171,7 +182,7 @@ const linksBodySchema = z.array(
     label: optionalString,
     subtitle: optionalString,
     icon: optionalString,
-    url: optionalString,
+    url: optionalActionUrlSchema,
     value: optionalString,
     visible: z.boolean().default(true),
     order: z.number().int().default(0),
@@ -182,7 +193,7 @@ const linksBodySchema = z.array(
 
 const sectionItemBodySchema = z
   .object({
-    imageUrl: optionalNullableString,
+    imageUrl: optionalHttpUrlSchema('Imagem da secao precisa ser uma URL http/https valida'),
     imagePublicId: optionalString,
   })
   .catchall(z.any());

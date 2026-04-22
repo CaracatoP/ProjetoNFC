@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { slugify } from '@shared/utils/tenantIdentity.js';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 import { EmptyState } from '@/components/common/EmptyState.jsx';
@@ -20,16 +21,6 @@ import {
   updateAdminBusinessStatus,
   uploadAdminImage,
 } from '@/services/adminService.js';
-
-function slugify(value) {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-{2,}/g, '-');
-}
 
 function buildUniqueSuffix(baseValue, existingValues = [], formatter) {
   const existing = new Set(existingValues.filter(Boolean).map((item) => String(item).trim().toLowerCase()));
@@ -53,16 +44,32 @@ function buildDuplicatePayload(editor, businesses = []) {
     return attempt === 1 ? base : `${base}-${attempt}`;
   });
 
+  const {
+    id: _businessId,
+    createdAt: _createdAt,
+    updatedAt: _updatedAt,
+    history: _history,
+    analytics: _analytics,
+    publicUrl: _publicUrl,
+    ...businessForClone
+  } = editor.business || {};
+
   return {
     business: {
-      ...editor.business,
+      ...businessForClone,
       name: nextName,
       slug: nextSlug,
+      domains: {
+        ...(businessForClone.domains || {}),
+        subdomain: '',
+        customDomain: '',
+        customDomainVerifiedAt: undefined,
+      },
     },
     theme: editor.theme,
     links: editor.links,
     sections: editor.sections,
-    nfcTag: editor.nfcTag ? { ...editor.nfcTag, code: '' } : null,
+    nfcTag: editor.nfcTag ? { status: editor.nfcTag.status || 'active', code: '' } : null,
   };
 }
 

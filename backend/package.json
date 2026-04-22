@@ -1,5 +1,5 @@
 {
-  "name": "nfc-linktree-saas-backend",
+  "name": "taplink-backend",
   "private": true,
   "type": "module",
   "scripts": {

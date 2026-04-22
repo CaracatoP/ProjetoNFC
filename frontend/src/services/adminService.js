@@ -1,45 +1,8 @@
 import { appConfig } from '@/config/appConfig.js';
 import { apiRequest } from '@/services/apiClient.js';
 import { buildAdminAuthHeaders } from '@/services/authService.js';
+import { normalizeEditorPayload } from '@/services/mediaNormalizer.js';
 import { resolveMediaUrl } from '@/utils/formatters.js';
-
-function normalizeBusinessMedia(business = {}) {
-  return {
-    ...business,
-    logoUrl: resolveMediaUrl(business.logoUrl),
-    bannerUrl: resolveMediaUrl(business.bannerUrl),
-    seo: business.seo
-      ? {
-          ...business.seo,
-          imageUrl: resolveMediaUrl(business.seo.imageUrl),
-        }
-      : business.seo,
-  };
-}
-
-function normalizeMediaSections(sections = []) {
-  return sections.map((section) => {
-    if (section.type !== 'gallery' && section.type !== 'services') {
-      return section;
-    }
-
-    return {
-      ...section,
-      items: (section.items || []).map((item) => ({
-        ...item,
-        imageUrl: item.imageUrl ? resolveMediaUrl(item.imageUrl) : item.imageUrl,
-      })),
-    };
-  });
-}
-
-function normalizeEditorPayload(editor = {}) {
-  return {
-    ...editor,
-    business: normalizeBusinessMedia(editor.business),
-    sections: normalizeMediaSections(editor.sections || []),
-  };
-}
 
 export async function fetchAdminOverview(token) {
   const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/dashboard/overview`, {

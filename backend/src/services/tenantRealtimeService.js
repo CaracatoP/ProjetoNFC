@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { normalizeHost } from '../../../shared/utils/tenantIdentity.js';
 
 const tenantRealtimeEmitter = new EventEmitter();
 const TENANT_UPDATED_EVENT = 'tenant.updated';
@@ -8,14 +9,6 @@ tenantRealtimeEmitter.setMaxListeners(0);
 function normalizeOptionalValue(value) {
   const normalized = String(value || '').trim();
   return normalized || '';
-}
-
-function normalizeHost(value) {
-  return normalizeOptionalValue(value)
-    .toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .replace(/\/.*$/, '')
-    .replace(/\.$/, '');
 }
 
 function buildEventPayload(payload = {}) {

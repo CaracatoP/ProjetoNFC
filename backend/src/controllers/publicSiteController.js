@@ -1,19 +1,14 @@
 import { successResponse } from '../utils/apiResponse.js';
-import { getPublicSiteBySlug, resolveTagToSite } from '../services/publicSiteService.js';
+import { getPublicSiteByHost, getPublicSiteBySlug, resolveTagToSite } from '../services/publicSiteService.js';
 import { subscribeToTenantUpdates } from '../services/tenantRealtimeService.js';
 
 export async function getSiteBySlug(req, res) {
-  const payload = await getPublicSiteBySlug({
-    slug: req.validated.params.slug,
-    host: req.tenantContext?.host,
-  });
-  return successResponse(res, payload, { resolvedBy: req.tenantContext?.source || 'slug' });
+  const payload = await getPublicSiteBySlug(req.validated.params.slug);
+  return successResponse(res, payload, { resolvedBy: 'slug' });
 }
 
 export async function getSiteByHost(req, res) {
-  const payload = await getPublicSiteBySlug({
-    host: req.validated?.query?.host || req.query?.host,
-  });
+  const payload = await getPublicSiteByHost(req.validated?.query?.host || req.query?.host);
   return successResponse(res, payload, { resolvedBy: 'host' });
 }
 

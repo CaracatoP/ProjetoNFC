@@ -56,7 +56,7 @@ export const env = {
   port: Number(process.env.PORT || 4000),
   mongodbUri: getDevelopmentFallback(
     process.env.MONGODB_URI,
-    'mongodb://127.0.0.1:27017/nfc-linktree-saas',
+    'mongodb://127.0.0.1:27017/taplink',
   ),
   frontendOrigins: parseList(process.env.FRONTEND_ORIGIN, isProduction ? [] : ['http://localhost:5173']),
   analyticsSalt: getDevelopmentFallback(process.env.ANALYTICS_SALT, 'dev-analytics-salt'),
@@ -72,7 +72,7 @@ export const env = {
     .trim()
     .toLowerCase(),
   adminBootstrapPassword: process.env.ADMIN_BOOTSTRAP_PASSWORD || process.env.ADMIN_PASSWORD || '',
-  adminBootstrapName: process.env.ADMIN_BOOTSTRAP_NAME || process.env.ADMIN_DISPLAY_NAME || 'Operacao NFC',
+  adminBootstrapName: process.env.ADMIN_BOOTSTRAP_NAME || process.env.ADMIN_DISPLAY_NAME || 'Operacao TapLink',
   adminBootstrapRole: (process.env.ADMIN_BOOTSTRAP_ROLE || 'superadmin').trim().toLowerCase(),
   adminTokenSecret: getDevelopmentFallback(process.env.ADMIN_TOKEN_SECRET || process.env.JWT_SECRET, 'dev-admin-token-secret'),
   adminSessionTtlHours: Number(process.env.ADMIN_SESSION_TTL_HOURS || 12),

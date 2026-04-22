@@ -26,6 +26,7 @@ import {
 } from '../repositories/businessRepository.js';
 import { ensureDefaultSubscriptionForBusiness } from './billingService.js';
 import { publishTenantUpdated } from './tenantRealtimeService.js';
+import { getCanonicalSectionType, normalizeHost } from '../../../shared/utils/tenantIdentity.js';
 
 function normalizeCoordinate(value) {
   if (value === '' || value === null || value === undefined) {
@@ -39,29 +40,6 @@ function normalizeCoordinate(value) {
 function normalizeOptionalValue(value) {
   const normalized = String(value || '').trim();
   return normalized || undefined;
-}
-
-function normalizeHost(value) {
-  return normalizeOptionalValue(value)
-    ?.toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .replace(/\/.*$/, '')
-    .replace(/\.$/, '');
-}
-
-const CANONICAL_SECTION_TYPES_BY_KEY = {
-  'hero-main': 'hero',
-  'quick-actions': 'links',
-  services: 'services',
-  contact: 'contact',
-  gallery: 'gallery',
-  about: 'custom',
-  pix: 'pix',
-  cta: 'cta',
-};
-
-function getCanonicalSectionType(key, fallbackType) {
-  return CANONICAL_SECTION_TYPES_BY_KEY[key] || fallbackType;
 }
 
 function isPlainObject(value) {
@@ -228,7 +206,7 @@ function normalizeBusinessPayload(payload = {}) {
     rating: String(payload.rating || '').trim(),
     domains: {
       subdomain: normalizeOptionalValue(payload.domains?.subdomain)?.toLowerCase(),
-      customDomain: normalizeHost(payload.domains?.customDomain),
+      customDomain: normalizeOptionalValue(normalizeHost(payload.domains?.customDomain)),
     },
     address: {
       display: String(payload.address?.display || '').trim(),
@@ -288,7 +266,7 @@ async function assertBusinessSlugAvailable(slug, excludedBusinessId = null) {
 
 async function assertBusinessDomainsAvailable(domains = {}, excludedBusinessId = null) {
   const subdomain = normalizeOptionalValue(domains.subdomain)?.toLowerCase();
-  const customDomain = normalizeHost(domains.customDomain);
+  const customDomain = normalizeOptionalValue(normalizeHost(domains.customDomain));
   const reservedSubdomains = new Set(['www', 'api']);
 
   if (subdomain && reservedSubdomains.has(subdomain)) {

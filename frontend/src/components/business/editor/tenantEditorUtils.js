@@ -1,3 +1,7 @@
+import { getCanonicalSectionType, normalizeOptionalHost, slugify } from '@shared/utils/tenantIdentity.js';
+
+export { normalizeOptionalHost, slugify };
+
 export function cloneDeep(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -115,44 +119,6 @@ export function normalizeHexColor(value, fallback = '#000000') {
   }
 
   return withHash.toLowerCase();
-}
-
-export function slugify(value, { preserveTrailingSeparator = false } = {}) {
-  const normalized = String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^-+/, '');
-
-  return preserveTrailingSeparator ? normalized : normalized.replace(/-+$/g, '');
-}
-
-export function normalizeOptionalHost(value) {
-  const normalized = String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .replace(/\/.*$/, '')
-    .replace(/\.$/, '');
-
-  return normalized || '';
-}
-
-const CANONICAL_SECTION_TYPES_BY_KEY = {
-  'hero-main': 'hero',
-  'quick-actions': 'links',
-  services: 'services',
-  contact: 'contact',
-  gallery: 'gallery',
-  about: 'custom',
-  pix: 'pix',
-  cta: 'cta',
-};
-
-function getCanonicalSectionType(key, fallbackType = 'custom') {
-  return CANONICAL_SECTION_TYPES_BY_KEY[key] || fallbackType;
 }
 
 function getEnvironmentOrigin(fallbackUrl = '') {
@@ -499,6 +465,16 @@ export function buildValidationErrors(draft) {
       (section.items || []).forEach((item, index) => {
         if (item.imageUrl && !isValidHttpUrl(item.imageUrl)) {
           errors[`sections.gallery.${index}.imageUrl`] = 'A imagem da galeria precisa ser uma URL valida.';
+        }
+      });
+    });
+
+  draft.sections
+    .filter((section) => section.key === 'services')
+    .forEach((section) => {
+      (section.items || []).forEach((item, index) => {
+        if (item.imageUrl && !isValidHttpUrl(item.imageUrl)) {
+          errors[`sections.services.${index}.imageUrl`] = 'A foto do servico precisa ser uma URL valida.';
         }
       });
     });

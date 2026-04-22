@@ -47,6 +47,12 @@ export const seoSchema = z.object({
   imageUrl: z.string().optional(),
 });
 
+export const businessDomainsSchema = z.object({
+  subdomain: z.string().optional().or(z.literal('')),
+  customDomain: z.string().optional().or(z.literal('')),
+  customDomainVerifiedAt: z.string().datetime().optional().nullable().or(z.literal('')),
+});
+
 export const businessSchema = z.object({
   id: z.string(),
   slug: z.string(),
@@ -60,7 +66,7 @@ export const businessSchema = z.object({
   address: businessAddressSchema.optional(),
   hours: z.array(businessHourSchema).default([]),
   rating: z.string().optional(),
+  domains: businessDomainsSchema.default({}),
   contact: businessContactSchema.default({}),
   seo: seoSchema,
 });
-

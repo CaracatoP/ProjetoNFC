@@ -1,16 +1,8 @@
 import { z } from 'zod';
 import { slugParamsSchema, tagParamsSchema } from '../../../shared/schemas/index.js';
+import { normalizeHost } from '../../../shared/utils/tenantIdentity.js';
 
 const hostPattern = /^(?!:\/\/)(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
-
-function normalizeHost(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .replace(/\/.*$/, '')
-    .replace(/\.$/, '');
-}
 
 const optionalStringSchema = z.preprocess(
   (value) => String(value || '').trim(),

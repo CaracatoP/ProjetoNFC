@@ -67,7 +67,7 @@ export function TenantEditorPanel({
   const activeStepIndex = EDITOR_STEPS.findIndex((step) => step.id === activeStep);
 
   useEffect(() => {
-    if (!hasBlockingErrors && localError) {
+    if (!hasBlockingErrors && localError === 'Corrija os campos destacados antes de salvar.') {
       setLocalError('');
     }
   }, [hasBlockingErrors, localError]);
@@ -107,19 +107,38 @@ export function TenantEditorPanel({
     await onSave?.(draft);
   };
 
-  const handleServiceImageUpload = async (serviceIndex, file) => {
+  const handleUploadAndPatch = async ({ uploadKey, file, assetType, applyUpload }) => {
     if (!file) {
       return;
     }
 
-    const uploadKey = `service-${serviceIndex}`;
     setUploadingField(uploadKey);
+    setLocalError('');
 
     try {
       await uploadImageAndPatch(file, onUpload, {
         tenantSlug: draft.business.slug,
-        assetType: 'service',
-      }, (upload) =>
+        assetType,
+      }, applyUpload);
+    } catch (uploadError) {
+      setLocalError(uploadError?.message || 'Nao foi possivel enviar esta imagem. Tente novamente.');
+    } finally {
+      setUploadingField('');
+    }
+  };
+
+  const handleFileInputUpload = async (event, options) => {
+    const file = event.target.files?.[0];
+    await handleUploadAndPatch({ ...options, file });
+    event.target.value = '';
+  };
+
+  const handleServiceImageUpload = async (serviceIndex, file) => {
+    await handleUploadAndPatch({
+      uploadKey: `service-${serviceIndex}`,
+      file,
+      assetType: 'service',
+      applyUpload: (upload) =>
         setDraft((current) => {
           const nextDraft = cloneDeep(current);
           updateSectionDraft(nextDraft, 'services', 'services', (section) => {
@@ -131,10 +150,7 @@ export function TenantEditorPanel({
           });
           return nextDraft;
         }),
-      );
-    } finally {
-      setUploadingField('');
-    }
+    });
   };
 
   const removeServiceImage = (serviceIndex) => {
@@ -379,25 +395,21 @@ export function TenantEditorPanel({
               <input
                 type="file"
                 accept="image/*"
-                onChange={async (event) => {
-                  const file = event.target.files?.[0];
-                  if (!file) return;
-                  setUploadingField('logo');
-                  await uploadImageAndPatch(file, onUpload, {
-                    tenantSlug: draft.business.slug,
+                onChange={(event) =>
+                  handleFileInputUpload(event, {
+                    uploadKey: 'logo',
                     assetType: 'logo',
-                  }, (upload) =>
-                    setDraft((current) => ({
-                      ...current,
-                      business: {
-                        ...current.business,
-                        logoUrl: upload.url,
-                        logoPublicId: upload.publicId || '',
-                      },
-                    })),
-                  );
-                  setUploadingField('');
-                }}
+                    applyUpload: (upload) =>
+                      setDraft((current) => ({
+                        ...current,
+                        business: {
+                          ...current.business,
+                          logoUrl: upload.url,
+                          logoPublicId: upload.publicId || '',
+                        },
+                      })),
+                  })
+                }
               />
               {uploadingField === 'logo' ? <small>Enviando logo...</small> : null}
             </div>
@@ -428,28 +440,24 @@ export function TenantEditorPanel({
               <input
                 type="file"
                 accept="image/*"
-                onChange={async (event) => {
-                  const file = event.target.files?.[0];
-                  if (!file) return;
-                  setUploadingField('site-icon');
-                  await uploadImageAndPatch(file, onUpload, {
-                    tenantSlug: draft.business.slug,
+                onChange={(event) =>
+                  handleFileInputUpload(event, {
+                    uploadKey: 'site-icon',
                     assetType: 'site-icon',
-                  }, (upload) =>
-                    setDraft((current) => ({
-                      ...current,
-                      business: {
-                        ...current.business,
-                        seo: {
-                          ...current.business.seo,
-                          imageUrl: upload.url,
-                          imagePublicId: upload.publicId || '',
+                    applyUpload: (upload) =>
+                      setDraft((current) => ({
+                        ...current,
+                        business: {
+                          ...current.business,
+                          seo: {
+                            ...current.business.seo,
+                            imageUrl: upload.url,
+                            imagePublicId: upload.publicId || '',
+                          },
                         },
-                      },
-                    })),
-                  );
-                  setUploadingField('');
-                }}
+                      })),
+                  })
+                }
               />
               {uploadingField === 'site-icon' ? <small>Enviando icone...</small> : null}
             </div>
@@ -473,25 +481,21 @@ export function TenantEditorPanel({
               <input
                 type="file"
                 accept="image/*"
-                onChange={async (event) => {
-                  const file = event.target.files?.[0];
-                  if (!file) return;
-                  setUploadingField('banner');
-                  await uploadImageAndPatch(file, onUpload, {
-                    tenantSlug: draft.business.slug,
+                onChange={(event) =>
+                  handleFileInputUpload(event, {
+                    uploadKey: 'banner',
                     assetType: 'banner',
-                  }, (upload) =>
-                    setDraft((current) => ({
-                      ...current,
-                      business: {
-                        ...current.business,
-                        bannerUrl: upload.url,
-                        bannerPublicId: upload.publicId || '',
-                      },
-                    })),
-                  );
-                  setUploadingField('');
-                }}
+                    applyUpload: (upload) =>
+                      setDraft((current) => ({
+                        ...current,
+                        business: {
+                          ...current.business,
+                          bannerUrl: upload.url,
+                          bannerPublicId: upload.publicId || '',
+                        },
+                      })),
+                  })
+                }
               />
               {uploadingField === 'banner' ? <small>Enviando banner...</small> : null}
             </div>
@@ -983,7 +987,10 @@ export function TenantEditorPanel({
                       <input
                         type="file"
                         accept="image/*"
-                        onChange={(event) => handleServiceImageUpload(index, event.target.files?.[0])}
+                        onChange={async (event) => {
+                          await handleServiceImageUpload(index, event.target.files?.[0]);
+                          event.target.value = '';
+                        }}
                       />
                     </label>
                     {service.imageUrl ? (
@@ -1087,28 +1094,24 @@ export function TenantEditorPanel({
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={async (event) => {
-                    const file = event.target.files?.[0];
-                    if (!file) return;
-                    setUploadingField(`gallery-${index}`);
-                    await uploadImageAndPatch(file, onUpload, {
-                      tenantSlug: draft.business.slug,
+                  onChange={(event) =>
+                    handleFileInputUpload(event, {
+                      uploadKey: `gallery-${index}`,
                       assetType: 'gallery',
-                    }, (upload) =>
-                      setDraft((current) => {
-                        const nextDraft = cloneDeep(current);
-                        updateSectionDraft(nextDraft, 'gallery', 'gallery', (section) => {
-                          section.items[index] = {
-                            ...section.items[index],
-                            imageUrl: upload.url,
-                            imagePublicId: upload.publicId || '',
-                          };
-                        });
-                        return nextDraft;
-                      }),
-                    );
-                    setUploadingField('');
-                  }}
+                      applyUpload: (upload) =>
+                        setDraft((current) => {
+                          const nextDraft = cloneDeep(current);
+                          updateSectionDraft(nextDraft, 'gallery', 'gallery', (section) => {
+                            section.items[index] = {
+                              ...section.items[index],
+                              imageUrl: upload.url,
+                              imagePublicId: upload.publicId || '',
+                            };
+                          });
+                          return nextDraft;
+                        }),
+                    })
+                  }
                 />
                 {uploadingField === `gallery-${index}` ? <small>Enviando foto...</small> : null}
                 <div className="admin-inline-actions">

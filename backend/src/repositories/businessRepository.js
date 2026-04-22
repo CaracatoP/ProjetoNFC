@@ -1,79 +1,44 @@
-import { BUSINESS_STATUS } from '../../../shared/constants/index.js';
+import { normalizeHost } from '../../../shared/utils/tenantIdentity.js';
 import { Business } from '../models/Business.js';
-
-function normalizeHost(host) {
-  return String(host || '')
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .replace(/\/.*$/, '')
-    .split(':')[0];
-}
 
 function buildExcludedBusinessFilter(excludedBusinessId = null) {
   return excludedBusinessId ? { _id: { $ne: excludedBusinessId } } : {};
 }
 
-function buildTenantReferenceOrConditions(reference = {}) {
-  const slug = String(reference.slug || '').trim();
-  const host = normalizeHost(reference.host);
-  const orConditions = [];
+export async function findBusinessByHost(host) {
+  const normalizedHost = normalizeHost(host);
 
-  if (slug) {
-    orConditions.push({ slug });
-  }
-
-  if (host) {
-    orConditions.push({ 'domains.customDomain': host });
-
-    const hostParts = host.split('.').filter(Boolean);
-    if (hostParts.length > 2) {
-      orConditions.push({ 'domains.subdomain': hostParts[0] });
-    }
-  }
-
-  return orConditions;
-}
-
-function buildPublicStatusFilter() {
-  return {
-    $in: [BUSINESS_STATUS.ACTIVE, BUSINESS_STATUS.DRAFT],
-  };
-}
-
-export async function findBusinessByTenantContext(reference = {}) {
-  const orConditions = buildTenantReferenceOrConditions(reference);
-
-  if (!orConditions.length) {
+  if (!normalizedHost) {
     return null;
   }
 
-  return Business.findOne({ $or: orConditions }).lean();
-}
+  const exactCustomDomainMatch = await Business.findOne({ 'domains.customDomain': normalizedHost }).lean();
 
-export async function findPublicBusinessByTenantContext(reference = {}) {
-  const orConditions = buildTenantReferenceOrConditions(reference);
+  if (exactCustomDomainMatch) {
+    return exactCustomDomainMatch;
+  }
 
-  if (!orConditions.length) {
+  const hostParts = normalizedHost.split('.').filter(Boolean);
+
+  if (hostParts.length <= 2) {
     return null;
   }
 
-  return Business.findOne({
-    status: buildPublicStatusFilter(),
-    $or: orConditions,
-  }).lean();
+  return Business.findOne({ 'domains.subdomain': hostParts[0] }).lean();
 }
 
-export async function findPublicBusinessBySlug(slug) {
-  return findPublicBusinessByTenantContext({ slug });
+export async function findBusinessBySlugStrict(slug) {
+  const normalizedSlug = String(slug || '').trim();
+
+  if (!normalizedSlug) {
+    return null;
+  }
+
+  return Business.findOne({ slug: normalizedSlug }).lean();
 }
 
 export async function findBusinessBySlug(slug) {
   return Business.findOne({ slug }).lean();
-}
-
-export async function findBusinessById(id) {
-  return Business.findById(id).lean();
 }
 
 export async function isBusinessSlugTaken(slug, excludedBusinessId = null) {

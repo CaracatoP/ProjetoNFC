@@ -1,14 +1,5 @@
 import { BUSINESS_STATUS, LINK_GROUPS, LINK_TYPES, SECTION_TYPES } from '../../../shared/constants/index.js';
-
-function toSlug(value) {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 80);
-}
+import { normalizePhoneActionValue, slugify } from '../../../shared/utils/tenantIdentity.js';
 
 function createDefaultTheme() {
   return {
@@ -66,24 +57,6 @@ function createDefaultTheme() {
     },
     customCss: '',
   };
-}
-
-function normalizePhoneActionValue(value, countryCode = '55') {
-  const digits = String(value || '').replace(/\D/g, '');
-
-  if (!digits) {
-    return '';
-  }
-
-  if (digits.startsWith(countryCode)) {
-    return digits;
-  }
-
-  if (digits.length === 10 || digits.length === 11) {
-    return `${countryCode}${digits}`;
-  }
-
-  return digits;
 }
 
 function buildMailToLink(email) {
@@ -331,7 +304,7 @@ function buildSections(business) {
 
 export function buildDefaultTenantSetup(input = {}) {
   const name = String(input.name || 'Novo comercio').trim();
-  const slug = toSlug(input.slug || input.name || 'novo-comercio') || `negocio-${Date.now()}`;
+  const slug = slugify(input.slug || input.name || 'novo-comercio', { maxLength: 80 }) || `negocio-${Date.now()}`;
   const description = String(input.description || '').trim();
   const addressDisplay = String(input.address?.display || input.addressDisplay || '').trim();
   const mapUrl = String(input.address?.mapUrl || input.mapUrl || '').trim();

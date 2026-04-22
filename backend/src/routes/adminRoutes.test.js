@@ -12,10 +12,10 @@ let mongoServer;
 let adminToken;
 
 vi.mock('../utils/cloudinaryUpload.js', () => ({
-  buildTenantAssetFolder: vi.fn((tenantSlug = 'default') => `nfc-saas/${tenantSlug || 'default'}`),
+  buildTenantAssetFolder: vi.fn((tenantSlug = 'default') => `taplink/${tenantSlug || 'default'}`),
   uploadImageBufferToCloudinary: vi.fn(async (_file, options = {}) => ({
-    secure_url: `https://res.cloudinary.com/demo/image/upload/v1/${options.folder || 'nfc-saas/default'}/${options.assetType || 'image'}.png`,
-    public_id: `${options.folder || 'nfc-saas/default'}/${options.assetType || 'image'}-demo`,
+    secure_url: `https://res.cloudinary.com/demo/image/upload/v1/${options.folder || 'taplink/default'}/${options.assetType || 'image'}.png`,
+    public_id: `${options.folder || 'taplink/default'}/${options.assetType || 'image'}-demo`,
     bytes: 2048,
     width: 1200,
     height: 630,
@@ -283,9 +283,9 @@ describe('Admin routes', () => {
     const { business, theme, links, sections, nfcTag } = detailResponse.body.data;
     business.badge = 'Agenda premium';
     business.logoUrl = 'https://cdn.example.com/logo-novo.png';
-    business.logoPublicId = 'nfc-saas/barbearia-estilo-vivo/logo-demo';
+    business.logoPublicId = 'taplink/barbearia-estilo-vivo/logo-demo';
     business.bannerUrl = 'https://cdn.example.com/banner-novo.png';
-    business.bannerPublicId = 'nfc-saas/barbearia-estilo-vivo/banner-demo';
+    business.bannerPublicId = 'taplink/barbearia-estilo-vivo/banner-demo';
     business.description = 'Descricao atualizada pelo painel.';
     business.contact.email = 'contato@estilovivo.com';
     business.contact.wifi = {
@@ -295,7 +295,7 @@ describe('Admin routes', () => {
       security: 'WPA',
     };
     business.seo.imageUrl = 'https://cdn.example.com/favicon-novo.png';
-    business.seo.imagePublicId = 'nfc-saas/barbearia-estilo-vivo/site-icon-demo';
+    business.seo.imagePublicId = 'taplink/barbearia-estilo-vivo/site-icon-demo';
     links.push({
       type: 'social',
       group: 'primary',
@@ -343,9 +343,9 @@ describe('Admin routes', () => {
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(persistedEditorResponse.status).toBe(200);
-    expect(persistedEditorResponse.body.data.business.logoPublicId).toBe('nfc-saas/barbearia-estilo-vivo/logo-demo');
-    expect(persistedEditorResponse.body.data.business.bannerPublicId).toBe('nfc-saas/barbearia-estilo-vivo/banner-demo');
-    expect(persistedEditorResponse.body.data.business.seo.imagePublicId).toBe('nfc-saas/barbearia-estilo-vivo/site-icon-demo');
+    expect(persistedEditorResponse.body.data.business.logoPublicId).toBe('taplink/barbearia-estilo-vivo/logo-demo');
+    expect(persistedEditorResponse.body.data.business.bannerPublicId).toBe('taplink/barbearia-estilo-vivo/banner-demo');
+    expect(persistedEditorResponse.body.data.business.seo.imagePublicId).toBe('taplink/barbearia-estilo-vivo/site-icon-demo');
   });
 
   it('returns dashboard overview and accepts image uploads', async () => {
@@ -368,7 +368,7 @@ describe('Admin routes', () => {
 
     expect(uploadResponse.status).toBe(201);
     expect(uploadResponse.body.data.url).toContain('res.cloudinary.com');
-    expect(uploadResponse.body.data.publicId).toBe('nfc-saas/barbearia-estilo-vivo/banner-demo');
+    expect(uploadResponse.body.data.publicId).toBe('taplink/barbearia-estilo-vivo/banner-demo');
   });
 
   it('rejects non-image files on the admin upload route', async () => {

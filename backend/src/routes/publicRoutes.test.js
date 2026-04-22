@@ -49,6 +49,27 @@ describe('Public routes', () => {
     expect(response.body.data.sections.some((section) => section.type === 'pix')).toBe(true);
   });
 
+  it('resolves explicit slug routes by slug even when the request host belongs to another tenant', async () => {
+    await Business.create({
+      name: 'Tenant por Dominio',
+      slug: 'tenant-por-dominio',
+      status: 'active',
+      domains: { customDomain: 'cliente-dominio.com.br' },
+      seo: {
+        title: 'Tenant por Dominio',
+        description: 'Tenant usado para validar isolamento por slug.',
+      },
+    });
+
+    const response = await request(app)
+      .get('/api/public/site/barbearia-estilo-vivo')
+      .set('Host', 'cliente-dominio.com.br');
+
+    expect(response.status).toBe(200);
+    expect(response.body.meta.resolvedBy).toBe('slug');
+    expect(response.body.data.business.slug).toBe('barbearia-estilo-vivo');
+  });
+
   it('returns enabled services with optional images on the public site', async () => {
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' }).lean();
 

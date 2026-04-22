@@ -10,6 +10,14 @@ export function errorHandler(error, req, res, _next) {
         ? new AppError('Este slug ja esta em uso por outro tenant', 409, 'business_slug_conflict', [
             { path: 'business.slug', message: 'Este slug ja esta em uso por outro tenant' },
           ])
+        : error?.keyPattern?.['domains.subdomain']
+          ? new AppError('Este subdominio ja esta em uso por outro tenant', 409, 'business_subdomain_conflict', [
+              { path: 'business.domains.subdomain', message: 'Este subdominio ja esta em uso por outro tenant' },
+            ])
+          : error?.keyPattern?.['domains.customDomain']
+            ? new AppError('Este dominio customizado ja esta em uso por outro tenant', 409, 'business_custom_domain_conflict', [
+                { path: 'business.domains.customDomain', message: 'Este dominio customizado ja esta em uso por outro tenant' },
+              ])
         : error?.keyPattern?.email
           ? new AppError('Ja existe um usuario admin com este e-mail', 409, 'admin_user_email_conflict', [
               { path: 'email', message: 'Ja existe um usuario admin com este e-mail' },

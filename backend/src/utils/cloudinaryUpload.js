@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { AppError } from './appError.js';
 import { getCloudinaryClient } from './cloudinary.js';
+import { hasValidImageSignature } from './imageValidation.js';
 
 function sanitizeSegment(value, fallback = 'default') {
   const normalized = String(value || '')
@@ -21,12 +22,16 @@ function buildPublicId(originalName, assetType = 'image') {
 }
 
 export function buildTenantAssetFolder(tenantSlug = 'default') {
-  return `nfc-saas/${sanitizeSegment(tenantSlug, 'default')}`;
+  return `taplink/${sanitizeSegment(tenantSlug, 'default')}`;
 }
 
 export async function uploadImageBufferToCloudinary(file, options = {}) {
   if (!file?.buffer?.length) {
     throw new AppError('Nenhuma imagem valida foi enviada para o Cloudinary', 400, 'upload_missing_buffer');
+  }
+
+  if (!hasValidImageSignature(file)) {
+    throw new AppError('O arquivo enviado nao parece ser uma imagem valida', 400, 'upload_invalid_image');
   }
 
   const cloudinary = getCloudinaryClient();

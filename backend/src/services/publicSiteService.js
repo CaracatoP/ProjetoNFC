@@ -1,5 +1,5 @@
 import { AppError } from '../utils/appError.js';
-import { findBusinessBySlug, findBusinessByTenantContext } from '../repositories/businessRepository.js';
+import { findBusinessByHost, findBusinessBySlug, findBusinessBySlugStrict } from '../repositories/businessRepository.js';
 import { findThemeByBusinessId } from '../repositories/themeRepository.js';
 import { listVisibleSectionsByBusinessId } from '../repositories/sectionRepository.js';
 import { listVisibleLinksByBusinessId } from '../repositories/linkRepository.js';
@@ -10,24 +10,7 @@ import {
   normalizeCreatorSignatureCtaSection,
 } from '../utils/adminDefaults.js';
 import { BUSINESS_STATUS } from '../../../shared/constants/index.js';
-
-function normalizePhoneActionValue(value, countryCode = '55') {
-  const digits = String(value || '').replace(/\D/g, '');
-
-  if (!digits) {
-    return '';
-  }
-
-  if (digits.startsWith(countryCode)) {
-    return digits;
-  }
-
-  if (digits.length === 10 || digits.length === 11) {
-    return `${countryCode}${digits}`;
-  }
-
-  return digits;
-}
+import { getCanonicalSectionType, normalizePhoneActionValue } from '../../../shared/utils/tenantIdentity.js';
 
 function isManagedLinkMatch(link, action) {
   const url = String(link?.url || '').toLowerCase();
@@ -161,19 +144,8 @@ function sanitizePublicSectionItem(item, fallbackId) {
   return nextItem;
 }
 
-const CANONICAL_SECTION_TYPES_BY_KEY = {
-  'hero-main': 'hero',
-  'quick-actions': 'links',
-  services: 'services',
-  contact: 'contact',
-  gallery: 'gallery',
-  about: 'custom',
-  pix: 'pix',
-  cta: 'cta',
-};
-
 function getPublicSectionType(section) {
-  return CANONICAL_SECTION_TYPES_BY_KEY[section.key] || section.type;
+  return getCanonicalSectionType(section.key, section.type);
 }
 
 function isPubliclyAccessibleStatus(status) {
@@ -292,10 +264,7 @@ function hydrateSection(section, business, links) {
   }
 }
 
-export async function getPublicSiteBySlug(reference) {
-  const tenantReference = typeof reference === 'string' ? { slug: reference } : reference;
-  const business = await findBusinessByTenantContext(tenantReference);
-
+async function getPublicSiteByBusiness(business) {
   if (!business) {
     throw new AppError('Negocio nao encontrado', 404, 'business_not_found');
   }
@@ -388,6 +357,16 @@ export async function getPublicSiteBySlug(reference) {
       imageUrl: business.seo?.imageUrl,
     },
   };
+}
+
+export async function getPublicSiteBySlug(slug) {
+  const business = await findBusinessBySlugStrict(slug);
+  return getPublicSiteByBusiness(business);
+}
+
+export async function getPublicSiteByHost(host) {
+  const business = await findBusinessByHost(host);
+  return getPublicSiteByBusiness(business);
 }
 
 export async function resolveTagToSite(tagCode) {

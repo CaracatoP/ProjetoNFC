@@ -29,6 +29,9 @@ out/
 coverage/
 .vitest/
 
+# Uploads locais legados. Midia de producao deve ir para Cloudinary.
+/uploads/
+
 # Logs
 logs/
 *.log

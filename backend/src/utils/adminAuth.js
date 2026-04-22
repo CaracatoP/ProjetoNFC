@@ -2,6 +2,8 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { AppError } from './appError.js';
 
+const ADMIN_TOKEN_ISSUERS = ['taplink-admin', 'nfc-linktree-saas'];
+
 function assertAdminJwtSecret() {
   if (String(env.adminTokenSecret || '').trim()) {
     return;
@@ -39,7 +41,7 @@ export function createAdminSessionToken(user) {
     },
     env.adminTokenSecret,
     {
-      issuer: 'nfc-linktree-saas',
+      issuer: 'taplink-admin',
       audience: 'admin-panel',
       expiresIn: `${env.adminSessionTtlHours}h`,
     },
@@ -51,7 +53,7 @@ export function verifyAdminSessionToken(token) {
 
   try {
     return jwt.verify(String(token || ''), env.adminTokenSecret, {
-      issuer: 'nfc-linktree-saas',
+      issuer: ADMIN_TOKEN_ISSUERS,
       audience: 'admin-panel',
     });
   } catch (_error) {

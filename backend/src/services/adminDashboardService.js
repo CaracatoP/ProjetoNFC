@@ -1,5 +1,6 @@
 import { env } from '../config/env.js';
 import { getDashboardOverviewSummary } from '../repositories/adminRepository.js';
+import { getAcceptedImageMimeTypes } from '../utils/imageValidation.js';
 
 export async function getAdminDashboardOverview() {
   const summary = await getDashboardOverviewSummary();
@@ -32,7 +33,7 @@ export async function getAdminDashboardOverview() {
     })),
     uploadConfig: {
       maxFileSizeMb: env.maxUploadMb,
-      acceptedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'],
+      acceptedMimeTypes: getAcceptedImageMimeTypes(),
     },
   };
 }

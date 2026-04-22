@@ -1,101 +1,83 @@
-# NFC Linktree SaaS
+# TapLink
 
-Base refatorada para páginas NFC multi-tenant, preparada para operar como SaaS white-label com frontend componentizado, backend em camadas e contratos compartilhados.
+TapLink e uma base SaaS multi-tenant para paginas NFC white-label. O projeto tem painel administrativo interno, site publico por tenant, uploads via Cloudinary, backend Express em camadas e contratos compartilhados entre frontend e backend.
 
 ## Estrutura
 
 ```text
-frontend/
-backend/
-shared/
-.env
-.env.example
-README.md
+frontend/   React + Vite
+backend/    Node.js + Express + MongoDB/Mongoose
+shared/     constantes e schemas Zod compartilhados
 ```
 
-## Frontend
+## Fluxos principais
 
-- `React + Vite`
-- rotas públicas em `/site/:slug`
-- scaffolds prontos para `/auth/*` e `/dashboard/*`
-- renderização orientada por dados via `section.type`
+- `/auth`: login do administrador interno.
+- `/dashboard`: criacao, edicao, duplicacao, ativacao/inativacao e preview dos tenants.
+- `/site/:slug`: pagina publica do tenant por slug.
+- `GET /api/public/site?host=...`: resolucao preparada para subdominio/dominio customizado.
+- Uploads de logo, banner, favicon, galeria e servicos passam pelo backend e sao enviados ao Cloudinary.
 
-## Backend
+## Ambiente
 
-- `Express + MongoDB + Mongoose`
-- fluxo `route -> controller -> service -> repository`
-- middlewares de tenant, validação, logging e erro global
-- seed inicial derivado da barbearia original
+Use `.env.example` como base. Segredos reais nunca devem ser commitados.
 
-## Endpoints ativos
+Variaveis essenciais:
 
-- `GET /api/health`
-- `GET /api/public/site/:slug`
-- `GET /api/public/tags/:tagCode/resolve`
-- `POST /api/public/analytics/events`
+- `MONGODB_URI`
+- `FRONTEND_ORIGIN`
+- `PUBLIC_SITE_BASE_URL`
+- `API_PUBLIC_BASE_URL`
+- `ADMIN_BOOTSTRAP_EMAIL`
+- `ADMIN_BOOTSTRAP_PASSWORD`
+- `ADMIN_TOKEN_SECRET`
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
+- `VITE_API_BASE_URL`
 
-## Variáveis de ambiente
-
-Use `.env.example` como base. Nesta fase o `.env` guarda apenas infraestrutura e runtime; PIX, Wi-Fi, branding, links e conteúdo pertencem ao tenant seedado no banco.
-
-## Execução esperada
-
-Em um ambiente Node com `npm` disponível:
+## Desenvolvimento
 
 ```bash
 npm install
-```
-
-```bash
 npm run dev:backend
-```
-
-```bash
 npm run dev:frontend
 ```
 
-Ou, se preferir por pasta:
+Tambem e possivel rodar por pasta:
 
 ```bash
-cd backend
-npm install
-npm run dev
+npm --prefix backend run dev
+npm --prefix frontend run dev
 ```
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+## Deploy
 
-Importante: o frontend não deve ser aberto diretamente pelo `index.html` nem servido por um file server simples. Como a app usa `React + Vite`, ela precisa rodar pelo Vite dentro de `frontend/`.
+- Backend: Railway, expondo a API publica.
+- Frontend: Vercel, com SPA routing preservado.
+- Banco: MongoDB Atlas.
+- Midia: Cloudinary.
 
-## Próximos passos
+No frontend em producao, configure `VITE_API_BASE_URL` apontando para o backend publico com `/api` no final.
 
-- autenticação real e proteção de rotas
-- CRUD administrativo de negócios, seções, links e tema
-- analytics visual por tenant
-- billing, planos e assinatura
-- editor visual de seções e white-label por domínio
-
-## Demo no Netlify
-
-Você pode publicar o frontend no Netlify, mas ele depende de um backend público acessível.
-
-- o slug `/site/barbearia-estilo-vivo` não usa mais fallback local
-- o frontend consulta a API definida em `VITE_API_BASE_URL`
-- se essa variável não estiver configurada no deploy, o app cai no valor local `http://localhost:4000/api` e a página pública entra em erro
-- o dashboard `/auth` e `/dashboard` também precisa do backend online para funcionar
-
-O projeto já está preparado com `netlify.toml` na raiz. No Netlify, use:
-
-- Base directory: `frontend`
-- Build command: `npm run build`
-- Publish directory: `dist`
-- Environment variable: `VITE_API_BASE_URL=https://seu-backend-publico/api`
-
-Depois do deploy, a URL ideal para mostrar é:
+Exemplo:
 
 ```text
-https://seu-site.netlify.app/site/barbearia-estilo-vivo
+VITE_API_BASE_URL=https://seu-backend.railway.app/api
+PUBLIC_SITE_BASE_URL=https://taplinkapp.vercel.app
+FRONTEND_ORIGIN=https://taplinkapp.vercel.app
 ```
+
+## Testes
+
+```bash
+npm --prefix backend test -- --run
+npm --prefix frontend test -- --run
+npm --prefix frontend run build
+```
+
+## Observacoes
+
+- O seed demo e opcional e deve ficar desabilitado em producao (`ENABLE_DEMO_SEED=false`).
+- Tenants `inactive` nao carregam o site publico normal; o frontend exibe uma mensagem neutra.
+- Arquivos locais em `/uploads` sao legado e devem permanecer fora do Git. O fluxo oficial de midia e Cloudinary.

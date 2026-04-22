@@ -8,8 +8,8 @@ describe('resolveMediaUrl', () => {
 
   it('keeps cloudinary URLs untouched', () => {
     expect(
-      resolveMediaUrl('https://res.cloudinary.com/demo/image/upload/v1/nfc-saas/default/banner.png'),
-    ).toBe('https://res.cloudinary.com/demo/image/upload/v1/nfc-saas/default/banner.png');
+      resolveMediaUrl('https://res.cloudinary.com/demo/image/upload/v1/taplink/default/banner.png'),
+    ).toBe('https://res.cloudinary.com/demo/image/upload/v1/taplink/default/banner.png');
   });
 
   it('returns relative paths as-is when explicitly provided', () => {
