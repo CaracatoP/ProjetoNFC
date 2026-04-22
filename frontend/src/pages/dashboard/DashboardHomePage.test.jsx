@@ -398,7 +398,7 @@ describe('DashboardHomePage', () => {
 
     expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
     expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /SEO \/ Advanced/i }));
+    await user.click(screen.getByRole('button', { name: /Configuracoes/i }));
     const primaryColorInput = screen.getByLabelText('Cor primaria');
     fireEvent.change(primaryColorInput, { target: { value: '#22c55e' } });
     fireEvent.click(screen.getByRole('button', { name: /Salvar alteracoes/i }));

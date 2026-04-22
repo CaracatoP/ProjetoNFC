@@ -1,624 +1,42 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 import { EmptyState } from '@/components/common/EmptyState.jsx';
-import { resolveMediaUrl } from '@/utils/formatters.js';
-
-function cloneDeep(value) {
-  return JSON.parse(JSON.stringify(value));
-}
-
-function hexToRgb(value) {
-  const hex = String(value || '').trim().replace('#', '');
-
-  if (!/^[\da-fA-F]{6}$/.test(hex)) {
-    return null;
-  }
-
-  return {
-    r: Number.parseInt(hex.slice(0, 2), 16),
-    g: Number.parseInt(hex.slice(2, 4), 16),
-    b: Number.parseInt(hex.slice(4, 6), 16),
-  };
-}
-
-function hexToRgba(value, alpha) {
-  const rgb = hexToRgb(value);
-
-  if (!rgb) {
-    return value;
-  }
-
-  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
-}
-
-function mixHexColors(base, mixWith, weight) {
-  const first = hexToRgb(base);
-  const second = hexToRgb(mixWith);
-
-  if (!first || !second) {
-    return base;
-  }
-
-  const mixChannel = (channel) =>
-    Math.round(first[channel] * (1 - weight) + second[channel] * weight)
-      .toString(16)
-      .padStart(2, '0');
-
-  return `#${mixChannel('r')}${mixChannel('g')}${mixChannel('b')}`;
-}
-
-function getReadableTextColor(background) {
-  const rgb = hexToRgb(background);
-
-  if (!rgb) {
-    return '#ffffff';
-  }
-
-  const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
-  return luminance > 0.58 ? '#1a120f' : '#ffffff';
-}
-
-function buildDerivedTheme(theme, overrides) {
-  const palette = {
-    primary: overrides.primary || theme.colors?.primary || '#f97316',
-    secondary: overrides.secondary || theme.colors?.secondary || '#fb7185',
-    background: overrides.background || theme.colors?.background || '#140d09',
-    text: overrides.text || theme.colors?.text || '#fff8f2',
-  };
-
-  const elevatedSurface = mixHexColors(palette.background, '#ffffff', 0.08);
-  const alternateSurface = mixHexColors(palette.background, '#ffffff', 0.16);
-
-  return {
-    ...theme,
-    colors: {
-      ...theme.colors,
-      primary: palette.primary,
-      secondary: palette.secondary,
-      background: palette.background,
-      surface: hexToRgba(elevatedSurface, 0.92),
-      surfaceAlt: hexToRgba(alternateSurface, 0.86),
-      text: palette.text,
-      textMuted: hexToRgba(palette.text, 0.74),
-      border: hexToRgba(palette.text, 0.12),
-      accent: hexToRgba(palette.primary, 0.18),
-      success: theme.colors?.success || '#22c55e',
-      danger: theme.colors?.danger || '#ef4444',
-    },
-    buttons: {
-      ...theme.buttons,
-      primary: {
-        ...(theme.buttons?.primary || {}),
-        background: `linear-gradient(135deg, ${palette.primary}, ${palette.secondary})`,
-        color: getReadableTextColor(mixHexColors(palette.primary, palette.secondary, 0.5)),
-        border: 'none',
-      },
-      secondary: {
-        ...(theme.buttons?.secondary || {}),
-        background: hexToRgba(palette.text, 0.06),
-        color: palette.text,
-        border: `1px solid ${hexToRgba(palette.text, 0.12)}`,
-      },
-    },
-  };
-}
-
-function isHexColor(value) {
-  return /^#([\da-fA-F]{6}|[\da-fA-F]{3})$/.test(String(value || '').trim());
-}
-
-function normalizeHexColor(value, fallback = '#000000') {
-  const trimmed = String(value || '').trim();
-  const withHash = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
-
-  if (!isHexColor(withHash)) {
-    return fallback;
-  }
-
-  if (withHash.length === 4) {
-    return `#${withHash[1]}${withHash[1]}${withHash[2]}${withHash[2]}${withHash[3]}${withHash[3]}`.toLowerCase();
-  }
-
-  return withHash.toLowerCase();
-}
-
-function slugify(value, { preserveTrailingSeparator = false } = {}) {
-  const normalized = String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^-+/, '');
-
-  return preserveTrailingSeparator ? normalized : normalized.replace(/-+$/g, '');
-}
-
-function normalizeOptionalHost(value) {
-  const normalized = String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .replace(/\/.*$/, '')
-    .replace(/\.$/, '');
-
-  return normalized || '';
-}
-
-function getEnvironmentOrigin(fallbackUrl = '') {
-  const browserOrigin = typeof window !== 'undefined' ? String(window.location.origin || '').replace(/\/$/, '') : '';
-
-  if (browserOrigin) {
-    return browserOrigin;
-  }
-
-  try {
-    return new URL(fallbackUrl).origin;
-  } catch {
-    return '';
-  }
-}
-
-function buildSubdomainPreviewUrl(subdomain, fallbackUrl = '') {
-  const normalizedSubdomain = slugify(subdomain);
-
-  if (!normalizedSubdomain) {
-    return '';
-  }
-
-  const baseOrigin = getEnvironmentOrigin(fallbackUrl);
-
-  try {
-    const baseUrl = new URL(baseOrigin || fallbackUrl);
-    return `${baseUrl.protocol}//${normalizedSubdomain}.${baseUrl.host}`;
-  } catch {
-    return `https://${normalizedSubdomain}.seu-dominio.com`;
-  }
-}
-
-function buildTenantPublicUrlPreview(business = {}, fallbackUrl = '') {
-  const slug = slugify(business.slug);
-  const customDomain = normalizeOptionalHost(business.domains?.customDomain);
-  const subdomain = slugify(business.domains?.subdomain);
-  const origin = getEnvironmentOrigin(fallbackUrl);
-  const slugUrl = slug && origin ? `${origin}/site/${slug}` : slug ? `/site/${slug}` : '';
-  const subdomainUrl = buildSubdomainPreviewUrl(subdomain, fallbackUrl);
-
-  return {
-    slugUrl,
-    subdomainUrl,
-    customDomainUrl: customDomain ? `https://${customDomain}` : '',
-    preferredUrl: customDomain ? `https://${customDomain}` : subdomainUrl || slugUrl || fallbackUrl || '',
-  };
-}
-
-function ensureSection(draft, key, fallbackType = 'custom') {
-  const existing = draft.sections.find((section) => section.key === key);
-
-  if (existing) {
-    return existing;
-  }
-
-  const nextSection = {
-    id: key,
-    key,
-    type: fallbackType,
-    title: '',
-    description: '',
-    order: draft.sections.length + 1,
-    visible: false,
-    variant: '',
-    settings: {},
-    items: [],
-  };
-
-  draft.sections = [...draft.sections, nextSection];
-  return nextSection;
-}
-
-function updateSectionDraft(draft, key, fallbackType, updater) {
-  const section = ensureSection(draft, key, fallbackType);
-  updater(section);
-}
-
-function newLinkItem() {
-  return {
-    id: `link-${Date.now()}`,
-    type: 'external',
-    group: 'primary',
-    label: '',
-    subtitle: '',
-    icon: 'default',
-    url: '',
-    value: '',
-    visible: true,
-    order: Date.now(),
-    target: '_blank',
-    metadata: {},
-  };
-}
-
-function newServiceItem() {
-  return {
-    id: `service-${Date.now()}`,
-    name: '',
-    description: '',
-    price: 0,
-    ctaLabel: 'Gerar QR PIX',
-  };
-}
-
-function newGalleryItem() {
-  return {
-    id: `gallery-${Date.now()}`,
-    imageUrl: '',
-    imagePublicId: '',
-    alt: '',
-  };
-}
-
-function newHourItem() {
-  return {
-    id: `hour-${Date.now()}`,
-    label: '',
-    value: '',
-  };
-}
-
-const SECTION_LABELS = {
-  'hero-main': 'Hero principal',
-  'quick-actions': 'Acesso rapido',
-  services: 'Servicos',
-  contact: 'Contato e atendimento',
-  gallery: 'Galeria',
-  about: 'Sobre nos',
-  pix: 'Pagamento PIX',
-  cta: 'Assinatura do criador',
-};
-
-const SECTION_TYPE_LABELS = {
-  hero: 'Hero',
-  links: 'Links e atalhos',
-  services: 'Servicos',
-  contact: 'Contato',
-  gallery: 'Galeria',
-  custom: 'Conteudo livre',
-  pix: 'PIX',
-  cta: 'Footer promocional',
-};
-
-const HIDDEN_ADMIN_SECTION_KEYS = new Set(['wifi', 'social']);
-
-const ANALYTICS_EVENT_LABELS = {
-  page_view: 'Visualizacao de pagina',
-  link_click: 'Clique em atalho',
-  copy_action: 'Copia de acao',
-  cta_click: 'Clique em CTA',
-  modal_open: 'Abertura de modal',
-};
-
-const EDITOR_STEPS = [
-  { id: 'basic', label: 'Basic Info', description: 'Identidade, contato e operacao.' },
-  { id: 'visual', label: 'Visual', description: 'Logo, banner e favicon.' },
-  { id: 'content', label: 'Content', description: 'Servicos, galeria e texto principal.' },
-  { id: 'links', label: 'Links', description: 'Acessos rapidos e atalhos.' },
-  { id: 'seo', label: 'SEO / Advanced', description: 'SEO, secoes, assinatura, historico e analytics.' },
-];
-
-const customDomainPattern = /^(?!:\/\/)(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
-
-function humanizeToken(value) {
-  return String(value || '')
-    .replace(/[_-]+/g, ' ')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function getSectionDisplayLabel(section) {
-  return SECTION_LABELS[section.key] || section.title || humanizeToken(section.key);
-}
-
-function getSectionTypeLabel(section) {
-  return SECTION_TYPE_LABELS[section.type] || humanizeToken(section.type);
-}
-
-function getAnalyticsEventLabel(eventType) {
-  return ANALYTICS_EVENT_LABELS[eventType] || humanizeToken(eventType);
-}
-
-function formatAnalyticsTimestamp(value) {
-  if (!value) {
-    return 'Sem registro';
-  }
-
-  return new Date(value).toLocaleString('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  });
-}
-
-function getAnalyticsTargetSummary(event) {
-  const pieces = [
-    event.targetLabel || '',
-    event.sectionType ? `Secao ${humanizeToken(event.sectionType)}` : '',
-    event.targetType ? `Alvo ${humanizeToken(event.targetType)}` : '',
-  ].filter(Boolean);
-
-  return pieces.join(' • ') || 'Sem alvo detalhado';
-}
-
-function normalizePhoneDigits(value) {
-  return String(value || '').replace(/\D+/g, '').slice(0, 13);
-}
-
-function formatWhatsappValue(value) {
-  const digits = normalizePhoneDigits(value);
-
-  if (!digits) {
-    return '';
-  }
-
-  const hasCountryCode = digits.startsWith('55') && digits.length > 11;
-  const countryCode = hasCountryCode ? digits.slice(0, 2) : '';
-  const localDigits = hasCountryCode ? digits.slice(2) : digits;
-  const areaCode = localDigits.slice(0, 2);
-  const prefixLength = localDigits.length > 10 ? 5 : 4;
-  const prefix = localDigits.slice(2, 2 + prefixLength);
-  const suffix = localDigits.slice(2 + prefixLength, 2 + prefixLength + 4);
-
-  return [
-    countryCode ? `+${countryCode}` : '',
-    areaCode ? `(${areaCode})` : '',
-    prefix,
-    suffix ? `-${suffix}` : '',
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .replace(' -', '-');
-}
-
-function isValidHttpUrl(value) {
-  if (!String(value || '').trim()) {
-    return true;
-  }
-
-  try {
-    const url = new URL(String(value).trim());
-    return ['http:', 'https:'].includes(url.protocol);
-  } catch {
-    return false;
-  }
-}
-
-function isValidLinkUrl(value) {
-  const normalized = String(value || '').trim();
-
-  if (!normalized) {
-    return true;
-  }
-
-  if (normalized.startsWith('mailto:') || normalized.startsWith('tel:')) {
-    return true;
-  }
-
-  return isValidHttpUrl(normalized);
-}
-
-function formatHistoryValue(value) {
-  if (value === undefined || value === null || value === '') {
-    return 'vazio';
-  }
-
-  if (typeof value === 'string') {
-    return value.length > 72 ? `${value.slice(0, 69)}...` : value;
-  }
-
-  const serialized = JSON.stringify(value);
-  return serialized.length > 72 ? `${serialized.slice(0, 69)}...` : serialized;
-}
-
-function getFieldStep(path) {
-  if (path.startsWith('business.logoUrl') || path.startsWith('business.bannerUrl') || path.startsWith('business.seo.imageUrl')) {
-    return 'visual';
-  }
-
-  if (path.startsWith('links.') || path.includes('primaryAction.href')) {
-    return 'links';
-  }
-
-  if (path.startsWith('sections.gallery') || path.startsWith('theme.') || path.startsWith('sections.services')) {
-    return 'content';
-  }
-
-  if (path.startsWith('business.seo.') || path.startsWith('history.')) {
-    return 'seo';
-  }
-
-  return 'basic';
-}
-
-function buildValidationErrors(draft) {
-  const errors = {};
-  const whatsappDigits = normalizePhoneDigits(draft.business.contact?.whatsapp);
-  const ctaLink = draft.sections.find((section) => section.key === 'cta')?.settings?.primaryAction?.href;
-
-  if (!String(draft.business.name || '').trim()) {
-    errors['business.name'] = 'Nome do comercio e obrigatorio.';
-  }
-
-  if (!slugify(draft.business.slug)) {
-    errors['business.slug'] = 'Slug obrigatorio, em minusculas e sem espacos.';
-  }
-
-  if (whatsappDigits && (whatsappDigits.length < 10 || whatsappDigits.length > 13)) {
-    errors['business.contact.whatsapp'] = 'Informe um WhatsApp valido com DDI e numero.';
-  }
-
-  if (draft.business.domains?.customDomain && !customDomainPattern.test(draft.business.domains.customDomain)) {
-    errors['business.domains.customDomain'] = 'Informe um dominio customizado valido.';
-  }
-
-  [
-    ['business.logoUrl', draft.business.logoUrl, 'Logo'],
-    ['business.bannerUrl', draft.business.bannerUrl, 'Banner'],
-    ['business.seo.imageUrl', draft.business.seo?.imageUrl, 'Icone do site'],
-    ['cta.primaryAction.href', ctaLink, 'Link da assinatura'],
-  ].forEach(([path, value, label]) => {
-    if (value && !isValidHttpUrl(value)) {
-      errors[path] = `${label} precisa ser uma URL valida.`;
-    }
-  });
-
-  draft.links.forEach((link, index) => {
-    if (link.url && !isValidLinkUrl(link.url)) {
-      errors[`links.${index}.url`] = 'Use uma URL valida para este atalho.';
-    }
-  });
-
-  draft.sections
-    .filter((section) => section.key === 'gallery')
-    .forEach((section) => {
-      (section.items || []).forEach((item, index) => {
-        if (item.imageUrl && !isValidHttpUrl(item.imageUrl)) {
-          errors[`sections.gallery.${index}.imageUrl`] = 'A imagem da galeria precisa ser uma URL valida.';
-        }
-      });
-    });
-
-  return errors;
-}
-
-function getInputState(error) {
-  return {
-    className: error ? 'admin-input--invalid' : '',
-    'aria-invalid': Boolean(error),
-  };
-}
-
-function AdminField({ label, children, description, error }) {
-  return (
-    <label className={`admin-field ${error ? 'admin-field--invalid' : ''}`}>
-      <span>{label}</span>
-      {children}
-      {error ? <small className="admin-field__error">{error}</small> : null}
-      {description ? <small>{description}</small> : null}
-    </label>
-  );
-}
-
-function SectionEyebrow({ children }) {
-  return <span className="admin-editor-kicker">{children}</span>;
-}
-
-function SensitiveInput({ label, value, onChange, placeholder, error }) {
-  const [revealed, setRevealed] = useState(false);
-
-  return (
-    <AdminField label={label} error={error}>
-      <div className="admin-sensitive-input">
-        <input
-          type={revealed ? 'text' : 'password'}
-          value={value || ''}
-          onChange={onChange}
-          placeholder={placeholder}
-          {...getInputState(error)}
-        />
-        <button type="button" className="admin-sensitive-toggle" onClick={() => setRevealed((current) => !current)}>
-          {revealed ? 'Ocultar' : 'Mostrar'}
-        </button>
-      </div>
-    </AdminField>
-  );
-}
-
-function ThemeColorField({ label, value, fallback, onChange }) {
-  const pickerId = useId();
-  const normalizedValue = normalizeHexColor(value, fallback);
-  const [textValue, setTextValue] = useState(normalizedValue);
-
-  useEffect(() => {
-    setTextValue(normalizedValue);
-  }, [normalizedValue]);
-
-  function commit(nextValue) {
-    const committed = normalizeHexColor(nextValue, normalizedValue);
-    setTextValue(committed);
-    onChange?.(committed);
-  }
-
-  return (
-    <AdminField label={label} description="Use um valor hexadecimal, por exemplo #f97316.">
-      <div className="admin-color-control">
-        <input
-          aria-label={label}
-          value={textValue}
-          onChange={(event) => {
-            const nextValue = event.target.value;
-            setTextValue(nextValue);
-
-            const candidate = nextValue.startsWith('#') ? nextValue : `#${nextValue}`;
-            if (isHexColor(candidate)) {
-              onChange?.(normalizeHexColor(nextValue, normalizedValue));
-            }
-          }}
-          onBlur={(event) => commit(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              commit(textValue);
-            }
-          }}
-          placeholder={fallback}
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck="false"
-        />
-        <button
-          type="button"
-          className="admin-color-swatch"
-          aria-label={`Selecionar ${label}`}
-          style={{ background: normalizedValue }}
-          onClick={() => document.getElementById(pickerId)?.click()}
-        />
-        <input
-          id={pickerId}
-          type="color"
-          className="admin-color-picker"
-          value={normalizedValue}
-          onChange={(event) => commit(event.target.value)}
-          tabIndex={-1}
-          aria-hidden="true"
-        />
-      </div>
-    </AdminField>
-  );
-}
-
-function PreviewImage({ src, alt }) {
-  const resolvedSrc = resolveMediaUrl(src);
-
-  if (!resolvedSrc) {
-    return <div className="admin-image-preview admin-image-preview--empty">Sem imagem</div>;
-  }
-
-  return (
-    <div className="admin-image-preview">
-      <img src={resolvedSrc} alt={alt} />
-    </div>
-  );
-}
-
-async function uploadImageAndPatch(file, onUpload, options, onDone) {
-  if (!file || !onUpload) {
-    return;
-  }
-
-  const upload = await onUpload(file, options);
-  onDone(upload);
-}
-
+import {
+  buildDerivedTheme,
+  buildTenantPublicUrlPreview,
+  buildValidationErrors,
+  cloneDeep,
+  EDITOR_STEPS,
+  formatAnalyticsTimestamp,
+  formatHistoryValue,
+  formatWhatsappValue,
+  getAnalyticsEventLabel,
+  getAnalyticsTargetSummary,
+  getFieldStep,
+  getInputState,
+  getSectionDisplayLabel,
+  getSectionTypeLabel,
+  HIDDEN_ADMIN_SECTION_KEYS,
+  newGalleryItem,
+  newHourItem,
+  newLinkItem,
+  newServiceItem,
+  normalizeOptionalHost,
+  normalizePhoneDigits,
+  slugify,
+  updateSectionDraft,
+  uploadImageAndPatch,
+} from './editor/tenantEditorUtils.js';
+import {
+  AdminField,
+  PreviewImage,
+  SectionEyebrow,
+  SensitiveInput,
+  ThemeColorField,
+} from './editor/TenantEditorPrimitives.jsx';
+import { TenantEditorHeader } from './editor/TenantEditorHeader.jsx';
+import { TenantEditorStepper } from './editor/TenantEditorStepper.jsx';
 export function TenantEditorPanel({
   editor,
   saving,
@@ -692,108 +110,32 @@ export function TenantEditorPanel({
   return (
     <div className="admin-editor-stack">
       <Card className="admin-panel-card admin-panel-card--hero">
-        <div className="admin-editor-header admin-editor-header--hero">
-          <div className="admin-editor-hero-main">
-            <SectionEyebrow>Tenant em edicao</SectionEyebrow>
-            <h2>{draft.business.name}</h2>
-            <p className="admin-editor-public-url">{publicUrlPreview.preferredUrl || `/site/${draft.business.slug}`}</p>
-            <div className="admin-editor-meta admin-editor-meta--hero">
-              <span className="admin-meta-pill">Status: {draft.business.status}</span>
-              <span className="admin-meta-pill">Tag: {draft.nfcTag?.code || 'Sem codigo NFC'}</span>
-              <span className="admin-meta-pill">Eventos: {analyticsSummary?.totalEvents || 0}</span>
-            </div>
-          </div>
-          <div className="admin-editor-hero-actions">
-            <div className="admin-toolbar admin-toolbar--editor">
-              <div className="admin-toolbar__group admin-toolbar__group--utility">
-                <Button variant="secondary" onClick={onCopyPublicLink} disabled={!publicUrlPreview.preferredUrl}>
-                  Copiar link
-                </Button>
-                <Button variant="secondary" onClick={onDuplicate} disabled={duplicating || deleting || saving}>
-                  {duplicating ? 'Duplicando...' : 'Duplicar tenant'}
-                </Button>
-              </div>
-              <div className="admin-toolbar__group admin-toolbar__group--danger">
-                <Button
-                  variant="secondary"
-                  onClick={() => onToggleStatus?.(draft.business.id, isActive ? 'inactive' : 'active')}
-                  disabled={togglingStatus || deleting || saving || duplicating}
-                >
-                  {togglingStatus ? (isActive ? 'Inativando...' : 'Ativando...') : isActive ? 'Inativar site' : 'Ativar site'}
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="button--danger-tone"
-                  onClick={() => onDelete?.(draft.business.id)}
-                  disabled={deleting || duplicating}
-                >
-                  {deleting ? 'Excluindo...' : 'Excluir tenant'}
-                </Button>
-              </div>
-              <div className="admin-toolbar__group admin-toolbar__group--primary">
-                <Button onClick={handleSave} disabled={saving}>
-                  {saving ? 'Salvando...' : 'Salvar alteracoes'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <TenantEditorHeader
+          business={draft.business}
+          nfcTag={draft.nfcTag}
+          totalEvents={analyticsSummary?.totalEvents}
+          publicUrl={publicUrlPreview.preferredUrl}
+          isActive={isActive}
+          saving={saving}
+          deleting={deleting}
+          duplicating={duplicating}
+          togglingStatus={togglingStatus}
+          onCopyPublicLink={onCopyPublicLink}
+          onDuplicate={onDuplicate}
+          onToggleStatus={onToggleStatus}
+          onDelete={onDelete}
+          onSave={handleSave}
+        />
       </Card>
 
       <Card className="admin-panel-card admin-panel-card--controls">
-        <div className="admin-card-stack admin-card-stack--airy">
-          <div className="admin-panel-card__header">
-            <div>
-              <SectionEyebrow>Fluxo</SectionEyebrow>
-              <h2>Fluxo do editor</h2>
-              <p>Navegue por etapas para ajustar o tenant com mais foco e menos densidade visual.</p>
-            </div>
-            <span className="admin-section-chip admin-section-chip--accent">
-              Etapa {activeStepIndex + 1} de {EDITOR_STEPS.length}
-            </span>
-          </div>
-
-          <div className="admin-stepper admin-stepper--dashboard">
-            {EDITOR_STEPS.map((step, index) => (
-              <button
-                key={step.id}
-                type="button"
-                className={`admin-stepper__item ${activeStep === step.id ? 'admin-stepper__item--active' : ''}`}
-                aria-label={step.label}
-                aria-current={activeStep === step.id ? 'step' : undefined}
-                title={step.label}
-                onClick={() => setActiveStep(step.id)}
-              >
-                <span className="admin-stepper__index">{index + 1}</span>
-                <span className="admin-stepper__copy">
-                  <strong>{step.label}</strong>
-                  <small>{step.description}</small>
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <div className="admin-stepper-footer">
-            <div className="admin-inline-note admin-inline-note--step">
-              <strong>{EDITOR_STEPS[activeStepIndex]?.label}</strong>
-              <span>{EDITOR_STEPS[activeStepIndex]?.description}</span>
-            </div>
-            <div className="admin-inline-actions">
-              <Button variant="secondary" disabled={activeStepIndex <= 0} onClick={() => setActiveStep(EDITOR_STEPS[Math.max(0, activeStepIndex - 1)].id)}>
-                Voltar
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={activeStepIndex >= EDITOR_STEPS.length - 1}
-                onClick={() => setActiveStep(EDITOR_STEPS[Math.min(EDITOR_STEPS.length - 1, activeStepIndex + 1)].id)}
-              >
-                Proxima etapa
-              </Button>
-            </div>
-          </div>
-
-          {localError ? <p className="admin-status-banner admin-status-banner--error">{localError}</p> : null}
-        </div>
+        <TenantEditorStepper
+          steps={EDITOR_STEPS}
+          activeStep={activeStep}
+          activeStepIndex={activeStepIndex}
+          localError={localError}
+          onStepChange={setActiveStep}
+        />
       </Card>
 
       <div className="admin-editor-grid">
@@ -1271,8 +613,11 @@ export function TenantEditorPanel({
           </section>
           </div>
         </Card>
+          </>
+        ) : null}
 
-        <Card id="tenant-payments" className="admin-panel-card">
+        {activeStep === 'payments' ? (
+        <Card id="tenant-payments" className="admin-panel-card admin-panel-card--span-2">
           <div className="admin-panel-card__header">
             <div>
               <SectionEyebrow>Operacao</SectionEyebrow>
@@ -1379,7 +724,6 @@ export function TenantEditorPanel({
           </div>
           </div>
         </Card>
-          </>
         ) : null}
 
         {activeStep === 'links' ? (
@@ -1711,14 +1055,14 @@ export function TenantEditorPanel({
         </Card>
         ) : null}
 
-        {activeStep === 'seo' ? (
+        {activeStep === 'settings' ? (
           <>
         <Card id="tenant-content" className="admin-panel-card admin-panel-card--span-2">
           <div className="admin-panel-card__header">
             <div>
-              <SectionEyebrow>Advanced</SectionEyebrow>
-              <h2>Conteudo, SEO e secoes</h2>
-              <p>Controle visibilidade, mensagem institucional e cores do tenant.</p>
+              <SectionEyebrow>Configuracoes</SectionEyebrow>
+              <h2>SEO, tema e secoes</h2>
+              <p>Controle visibilidade, mensagem institucional, cores e detalhes avancados do tenant.</p>
             </div>
           </div>
 
@@ -2078,3 +1422,4 @@ export function TenantEditorPanel({
     </div>
   );
 }
+

@@ -2914,7 +2914,7 @@ img {
 .dashboard-shell .admin-stepper--dashboard {
   grid-auto-flow: initial;
   grid-auto-columns: auto;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   overflow: visible;
 }
 
