@@ -17,15 +17,19 @@ export function BusinessServicesSection({ section }) {
           return (
             <article key={service.id} className="service-card">
               {serviceImageUrl ? (
-                <img className="service-card__image" src={serviceImageUrl} alt={service.name} />
+                <div className="service-card__media">
+                  <img className="service-card__image" src={serviceImageUrl} alt={service.name} />
+                </div>
               ) : null}
 
-              <div className="service-card__header">
-                <h3>{service.name}</h3>
-                <strong>{formatCurrency(service.price)}</strong>
-              </div>
+              <div className="service-card__content">
+                <div className="service-card__header">
+                  <h3>{service.name}</h3>
+                  <strong className="service-card__price">{formatCurrency(service.price)}</strong>
+                </div>
 
-              {service.description ? <p>{service.description}</p> : null}
+                {service.description ? <p className="service-card__description">{service.description}</p> : null}
+              </div>
             </article>
           );
         })}
