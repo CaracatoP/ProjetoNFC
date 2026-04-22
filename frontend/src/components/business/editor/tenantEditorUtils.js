@@ -239,7 +239,7 @@ export function newServiceItem() {
     name: '',
     description: '',
     price: 0,
-    ctaLabel: 'Gerar QR PIX',
+    imageUrl: null,
   };
 }
 

@@ -2,6 +2,16 @@ import mongoose from 'mongoose';
 import { SECTION_TYPE_VALUES } from '../../../shared/constants/index.js';
 import { baseSchemaOptions } from '../utils/mongoose.js';
 
+const sectionItemSchema = new mongoose.Schema(
+  {
+    imageUrl: { type: String, trim: true, default: null },
+  },
+  {
+    _id: false,
+    strict: false,
+  },
+);
+
 const businessSectionSchema = new mongoose.Schema(
   {
     businessId: { type: mongoose.Schema.Types.ObjectId, ref: 'Business', required: true, index: true },
@@ -13,7 +23,7 @@ const businessSectionSchema = new mongoose.Schema(
     visible: { type: Boolean, default: true },
     variant: { type: String, trim: true },
     settings: { type: mongoose.Schema.Types.Mixed, default: {} },
-    items: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    items: { type: [sectionItemSchema], default: [] },
   },
   baseSchemaOptions,
 );
@@ -22,4 +32,3 @@ businessSectionSchema.index({ businessId: 1, key: 1 }, { unique: true });
 
 export const BusinessSection =
   mongoose.models.BusinessSection || mongoose.model('BusinessSection', businessSectionSchema);
-

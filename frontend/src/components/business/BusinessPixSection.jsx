@@ -1,14 +1,11 @@
 import { useState } from 'react';
 import QRCode from 'react-qr-code';
-import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 import { SectionHeader } from '@/components/common/SectionHeader.jsx';
-import { useClipboard } from '@/hooks/useClipboard.js';
 import { buildPixPayload } from '@/utils/pix.js';
 
-export function BusinessPixSection({ section, onTrackAction }) {
+export function BusinessPixSection({ section }) {
   const pix = section.settings;
-  const { copy, lastCopied } = useClipboard();
   const [amount, setAmount] = useState('');
   const numericAmount = Number(amount.replace(',', '.'));
   const pixPayload = buildPixPayload(pix, numericAmount > 0 ? numericAmount : undefined);
@@ -39,35 +36,6 @@ export function BusinessPixSection({ section, onTrackAction }) {
               inputMode="decimal"
             />
           </label>
-          <div className="button-row">
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                await copy(pix.key);
-                onTrackAction?.({
-                  eventType: 'copy_action',
-                  sectionType: 'pix',
-                  targetType: 'pix_key',
-                  targetLabel: pix.receiverName,
-                });
-              }}
-            >
-              {lastCopied === pix.key ? 'Chave copiada' : pix.actionLabel || 'Copiar chave PIX'}
-            </Button>
-            <Button
-              onClick={async () => {
-                await copy(pixPayload);
-                onTrackAction?.({
-                  eventType: 'copy_action',
-                  sectionType: 'pix',
-                  targetType: 'pix_payload',
-                  targetLabel: pix.receiverName,
-                });
-              }}
-            >
-              {lastCopied === pixPayload ? 'Código copiado' : 'Copiar código PIX'}
-            </Button>
-          </div>
         </div>
         <div className="qr-panel">
           <div className="qr-frame">
@@ -79,4 +47,3 @@ export function BusinessPixSection({ section, onTrackAction }) {
     </Card>
   );
 }
-

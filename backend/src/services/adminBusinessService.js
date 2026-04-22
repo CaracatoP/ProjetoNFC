@@ -424,12 +424,21 @@ function synchronizeManagedLinks(links = [], business = {}) {
     }));
 }
 
-function normalizeSectionItems(items = []) {
+function normalizeSectionItems(items = [], section = {}) {
   return items
-    .map((item, index) => ({
-      ...item,
-      id: item.id || `item-${index + 1}`,
-    }))
+    .map((item, index) => {
+      const normalizedItem = {
+        ...item,
+        id: item.id || `item-${index + 1}`,
+      };
+
+      if (section.key === 'services' || section.type === 'services') {
+        normalizedItem.imageUrl = normalizeOptionalValue(item.imageUrl) || null;
+        normalizedItem.imagePublicId = normalizeOptionalValue(item.imagePublicId) || '';
+      }
+
+      return normalizedItem;
+    })
     .filter(Boolean);
 }
 
@@ -444,7 +453,7 @@ function normalizeSectionsPayload(sections = []) {
       visible: section.visible !== false,
       variant: String(section.variant || '').trim(),
       settings: section.settings || {},
-      items: normalizeSectionItems(section.items),
+      items: normalizeSectionItems(section.items, section),
     }))
     .map((section) => {
       if (section.key === 'about') {

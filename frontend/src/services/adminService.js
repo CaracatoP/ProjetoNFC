@@ -17,9 +17,9 @@ function normalizeBusinessMedia(business = {}) {
   };
 }
 
-function normalizeGallerySections(sections = []) {
+function normalizeMediaSections(sections = []) {
   return sections.map((section) => {
-    if (section.type !== 'gallery') {
+    if (section.type !== 'gallery' && section.type !== 'services') {
       return section;
     }
 
@@ -27,7 +27,7 @@ function normalizeGallerySections(sections = []) {
       ...section,
       items: (section.items || []).map((item) => ({
         ...item,
-        imageUrl: resolveMediaUrl(item.imageUrl),
+        imageUrl: item.imageUrl ? resolveMediaUrl(item.imageUrl) : item.imageUrl,
       })),
     };
   });
@@ -37,7 +37,7 @@ function normalizeEditorPayload(editor = {}) {
   return {
     ...editor,
     business: normalizeBusinessMedia(editor.business),
-    sections: normalizeGallerySections(editor.sections || []),
+    sections: normalizeMediaSections(editor.sections || []),
   };
 }
 

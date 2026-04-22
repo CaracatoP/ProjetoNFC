@@ -8,6 +8,7 @@ import {
 } from '../../../shared/constants/index.js';
 
 const optionalString = z.string().optional().or(z.literal(''));
+const optionalNullableString = z.string().nullable().optional().or(z.literal(''));
 const slugPattern = /^[a-z0-9-]+$/;
 const subdomainPattern = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/;
 const customDomainPattern = /^(?!:\/\/)(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
@@ -179,6 +180,13 @@ const linksBodySchema = z.array(
   }),
 );
 
+const sectionItemBodySchema = z
+  .object({
+    imageUrl: optionalNullableString,
+    imagePublicId: optionalString,
+  })
+  .catchall(z.any());
+
 const sectionsBodySchema = z.array(
   z.object({
     id: optionalString,
@@ -190,7 +198,7 @@ const sectionsBodySchema = z.array(
     visible: z.boolean().default(true),
     variant: optionalString,
     settings: z.record(z.any()).default({}),
-    items: z.array(z.record(z.any())).default([]),
+    items: z.array(sectionItemBodySchema).default([]),
   }),
 );
 

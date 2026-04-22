@@ -196,7 +196,6 @@ export function PublicSitePage() {
         open={activeModal === 'pix'}
         pix={site.business.contact?.pix}
         onClose={() => setActiveModal(null)}
-        onTrackAction={trackAction}
       />
     </PublicSiteLayout>
   );

@@ -139,7 +139,15 @@ const siteFixture = {
       order: 30,
       visible: true,
       settings: {},
-      items: [{ id: 'service-1', name: 'Corte masculino', price: 45, description: 'Classico' }],
+      items: [
+        {
+          id: 'service-1',
+          name: 'Corte masculino',
+          price: 45,
+          description: 'Classico',
+          imageUrl: 'https://cdn.example.com/service.jpg',
+        },
+      ],
     },
     {
       id: 'hidden-1',
@@ -209,6 +217,10 @@ describe('PublicSitePage', () => {
     expect(await screen.findByRole('heading', { name: 'Barbearia Estilo Vivo' })).toBeInTheDocument();
     expect(screen.getAllByText('Barbearia Estilo Vivo')).toHaveLength(1);
     expect(screen.getByText('Servicos')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Corte masculino' })).toHaveAttribute(
+      'src',
+      'https://cdn.example.com/service.jpg',
+    );
     expect(screen.getByText('Experiencia premium.')).toBeInTheDocument();
     expect(screen.getByText('Fale com nossa equipe')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Abrir Instagram/i })).toHaveAttribute(

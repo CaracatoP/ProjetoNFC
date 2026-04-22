@@ -107,6 +107,50 @@ export function TenantEditorPanel({
     await onSave?.(draft);
   };
 
+  const handleServiceImageUpload = async (serviceIndex, file) => {
+    if (!file) {
+      return;
+    }
+
+    const uploadKey = `service-${serviceIndex}`;
+    setUploadingField(uploadKey);
+
+    try {
+      await uploadImageAndPatch(file, onUpload, {
+        tenantSlug: draft.business.slug,
+        assetType: 'service',
+      }, (upload) =>
+        setDraft((current) => {
+          const nextDraft = cloneDeep(current);
+          updateSectionDraft(nextDraft, 'services', 'services', (section) => {
+            section.items[serviceIndex] = {
+              ...section.items[serviceIndex],
+              imageUrl: upload.url,
+              imagePublicId: upload.publicId || '',
+            };
+          });
+          return nextDraft;
+        }),
+      );
+    } finally {
+      setUploadingField('');
+    }
+  };
+
+  const removeServiceImage = (serviceIndex) => {
+    setDraft((current) => {
+      const nextDraft = cloneDeep(current);
+      updateSectionDraft(nextDraft, 'services', 'services', (section) => {
+        section.items[serviceIndex] = {
+          ...section.items[serviceIndex],
+          imageUrl: null,
+          imagePublicId: '',
+        };
+      });
+      return nextDraft;
+    });
+  };
+
   return (
     <div className="admin-editor-stack">
       <Card className="admin-panel-card admin-panel-card--hero">
@@ -920,6 +964,36 @@ export function TenantEditorPanel({
                     })}
                   />
                 </AdminField>
+                <div className="admin-service-image-control">
+                  <span className="admin-service-image-control__label">Foto do servico (opcional)</span>
+                  {service.imageUrl ? (
+                    <PreviewImage src={service.imageUrl} alt={service.name || 'Foto do servico'} />
+                  ) : (
+                    <div className="admin-image-preview admin-image-preview--empty">Nenhuma foto adicionada</div>
+                  )}
+
+                  <div className="admin-inline-actions">
+                    <label className="button button--secondary button--md admin-file-action">
+                      {service.imageUrl ? 'Trocar foto' : 'Adicionar foto'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) => handleServiceImageUpload(index, event.target.files?.[0])}
+                      />
+                    </label>
+                    {service.imageUrl ? (
+                      <Button
+                        variant="secondary"
+                        className="button--danger-tone"
+                        onClick={() => removeServiceImage(index)}
+                      >
+                        Remover foto
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  {uploadingField === `service-${index}` ? <small>Enviando foto do servico...</small> : null}
+                </div>
                 <div className="admin-inline-actions">
                   <Button
                     variant="secondary"

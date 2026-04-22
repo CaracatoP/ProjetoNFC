@@ -145,30 +145,6 @@ function buildContactItems(business) {
   return items;
 }
 
-function buildHeroPrimaryAction(business, settings) {
-  const whatsappValue = normalizePhoneActionValue(business.contact?.whatsapp);
-
-  if (!whatsappValue) {
-    return undefined;
-  }
-
-  return {
-    label: settings.primaryAction?.label || 'Agendar pelo WhatsApp',
-    href: `https://wa.me/${whatsappValue}`,
-  };
-}
-
-function buildHeroSecondaryAction(business, settings) {
-  if (!business.contact?.pix?.key) {
-    return undefined;
-  }
-
-  return {
-    label: settings.secondaryAction?.label || 'Copiar PIX',
-    action: 'pix',
-  };
-}
-
 function sanitizePublicSectionItem(item, fallbackId) {
   if (!item) {
     return item;
@@ -223,8 +199,6 @@ function hydrateSection(section, business, links) {
           hours: business.hours || [],
           bannerUrl: business.bannerUrl || settings.bannerUrl,
           logoUrl: business.logoUrl || settings.logoUrl,
-          primaryAction: buildHeroPrimaryAction(business, settings),
-          secondaryAction: buildHeroSecondaryAction(business, settings),
         },
       };
     case 'links':

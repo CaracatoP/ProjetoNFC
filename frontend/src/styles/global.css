@@ -381,9 +381,7 @@ img {
   margin-top: 0.35rem;
 }
 
-.hero-card__actions,
-.button-row,
-.service-card__actions {
+.button-row {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
@@ -559,6 +557,14 @@ img {
   padding: 1.05rem;
   display: grid;
   gap: 0.9rem;
+}
+
+.service-card__image {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--theme-border);
 }
 
 .service-card__header {
@@ -1491,6 +1497,24 @@ img {
 
 .admin-media-card input[type='file'],
 .admin-repeater-card input[type='file'] {
+  color: var(--theme-text-muted);
+}
+
+.admin-file-action input[type='file'],
+.admin-file-action input {
+  display: none;
+}
+
+.admin-service-image-control {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.admin-service-image-control__label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--theme-text-muted);
 }
 

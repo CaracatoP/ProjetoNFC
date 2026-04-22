@@ -220,7 +220,7 @@ export function buildManagedPrimaryLinks(business) {
       type: LINK_TYPES.PIX,
       group: LINK_GROUPS.PRIMARY,
       label: 'PIX',
-      subtitle: 'Copiar chave de pagamento',
+      subtitle: 'Abrir dados de pagamento',
       icon: 'pix',
       value: contact.pix.key,
       order: nextOrder(),
@@ -250,18 +250,6 @@ function buildSections(business) {
         showAddress: true,
         showHours: true,
         showRating: true,
-        primaryAction: business.contact?.whatsapp
-          ? {
-              label: 'Agendar pelo WhatsApp',
-              href: `https://wa.me/${business.contact.whatsapp}`,
-            }
-          : undefined,
-        secondaryAction: hasPix
-          ? {
-              label: 'Copiar PIX',
-              action: 'pix',
-            }
-          : undefined,
       },
       items: [],
     },
@@ -285,9 +273,7 @@ function buildSections(business) {
       description: 'Adicione os servicos e precos do negocio.',
       order: 30,
       visible: false,
-      settings: {
-        showPixShortcut: hasPix,
-      },
+      settings: {},
       items: [],
     },
     {
@@ -327,7 +313,7 @@ function buildSections(business) {
       key: 'pix',
       type: SECTION_TYPES.PIX,
       title: 'Pagamento via PIX',
-      description: 'Escaneie ou copie a chave PIX.',
+      description: 'Escaneie o QR Code ou confira a chave PIX.',
       order: 70,
       visible: hasPix,
       settings: {
