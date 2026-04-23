@@ -68,11 +68,49 @@ const iconPaths = {
   ),
 };
 
+const iconAliases = {
+  email: 'mail',
+  'e-mail': 'mail',
+  telefone: 'phone',
+  telephone: 'phone',
+  location: 'map',
+  address: 'map',
+  localizacao: 'map',
+  maps: 'map',
+};
+
+const brandIconNames = new Set(['whatsapp', 'instagram', 'pix']);
+
+function isImageIcon(value) {
+  return /^(https?:\/\/|data:image\/|\/)/i.test(String(value || '').trim());
+}
+
+function normalizeIconName(name) {
+  const normalized = String(name || '').trim().toLowerCase();
+  const aliased = iconAliases[normalized] || normalized;
+
+  return iconPaths[aliased] ? aliased : 'default';
+}
+
 export function ActionIcon({ name, className = '' }) {
-  const iconName = iconPaths[name] ? name : 'default';
+  if (isImageIcon(name)) {
+    return (
+      <span className={['action-icon', 'action-icon--image', className].filter(Boolean).join(' ')}>
+        <img src={name} alt="" aria-hidden="true" />
+      </span>
+    );
+  }
+
+  const iconName = normalizeIconName(name);
+  const iconKind = brandIconNames.has(iconName) ? 'brand' : 'generic';
 
   return (
-    <span className={['action-icon', `action-icon--${iconName}`, className].filter(Boolean).join(' ')}>
+    <span
+      className={['action-icon', `action-icon--${iconKind}`, `action-icon--${iconName}`, className]
+        .filter(Boolean)
+        .join(' ')}
+      data-icon-kind={iconKind}
+    >
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         {iconPaths[iconName]}
       </svg>

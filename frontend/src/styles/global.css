@@ -498,54 +498,93 @@ img {
 .action-icon {
   display: inline-grid;
   place-items: center;
-  width: 54px;
-  height: 54px;
-  border-radius: 18px;
+  flex: 0 0 auto;
+  width: clamp(42px, 12vw, 50px);
+  height: clamp(42px, 12vw, 50px);
+  border-radius: 16px;
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, var(--theme-primary) 28%, transparent),
-    color-mix(in srgb, var(--theme-secondary) 16%, transparent)
+    color-mix(in srgb, var(--theme-text) 11%, transparent),
+    color-mix(in srgb, var(--theme-text) 5%, transparent)
   );
   color: var(--theme-text);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border: 1px solid color-mix(in srgb, var(--theme-text) 14%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 12px 24px color-mix(in srgb, var(--theme-background) 22%, transparent);
+  isolation: isolate;
+  overflow: hidden;
 }
 
 .action-icon svg {
-  width: 26px;
-  height: 26px;
+  width: 58%;
+  height: 58%;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
+  color: currentColor;
+}
+
+.action-icon img {
+  width: 70%;
+  height: 70%;
+  object-fit: contain;
+  display: block;
+}
+
+.action-icon--generic {
+  color: color-mix(in srgb, var(--theme-text) 92%, var(--theme-primary));
+}
+
+.action-icon--brand {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 14px 28px rgba(0, 0, 0, 0.22);
 }
 
 .action-icon--whatsapp {
-  color: color-mix(in srgb, var(--theme-success) 70%, var(--theme-text));
+  background:
+    radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.35), transparent 28%),
+    linear-gradient(135deg, #25d366, #128c7e);
 }
 
 .action-icon--phone {
-  color: color-mix(in srgb, var(--theme-secondary) 34%, var(--theme-text));
+  color: color-mix(in srgb, var(--theme-text) 88%, var(--theme-secondary));
 }
 
 .action-icon--map {
-  color: color-mix(in srgb, var(--theme-primary) 24%, var(--theme-text));
+  color: color-mix(in srgb, var(--theme-text) 86%, var(--theme-primary));
 }
 
 .action-icon--wifi {
-  color: color-mix(in srgb, var(--theme-secondary) 48%, var(--theme-text));
+  color: color-mix(in srgb, var(--theme-text) 88%, var(--theme-secondary));
 }
 
 .action-icon--pix {
-  color: color-mix(in srgb, var(--theme-success) 44%, var(--theme-text));
+  background:
+    radial-gradient(circle at 28% 18%, rgba(255, 255, 255, 0.34), transparent 28%),
+    linear-gradient(135deg, #32bcad, #0f8f82);
 }
 
 .action-icon--instagram {
-  color: color-mix(in srgb, var(--theme-secondary) 62%, var(--theme-primary));
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.32), transparent 24%),
+    linear-gradient(135deg, #feda75 0%, #fa7e1e 26%, #d62976 52%, #962fbf 76%, #4f5bd5 100%);
 }
 
 .action-icon--mail {
-  color: color-mix(in srgb, var(--theme-text) 80%, var(--theme-primary));
+  color: color-mix(in srgb, var(--theme-text) 90%, var(--theme-primary));
+}
+
+.action-icon--image {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.06)),
+    color-mix(in srgb, var(--theme-surface-alt) 88%, transparent);
+  color: inherit;
 }
 
 .service-grid,
