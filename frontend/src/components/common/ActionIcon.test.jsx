@@ -12,6 +12,11 @@ describe('ActionIcon', () => {
 
     expect(container.querySelector('.action-icon')).toHaveAttribute('data-icon-kind', 'generic');
     expect(container.querySelector('.action-icon')).toHaveClass('action-icon--generic', 'action-icon--mail');
+
+    rerender(<ActionIcon name="pix" />);
+
+    expect(container.querySelector('.action-icon')).toHaveAttribute('data-icon-kind', 'generic');
+    expect(container.querySelector('.action-icon')).toHaveClass('action-icon--generic', 'action-icon--pix');
   });
 
   it('renders external icon images without stretching or SVG color inheritance', () => {

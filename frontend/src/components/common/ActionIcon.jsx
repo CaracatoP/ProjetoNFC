@@ -79,7 +79,7 @@ const iconAliases = {
   maps: 'map',
 };
 
-const brandIconNames = new Set(['whatsapp', 'instagram', 'pix']);
+const brandIconNames = new Set(['whatsapp', 'instagram']);
 
 function isImageIcon(value) {
   return /^(https?:\/\/|data:image\/|\/)/i.test(String(value || '').trim());
