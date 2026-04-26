@@ -3202,3 +3202,315 @@ img {
     grid-template-columns: 1fr;
   }
 }
+
+.dashboard-shell .admin-dashboard-switcher {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 88%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-surface-alt) 58%, transparent);
+}
+
+.dashboard-shell .admin-analytics-view {
+  display: grid;
+  gap: clamp(1.35rem, 2vw, 1.85rem);
+}
+
+.dashboard-shell .analytics-overview-hero {
+  overflow: hidden;
+}
+
+.dashboard-shell .analytics-hero__controls {
+  display: grid;
+  gap: 0.9rem;
+  align-items: end;
+  justify-items: end;
+  min-width: min(100%, 340px);
+}
+
+.dashboard-shell .analytics-hero__controls .admin-field {
+  width: 100%;
+}
+
+.dashboard-shell .analytics-hero__controls .button {
+  min-width: 220px;
+}
+
+.dashboard-shell .analytics-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.dashboard-shell .analytics-metric-grid--tenant {
+  margin-bottom: 1rem;
+}
+
+.dashboard-shell .analytics-metric-card {
+  display: grid;
+  gap: 0.45rem;
+  min-height: 148px;
+  padding: 1.05rem 1.1rem;
+  border-radius: calc(var(--radius-lg) - 0.5rem);
+  border: 1px solid color-mix(in srgb, var(--theme-border) 84%, transparent);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--theme-surface-alt) 72%, transparent), color-mix(in srgb, var(--theme-surface) 96%, transparent));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.dashboard-shell .analytics-metric-card span,
+.dashboard-shell .analytics-metric-card small {
+  color: var(--theme-text-muted);
+}
+
+.dashboard-shell .analytics-metric-card strong {
+  font-family: var(--font-heading);
+  font-size: clamp(1.5rem, 1.3rem + 0.6vw, 2rem);
+  line-height: 1;
+}
+
+.dashboard-shell .analytics-metric-card--info {
+  border-color: color-mix(in srgb, var(--theme-primary) 18%, var(--theme-border));
+}
+
+.dashboard-shell .analytics-metric-card--accent {
+  border-color: color-mix(in srgb, var(--theme-secondary) 20%, var(--theme-border));
+}
+
+.dashboard-shell .analytics-metric-card--success {
+  border-color: color-mix(in srgb, var(--theme-success) 26%, var(--theme-border));
+}
+
+.dashboard-shell .analytics-layout-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(1.2rem, 1.8vw, 1.75rem);
+  align-items: start;
+}
+
+.dashboard-shell .analytics-panel {
+  display: grid;
+  gap: 1.1rem;
+  min-width: 0;
+}
+
+.dashboard-shell .analytics-panel--span-2 {
+  grid-column: 1 / -1;
+}
+
+.dashboard-shell .analytics-trend-chart {
+  display: grid;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  gap: 0.65rem;
+  align-items: end;
+  min-height: 260px;
+}
+
+.dashboard-shell .analytics-trend-chart__day {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.dashboard-shell .analytics-trend-chart__bars {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.18rem;
+  align-items: end;
+  min-height: 220px;
+  padding: 0.5rem;
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--theme-surface-alt) 58%, transparent);
+  border: 1px solid color-mix(in srgb, var(--theme-border) 84%, transparent);
+}
+
+.dashboard-shell .analytics-trend-chart__bar {
+  border-radius: 999px 999px 0 0;
+  min-height: 8px;
+}
+
+.dashboard-shell .analytics-trend-chart__bar--events {
+  background: color-mix(in srgb, var(--theme-text) 72%, transparent);
+}
+
+.dashboard-shell .analytics-trend-chart__bar--views {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--theme-primary) 84%, white), color-mix(in srgb, var(--theme-primary) 56%, transparent));
+}
+
+.dashboard-shell .analytics-trend-chart__bar--actions {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--theme-secondary) 84%, white), color-mix(in srgb, var(--theme-secondary) 54%, transparent));
+}
+
+.dashboard-shell .analytics-trend-chart__label {
+  display: grid;
+  gap: 0.12rem;
+  justify-items: center;
+  text-align: center;
+}
+
+.dashboard-shell .analytics-trend-chart__label strong {
+  font-size: 0.88rem;
+}
+
+.dashboard-shell .analytics-trend-chart__label span {
+  color: var(--theme-text-muted);
+  font-size: 0.78rem;
+}
+
+.dashboard-shell .analytics-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  color: var(--theme-text-muted);
+  font-size: 0.82rem;
+}
+
+.dashboard-shell .analytics-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.dashboard-shell .analytics-legend__swatch {
+  display: inline-flex;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 999px;
+}
+
+.dashboard-shell .analytics-legend__swatch--events {
+  background: color-mix(in srgb, var(--theme-text) 72%, transparent);
+}
+
+.dashboard-shell .analytics-legend__swatch--views {
+  background: color-mix(in srgb, var(--theme-primary) 68%, transparent);
+}
+
+.dashboard-shell .analytics-legend__swatch--actions {
+  background: color-mix(in srgb, var(--theme-secondary) 68%, transparent);
+}
+
+.dashboard-shell .analytics-bar-list,
+.dashboard-shell .analytics-breakdown-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.dashboard-shell .analytics-bar-list__item,
+.dashboard-shell .analytics-breakdown-list__item {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.95rem 1rem;
+  border-radius: calc(var(--radius-lg) - 0.55rem);
+  border: 1px solid color-mix(in srgb, var(--theme-border) 82%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-alt) 60%, transparent);
+}
+
+.dashboard-shell .analytics-bar-list__copy,
+.dashboard-shell .analytics-breakdown-list__item > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.dashboard-shell .analytics-bar-list__copy span,
+.dashboard-shell .analytics-breakdown-list__item span,
+.dashboard-shell .analytics-empty-state span {
+  color: var(--theme-text-muted);
+}
+
+.dashboard-shell .analytics-bar-list__meta {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.dashboard-shell .analytics-bar-list__track {
+  width: 100%;
+  height: 0.45rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-surface) 80%, transparent);
+}
+
+.dashboard-shell .analytics-bar-list__track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--theme-primary), var(--theme-secondary));
+}
+
+.dashboard-shell .analytics-breakdown-list__item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.dashboard-shell .analytics-empty-state {
+  display: grid;
+  gap: 0.35rem;
+  min-height: 180px;
+  place-content: center;
+  text-align: left;
+  padding: 1.1rem 0;
+}
+
+.dashboard-shell .analytics-recent-events {
+  max-height: 410px;
+}
+
+.dashboard-shell .analytics-tenant-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.dashboard-shell .analytics-subgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  gap: 1rem;
+}
+
+@media (max-width: 1500px) {
+  .dashboard-shell .analytics-layout-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-shell .analytics-panel--span-2 {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 1100px) {
+  .dashboard-shell .analytics-subgrid,
+  .dashboard-shell .analytics-hero__controls {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-shell .analytics-hero__controls {
+    justify-items: stretch;
+  }
+
+  .dashboard-shell .analytics-hero__controls .button {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .dashboard-shell .admin-dashboard-switcher {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .dashboard-shell .admin-dashboard-switcher .button {
+    flex: 1 1 0;
+  }
+
+  .dashboard-shell .analytics-trend-chart {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .dashboard-shell .analytics-breakdown-list__item {
+    grid-template-columns: 1fr;
+  }
+}

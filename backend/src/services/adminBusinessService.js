@@ -27,6 +27,13 @@ import {
 import { ensureDefaultSubscriptionForBusiness } from './billingService.js';
 import { publishTenantUpdated } from './tenantRealtimeService.js';
 import {
+  buildDailyTimeline,
+  buildEventTypeBreakdown,
+  buildTopTargetBreakdown,
+  buildUserAgentBreakdowns,
+  calculateActionRate,
+} from '../utils/adminAnalytics.js';
+import {
   getCanonicalSectionType,
   normalizeHost,
   normalizeManagedLinkAction,
@@ -574,6 +581,13 @@ async function hydrateEditorResponse(businessId) {
   }
 
   const analytics = await getBusinessAnalyticsSummary(businessId);
+  const totalEvents = analytics.totals.totalEvents || 0;
+  const pageViews = analytics.totals.pageViews || 0;
+  const linkClicks = analytics.totals.linkClicks || 0;
+  const ctaClicks = analytics.totals.ctaClicks || 0;
+  const copyActions = analytics.totals.copyActions || 0;
+  const qrViews = analytics.totals.qrViews || 0;
+  const interactions = linkClicks + ctaClicks + copyActions + qrViews;
 
   return {
     business: {
@@ -592,12 +606,25 @@ async function hydrateEditorResponse(businessId) {
         }
       : null,
     analytics: {
-      totalEvents: analytics.totals.totalEvents || 0,
+      totalEvents,
       last7DaysEvents: analytics.totals.last7DaysEvents || 0,
-      byEventType: analytics.byEventType.map((item) => ({
-        eventType: item._id,
+      pageViews,
+      linkClicks,
+      ctaClicks,
+      copyActions,
+      shortcutClicks: analytics.totals.shortcutClicks || 0,
+      uniqueVisitors: analytics.uniqueVisitors || 0,
+      actionRate: calculateActionRate(pageViews, interactions),
+      byEventType: buildEventTypeBreakdown(analytics.byEventType, totalEvents).map((item) => ({
+        eventType: item.eventType,
+        label: item.label,
         count: item.count,
+        share: item.share,
       })),
+      timeline: buildDailyTimeline(analytics.dailyEvents),
+      topLinks: buildTopTargetBreakdown(analytics.topTargets, { limit: 6 }),
+      topShortcuts: buildTopTargetBreakdown(analytics.topTargets, { limit: 6, shortcutsOnly: true }),
+      ...buildUserAgentBreakdowns(analytics.userAgents, totalEvents),
       recentEvents: analytics.recentEvents.map((event) => ({
         id: String(event._id),
         eventType: event.eventType,

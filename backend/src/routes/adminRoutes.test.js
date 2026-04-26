@@ -138,6 +138,9 @@ describe('Admin routes', () => {
     expect(detailResponse.status).toBe(200);
     expect(detailResponse.body.data.sections.find((section) => section.key === 'services')?.description).toBe('');
     expect(detailResponse.body.data.sections.find((section) => section.key === 'contact')?.description).toBe('');
+    expect(detailResponse.body.data.analytics.timeline).toBeInstanceOf(Array);
+    expect(detailResponse.body.data.analytics.topLinks).toBeInstanceOf(Array);
+    expect(detailResponse.body.data.analytics.topShortcuts).toBeInstanceOf(Array);
 
     const listResponse = await request(app)
       .get('/api/admin/businesses')
@@ -406,12 +409,31 @@ describe('Admin routes', () => {
   });
 
   it('returns dashboard overview and accepts image uploads', async () => {
+    await request(app).post('/api/public/analytics/events').send({
+      slug: 'barbearia-estilo-vivo',
+      eventType: 'page_view',
+      targetType: 'page',
+      targetLabel: 'Barbearia Estilo Vivo',
+    });
+    await request(app).post('/api/public/analytics/events').send({
+      slug: 'barbearia-estilo-vivo',
+      eventType: 'link_click',
+      targetType: 'whatsapp',
+      targetLabel: 'WhatsApp',
+    });
+
     const overviewResponse = await request(app)
       .get('/api/admin/dashboard/overview')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(overviewResponse.status).toBe(200);
     expect(overviewResponse.body.data.totals.businesses).toBeGreaterThan(0);
+    expect(overviewResponse.body.data.analytics.highlights.pageViews).toBeGreaterThanOrEqual(1);
+    expect(overviewResponse.body.data.analytics.highlights.linkClicks).toBeGreaterThanOrEqual(1);
+    expect(overviewResponse.body.data.analytics.timeline).toBeInstanceOf(Array);
+    expect(overviewResponse.body.data.analytics.topShortcuts.some((item) => item.targetType === 'whatsapp')).toBe(true);
+    expect(overviewResponse.body.data.analytics.devices).toBeInstanceOf(Array);
+    expect(overviewResponse.body.data.analytics.browsers).toBeInstanceOf(Array);
 
     const uploadResponse = await request(app)
       .post('/api/admin/uploads/image')

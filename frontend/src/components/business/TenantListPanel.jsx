@@ -77,7 +77,6 @@ export function TenantListPanel({
             </div>
             <div className="tenant-list__stats">
               <span className={`tenant-list__status tenant-list__status--${business.status}`}>{business.status}</span>
-              <small>{business.analytics.totalEvents} eventos</small>
               {selectedBusinessId === business.id ? <span className="tenant-list__selection">Selecionado</span> : null}
             </div>
           </button>

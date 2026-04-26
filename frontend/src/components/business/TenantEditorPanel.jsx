@@ -11,8 +11,6 @@ import {
   formatAnalyticsTimestamp,
   formatHistoryValue,
   formatWhatsappValue,
-  getAnalyticsEventLabel,
-  getAnalyticsTargetSummary,
   getFieldStep,
   getInputState,
   getSectionDisplayLabel,
@@ -63,7 +61,6 @@ export function TenantEditorPanel({
     setLocalError('');
   }, [editor]);
 
-  const analyticsSummary = useMemo(() => draft?.analytics || null, [draft]);
   const validationErrors = useMemo(() => (draft ? buildValidationErrors(draft) : {}), [draft]);
   const hasBlockingErrors = Object.keys(validationErrors).length > 0;
   const activeStepIndex = EDITOR_STEPS.findIndex((step) => step.id === activeStep);
@@ -79,7 +76,7 @@ export function TenantEditorPanel({
       <Card className="admin-panel-card">
         <EmptyState
           title="Nenhum tenant selecionado"
-          description="Escolha um comercio na coluna lateral para editar conteudo, branding, links e analytics."
+          description="Escolha um comercio na coluna lateral para editar conteudo, branding, links e configuracoes."
         />
       </Card>
     );
@@ -89,10 +86,6 @@ export function TenantEditorPanel({
   const gallerySection = draft.sections.find((section) => section.key === 'gallery');
   const aboutSection = draft.sections.find((section) => section.key === 'about');
   const ctaSection = draft.sections.find((section) => section.key === 'cta');
-  const analyticsByEventType = analyticsSummary?.byEventType || [];
-  const recentAnalyticsEvents = analyticsSummary?.recentEvents || [];
-  const maxAnalyticsEventCount = Math.max(1, ...analyticsByEventType.map((item) => item.count || 0));
-  const latestAnalyticsEvent = recentAnalyticsEvents[0] || null;
   const isActive = draft.business.status === 'active';
   const publicUrlPreview = buildTenantPublicUrlPreview(draft.business, editor?.business?.publicUrl);
   const historyEntries = draft.history || [];
@@ -175,7 +168,6 @@ export function TenantEditorPanel({
         <TenantEditorHeader
           business={draft.business}
           nfcTag={draft.nfcTag}
-          totalEvents={analyticsSummary?.totalEvents}
           publicUrl={publicUrlPreview.preferredUrl}
           isActive={isActive}
           saving={saving}
@@ -1414,95 +1406,6 @@ export function TenantEditorPanel({
           </div>
         </Card>
 
-        <Card id="tenant-analytics" className="admin-panel-card admin-panel-card--span-2">
-          <div className="admin-panel-card__header">
-            <div>
-              <SectionEyebrow>Observabilidade</SectionEyebrow>
-              <h2>Analytics do tenant</h2>
-              <p>Mostre valor rapidamente com volume de acessos e interacoes.</p>
-            </div>
-          </div>
-
-          <div className="admin-analytics-summary">
-            <div className="admin-analytics-stat-card">
-              <span>Total de eventos</span>
-              <strong>{analyticsSummary?.totalEvents || 0}</strong>
-              <small>Visao consolidada de todas as interacoes.</small>
-            </div>
-            <div className="admin-analytics-stat-card">
-              <span>Ultimos 7 dias</span>
-              <strong>{analyticsSummary?.last7DaysEvents || 0}</strong>
-              <small>Movimento recente do tenant na ultima semana.</small>
-            </div>
-            <div className="admin-analytics-stat-card">
-              <span>Tipos rastreados</span>
-              <strong>{analyticsByEventType.length}</strong>
-              <small>Quantos comportamentos diferentes o painel ja capturou.</small>
-            </div>
-            <div className="admin-analytics-stat-card">
-              <span>Ultimo registro</span>
-              <strong>{latestAnalyticsEvent ? formatAnalyticsTimestamp(latestAnalyticsEvent.occurredAt) : 'Sem eventos'}</strong>
-              <small>{latestAnalyticsEvent ? getAnalyticsEventLabel(latestAnalyticsEvent.eventType) : 'Assim que chegar um evento ele aparece aqui.'}</small>
-            </div>
-          </div>
-
-          <div className="admin-analytics-panels">
-            <div className="admin-analytics-panel">
-              <div className="admin-analytics-panel__header">
-                <div>
-                  <h3>Eventos por tipo</h3>
-                  <p>Entenda o que o visitante faz com mais frequencia.</p>
-                </div>
-              </div>
-
-              <div className="admin-ranked-list admin-ranked-list--scroll">
-                {analyticsByEventType.map((item) => (
-                  <div key={item.eventType} className="admin-ranked-item admin-ranked-item--analytics">
-                    <div>
-                      <span className="admin-section-chip admin-section-chip--accent">
-                        {getAnalyticsEventLabel(item.eventType)}
-                      </span>
-                      <strong>{getAnalyticsEventLabel(item.eventType)}</strong>
-                      <span>{item.count} evento(s) registrados.</span>
-                    </div>
-                    <div className="admin-ranked-item__meta">
-                      <b>{item.count}</b>
-                      <div className="admin-meter">
-                        <span style={{ width: `${Math.max(10, (item.count / maxAnalyticsEventCount) * 100)}%` }} />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="admin-analytics-panel">
-              <div className="admin-analytics-panel__header">
-                <div>
-                  <h3>Timeline recente</h3>
-                  <p>Ultimas acoes registradas para este tenant.</p>
-                </div>
-              </div>
-
-              <div className="admin-event-list admin-event-list--scroll">
-                {recentAnalyticsEvents.map((event) => (
-                  <div key={event.id} className="admin-event-item admin-event-item--analytics">
-                    <div>
-                      <span className="admin-section-chip admin-section-chip--muted">
-                        {getAnalyticsEventLabel(event.eventType)}
-                      </span>
-                      <strong>{getAnalyticsTargetSummary(event)}</strong>
-                      <span>
-                        {event.targetLabel || event.targetType || 'Sem alvo'}
-                      </span>
-                    </div>
-                    <time dateTime={event.occurredAt}>{formatAnalyticsTimestamp(event.occurredAt)}</time>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </Card>
           </>
         ) : null}
       </div>
