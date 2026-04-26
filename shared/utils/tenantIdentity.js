@@ -9,6 +9,8 @@ export const CANONICAL_SECTION_TYPES_BY_KEY = {
   cta: 'cta',
 };
 
+export const MANAGED_LINK_ACTIONS = ['whatsapp', 'phone', 'email', 'wifi', 'pix'];
+
 export function slugify(value, { preserveTrailingSeparator = false, maxLength } = {}) {
   const normalized = String(value || '')
     .normalize('NFD')
@@ -58,6 +60,16 @@ export function normalizePhoneActionValue(value, countryCode = '55') {
   }
 
   return digits;
+}
+
+export function normalizeManagedLinkAction(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return MANAGED_LINK_ACTIONS.includes(normalized) ? normalized : '';
+}
+
+export function normalizeManagedLinkActions(values = []) {
+  const source = Array.isArray(values) ? values : [values];
+  return [...new Set(source.map((value) => normalizeManagedLinkAction(value)).filter(Boolean))];
 }
 
 export function getCanonicalSectionType(key, fallbackType = 'custom') {

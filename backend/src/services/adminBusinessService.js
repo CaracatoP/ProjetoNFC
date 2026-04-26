@@ -26,7 +26,12 @@ import {
 } from '../repositories/businessRepository.js';
 import { ensureDefaultSubscriptionForBusiness } from './billingService.js';
 import { publishTenantUpdated } from './tenantRealtimeService.js';
-import { getCanonicalSectionType, normalizeHost } from '../../../shared/utils/tenantIdentity.js';
+import {
+  getCanonicalSectionType,
+  normalizeHost,
+  normalizeManagedLinkAction,
+  normalizeManagedLinkActions,
+} from '../../../shared/utils/tenantIdentity.js';
 
 function normalizeCoordinate(value) {
   if (value === '' || value === null || value === undefined) {
@@ -368,10 +373,59 @@ function isManagedLinkMatch(link, action) {
   }
 }
 
-function synchronizeManagedLinks(links = [], business = {}) {
-  const managedLinks = buildManagedPrimaryLinks(business);
+function getManagedLinkAction(link) {
+  const explicitAction = normalizeManagedLinkAction(link?.metadata?.action);
+
+  if (explicitAction) {
+    return explicitAction;
+  }
+
+  const url = String(link?.url || '').toLowerCase();
+  const icon = String(link?.icon || '').toLowerCase();
+  const type = String(link?.type || '').toLowerCase();
+
+  if (icon === 'whatsapp' || url.startsWith('https://wa.me/')) {
+    return 'whatsapp';
+  }
+
+  if (icon === 'phone' || url.startsWith('tel:')) {
+    return 'phone';
+  }
+
+  if (icon === 'mail' || url.startsWith('mailto:')) {
+    return 'email';
+  }
+
+  if (type === 'wifi') {
+    return 'wifi';
+  }
+
+  if (type === 'pix') {
+    return 'pix';
+  }
+
+  return '';
+}
+
+function getQuickActionHiddenActions(sections = []) {
+  const quickActionsSection = sections.find((section) => section.key === 'quick-actions');
+  return normalizeManagedLinkActions(quickActionsSection?.settings?.hiddenActions || []);
+}
+
+function synchronizeManagedLinks(links = [], business = {}, sections = []) {
+  const hiddenActions = new Set(getQuickActionHiddenActions(sections));
+  const visibleManagedActions = new Set(
+    links
+      .filter((link) => String(link.group || '').toLowerCase() === 'primary')
+      .map((link) => getManagedLinkAction(link))
+      .filter(Boolean),
+  );
+  const managedLinks = buildManagedPrimaryLinks(business).filter((link) => {
+    const action = getManagedLinkAction(link);
+    return !hiddenActions.has(action) || visibleManagedActions.has(action);
+  });
   const managedActions = managedLinks
-    .map((link) => String(link.metadata?.action || '').toLowerCase())
+    .map((link) => getManagedLinkAction(link))
     .filter(Boolean);
 
   const otherLinks = links.filter(
@@ -440,6 +494,7 @@ function normalizeSectionsPayload(sections = []) {
     .map((section, index) => {
       const key = String(section.key || '').trim();
       const type = getCanonicalSectionType(key, String(section.type || '').trim());
+      const settings = section.settings || {};
 
       return {
         key,
@@ -449,7 +504,13 @@ function normalizeSectionsPayload(sections = []) {
         order: Number(section.order ?? index + 1),
         visible: section.visible !== false,
         variant: String(section.variant || '').trim(),
-        settings: section.settings || {},
+        settings:
+          key === 'quick-actions'
+            ? {
+                ...settings,
+                hiddenActions: normalizeManagedLinkActions(settings.hiddenActions || []),
+              }
+            : settings,
         items: normalizeSectionItems(section.items, { ...section, key, type }),
       };
     })
@@ -577,15 +638,17 @@ export async function createAdminBusiness(input) {
   });
   await assertBusinessSlugAvailable(businessPayload.slug);
   await assertBusinessDomainsAvailable(businessPayload.domains);
+  const sectionsPayload = normalizeSectionsPayload(input.sections || defaults.sections);
   const linksPayload = synchronizeManagedLinks(
     normalizeLinksPayload(input.links || defaults.links),
     businessPayload,
+    sectionsPayload,
   );
   const business = await createBusinessRecord(businessPayload);
 
   await upsertThemeRecord(business._id, normalizeThemePayload(input.theme || defaults.theme));
   await replaceLinkRecords(business._id, linksPayload);
-  await replaceSectionRecords(business._id, normalizeSectionsPayload(input.sections || defaults.sections));
+  await replaceSectionRecords(business._id, sectionsPayload);
   await upsertNfcTagRecord(business._id, normalizeTagPayload(input.nfcTag || defaults.nfcTag));
   await ensureDefaultSubscriptionForBusiness(business._id);
   await appendBusinessHistoryEntries(String(business._id), [
@@ -609,7 +672,11 @@ export async function updateAdminBusiness(businessId, input) {
   const tagPayload = normalizeTagPayload(input.nfcTag || null);
   await assertBusinessSlugAvailable(businessPayload.slug, businessId);
   await assertBusinessDomainsAvailable(businessPayload.domains, businessId);
-  const linksPayload = synchronizeManagedLinks(normalizeLinksPayload(input.links || []), businessPayload);
+  const linksPayload = synchronizeManagedLinks(
+    normalizeLinksPayload(input.links || []),
+    businessPayload,
+    sectionsPayload,
+  );
   const previousSnapshot = {
     business: normalizeBusinessPayload(existingGraph.business || {}),
     theme: normalizeThemePayload(existingGraph.theme || buildDefaultTenantSetup(existingGraph.business || {}).theme),
