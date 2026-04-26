@@ -148,6 +148,46 @@ function getPublicSectionType(section) {
   return getCanonicalSectionType(section.key, section.type);
 }
 
+function normalizePublicSectionCopy(sectionType, section) {
+  const normalizedTitle = String(section?.title || '').trim();
+  const normalizedDescription = String(section?.description || '').trim();
+
+  if (
+    sectionType === 'services' &&
+    [
+      'Catalogo rapido para o cliente entender precos e ja iniciar o pagamento ou contato.',
+      'Adicione os servicos e precos do negocio.',
+    ].includes(normalizedDescription)
+  ) {
+    return {
+      ...section,
+      description: '',
+    };
+  }
+
+  if (
+    sectionType === 'contact' &&
+    [
+      'Horarios, endereco e canais para falar com a equipe sem precisar sair da pagina.',
+      'Horarios, localizacao e canais oficiais do negocio.',
+    ].includes(normalizedDescription)
+  ) {
+    return {
+      ...section,
+      description: '',
+    };
+  }
+
+  if (sectionType === 'gallery' && normalizedTitle === 'Galeria de ambientes e cortes') {
+    return {
+      ...section,
+      title: 'Galeria de ambientes',
+    };
+  }
+
+  return section;
+}
+
 function isPubliclyAccessibleStatus(status) {
   return status === BUSINESS_STATUS.ACTIVE || status === BUSINESS_STATUS.DRAFT;
 }
@@ -171,10 +211,10 @@ function buildBusinessPublicSiteUrl(business) {
 
 function hydrateSection(section, business, links) {
   const sectionType = getPublicSectionType(section);
-  const normalizedSection = {
+  const normalizedSection = normalizePublicSectionCopy(sectionType, {
     ...section,
     type: sectionType,
-  };
+  });
   const settings = { ...(section.settings || {}) };
 
   switch (sectionType) {

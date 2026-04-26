@@ -131,6 +131,14 @@ describe('Admin routes', () => {
     expect(publicResponse.status).toBe(200);
     expect(publicResponse.body.data.business.slug).toBe('restaurante-vista-boa');
 
+    const detailResponse = await request(app)
+      .get(`/api/admin/businesses/${createResponse.body.data.business.id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(detailResponse.status).toBe(200);
+    expect(detailResponse.body.data.sections.find((section) => section.key === 'services')?.description).toBe('');
+    expect(detailResponse.body.data.sections.find((section) => section.key === 'contact')?.description).toBe('');
+
     const listResponse = await request(app)
       .get('/api/admin/businesses')
       .set('Authorization', `Bearer ${adminToken}`);

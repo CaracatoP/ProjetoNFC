@@ -49,6 +49,20 @@ describe('Public routes', () => {
     expect(response.body.data.sections.some((section) => section.type === 'pix')).toBe(true);
   });
 
+  it('normalizes the public section copy for legacy seeded tenants', async () => {
+    const response = await request(app).get('/api/public/site/barbearia-estilo-vivo');
+    const servicesSection = response.body.data.sections.find((section) => section.key === 'services');
+    const contactSection = response.body.data.sections.find((section) => section.key === 'contact');
+    const gallerySection = response.body.data.sections.find((section) => section.key === 'gallery');
+
+    expect(response.status).toBe(200);
+    expect(servicesSection?.title).toBe('Nossos servicos');
+    expect(servicesSection?.description).toBe('');
+    expect(contactSection?.title).toBe('Contato e atendimento');
+    expect(contactSection?.description).toBe('');
+    expect(gallerySection?.title).toBe('Galeria de ambientes');
+  });
+
   it('resolves explicit slug routes by slug even when the request host belongs to another tenant', async () => {
     await Business.create({
       name: 'Tenant por Dominio',
