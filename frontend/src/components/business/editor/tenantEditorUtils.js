@@ -369,7 +369,7 @@ export const EDITOR_STEPS = [
   { id: 'content', label: 'Conteudo', description: 'Servicos, galeria e texto principal.' },
   { id: 'links', label: 'Links', description: 'Acessos rapidos e atalhos publicos.' },
   { id: 'payments', label: 'Pagamentos', description: 'PIX e Wi-Fi usados nas acoes do site.' },
-  { id: 'settings', label: 'Configuracoes', description: 'SEO, tema, secoes, historico e analytics.' },
+  { id: 'settings', label: 'Configuracoes', description: 'SEO, tema, secoes e historico de alteracoes.' },
 ];
 
 const customDomainPattern = /^(?!:\/\/)(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;

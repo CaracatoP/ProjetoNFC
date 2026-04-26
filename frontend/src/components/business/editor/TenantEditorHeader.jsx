@@ -4,7 +4,6 @@ import { SectionEyebrow } from './TenantEditorPrimitives.jsx';
 export function TenantEditorHeader({
   business,
   nfcTag,
-  totalEvents,
   publicUrl,
   isActive,
   saving,
@@ -26,7 +25,6 @@ export function TenantEditorHeader({
         <div className="admin-editor-meta admin-editor-meta--hero">
           <span className="admin-meta-pill">Status: {business.status}</span>
           <span className="admin-meta-pill">Tag: {nfcTag?.code || 'Sem codigo NFC'}</span>
-          <span className="admin-meta-pill">Eventos: {totalEvents || 0}</span>
         </div>
       </div>
 

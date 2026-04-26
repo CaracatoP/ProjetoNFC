@@ -25,6 +25,7 @@ const overviewFixture = {
   totals: {
     activeBusinesses: 1,
     draftBusinesses: 1,
+    inactiveBusinesses: 1,
     totalEvents: 24,
     last7DaysEvents: 10,
   },
@@ -48,6 +49,60 @@ const overviewFixture = {
   uploadConfig: {
     maxFileSizeMb: 5,
     acceptedMimeTypes: ['image/jpeg', 'image/png'],
+  },
+  analytics: {
+    highlights: {
+      totalEvents: 24,
+      last7DaysEvents: 10,
+      pageViews: 16,
+      linkClicks: 6,
+      ctaClicks: 1,
+      copyActions: 1,
+      shortcutClicks: 4,
+      uniqueVisitors: 9,
+      actionRate: 50,
+    },
+    timeline: [
+      { date: '2026-04-15', totalEvents: 2, pageViews: 1, interactions: 1, linkClicks: 1 },
+      { date: '2026-04-16', totalEvents: 6, pageViews: 4, interactions: 2, linkClicks: 2 },
+      { date: '2026-04-17', totalEvents: 4, pageViews: 3, interactions: 1, linkClicks: 1 },
+    ],
+    byEventType: [
+      { eventType: 'page_view', label: 'Page View', count: 16, share: 66.7 },
+      { eventType: 'link_click', label: 'Link Click', count: 6, share: 25 },
+    ],
+    topLinks: [
+      { key: 'instagram', label: 'Instagram', businessName: 'Barbearia Estilo Vivo', count: 3 },
+    ],
+    topShortcuts: [
+      { key: 'whatsapp', label: 'WhatsApp', businessName: 'Barbearia Estilo Vivo', count: 4 },
+    ],
+    topTenants: [
+      {
+        businessId: 'business-1',
+        name: 'Barbearia Estilo Vivo',
+        slug: 'barbearia-estilo-vivo',
+        eventCount: 18,
+      },
+    ],
+    recentEvents: [
+      {
+        id: 'event-1',
+        eventType: 'page_view',
+        targetType: 'page',
+        targetLabel: 'Landing page',
+        occurredAt: '2026-04-16T18:20:00.000Z',
+        businessName: 'Barbearia Estilo Vivo',
+      },
+    ],
+    devices: [
+      { label: 'Mobile', count: 14, share: 58.3 },
+      { label: 'Desktop', count: 10, share: 41.7 },
+    ],
+    browsers: [
+      { label: 'Chrome', count: 17, share: 70.8 },
+      { label: 'Safari', count: 7, share: 29.2 },
+    ],
   },
 };
 
@@ -219,7 +274,22 @@ const editorFixture = {
   analytics: {
     totalEvents: 24,
     last7DaysEvents: 10,
+    pageViews: 16,
+    linkClicks: 6,
+    ctaClicks: 1,
+    copyActions: 1,
+    shortcutClicks: 4,
+    uniqueVisitors: 9,
+    actionRate: 50,
     byEventType: [{ eventType: 'page_view', count: 16 }],
+    timeline: [
+      { date: '2026-04-15', totalEvents: 2, pageViews: 1, interactions: 1, linkClicks: 1 },
+      { date: '2026-04-16', totalEvents: 5, pageViews: 3, interactions: 2, linkClicks: 2 },
+    ],
+    topLinks: [{ key: 'instagram', label: 'Instagram', count: 2 }],
+    topShortcuts: [{ key: 'whatsapp', label: 'WhatsApp', count: 4 }],
+    devices: [{ label: 'Mobile', count: 12, share: 60 }],
+    browsers: [{ label: 'Chrome', count: 15, share: 75 }],
     recentEvents: [
       {
         id: 'event-1',
@@ -549,6 +619,25 @@ describe('DashboardHomePage', () => {
 
     expect(await screen.findByText(/Corrija os campos destacados antes de salvar\./i)).toBeInTheDocument();
     expect(adminService.updateAdminBusiness).not.toHaveBeenCalled();
+  });
+
+  it('moves analytics into a dedicated dashboard area', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Analises/i }));
+
+    expect(await screen.findByText('Centro de analytics')).toBeInTheDocument();
+    expect(screen.getByText('Visitas ao longo do tempo')).toBeInTheDocument();
+    expect(screen.getByText('Atalhos mais usados')).toBeInTheDocument();
+    expect(screen.queryByText('Novo comercio')).not.toBeInTheDocument();
   });
 
   it('persists removed quick actions in the save payload instead of recreating them', async () => {

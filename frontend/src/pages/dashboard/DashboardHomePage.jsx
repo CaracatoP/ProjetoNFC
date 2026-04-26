@@ -4,7 +4,7 @@ import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 import { EmptyState } from '@/components/common/EmptyState.jsx';
 import { AppShell } from '@/components/layout/AppShell.jsx';
-import { DashboardOverviewGrid } from '@/components/business/DashboardOverviewGrid.jsx';
+import { AdminAnalyticsView } from '@/components/business/AdminAnalyticsView.jsx';
 import { TenantEditorPanel } from '@/components/business/TenantEditorPanel.jsx';
 import { TenantListPanel } from '@/components/business/TenantListPanel.jsx';
 import { TenantOnboardingForm } from '@/components/business/TenantOnboardingForm.jsx';
@@ -107,6 +107,7 @@ export function DashboardHomePage() {
   const [tenantSort, setTenantSort] = useState('newest');
   const [tenantStatusFilter, setTenantStatusFilter] = useState('all');
   const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
+  const [activeView, setActiveView] = useState('workspace');
   const debouncedTenantSearch = useDebouncedValue(tenantSearchInput, 300);
 
   useEffect(() => {
@@ -446,6 +447,20 @@ export function DashboardHomePage() {
             <strong>{selectedSummary?.status || 'Sem status'}</strong>
             <small>{selectedSummary ? 'Controle manual de disponibilidade da pagina publica.' : 'Status aparece assim que houver um tenant ativo na area.'}</small>
           </div>
+          {overview ? (
+            <>
+              <div className="admin-mini-stat-card">
+                <span>Tenants ativos</span>
+                <strong>{overview.totals.activeBusinesses}</strong>
+                <small>Operacoes publicas que estao liberadas neste momento.</small>
+              </div>
+              <div className="admin-mini-stat-card">
+                <span>Tenants inativos</span>
+                <strong>{overview.totals.inactiveBusinesses}</strong>
+                <small>Sites pausados manualmente e bloqueados para o publico.</small>
+              </div>
+            </>
+          ) : null}
           {overview?.uploadConfig ? (
             <>
               <div className="admin-mini-stat-card">
@@ -471,60 +486,80 @@ export function DashboardHomePage() {
           <EmptyState title="Carregando dashboard" description="Buscando tenants, analytics e configuracoes da operacao." />
         ) : (
           <div className="admin-dashboard-main">
-            <DashboardOverviewGrid overview={overview} />
+            <div className="admin-dashboard-switcher">
+              <Button variant={activeView === 'workspace' ? 'primary' : 'secondary'} onClick={() => setActiveView('workspace')}>
+                Operacao
+              </Button>
+              <Button variant={activeView === 'analytics' ? 'primary' : 'secondary'} onClick={() => setActiveView('analytics')}>
+                Analises
+              </Button>
+            </div>
 
-            <div className="admin-workspace">
-              <div className="admin-sidebar-stack">
-                <TenantOnboardingForm creating={creating} onCreate={handleCreate} />
-                <TenantListPanel
-                  businesses={filteredBusinesses}
-                  selectedBusinessId={selectedBusinessId}
-                  loading={loadingWorkspace}
-                  onSelect={setSelectedBusinessId}
-                  searchValue={tenantSearchInput}
-                  onSearchChange={setTenantSearchInput}
-                  sortValue={tenantSort}
-                  onSortChange={setTenantSort}
-                  statusFilter={tenantStatusFilter}
-                  onStatusFilterChange={setTenantStatusFilter}
-                />
-              </div>
-
-              <div className="admin-editor-column">
-                <div className="admin-editor-layout">
-                  <div className="admin-editor-pane">
-                    {loadingEditor ? (
-                      <Card className="admin-panel-card">
-                        <p className="admin-muted-copy">Carregando editor do tenant...</p>
-                      </Card>
-                    ) : (
-                      <TenantEditorPanel
-                        editor={editor}
-                        saving={saving}
-                        togglingStatus={togglingStatus}
-                        deleting={deleting}
-                        duplicating={duplicating}
-                        onSave={handleSave}
-                        onToggleStatus={handleToggleStatus}
-                        onDelete={handleDelete}
-                        onUpload={handleUpload}
-                        onDuplicate={handleDuplicate}
-                        onCopyPublicLink={handleCopyPublicLink}
-                      />
-                    )}
-                  </div>
-
-                  <TenantPreviewPanel
-                    previewUrl={previewUrl}
-                    publicUrl={selectedSummary?.publicUrl || ''}
-                    businessName={selectedSummary?.name || ''}
-                    status={selectedSummary?.status || ''}
-                    previewKey={previewRefreshKey}
-                    onRefresh={() => setPreviewRefreshKey((current) => current + 1)}
+            {activeView === 'workspace' ? (
+              <div className="admin-workspace">
+                <div className="admin-sidebar-stack">
+                  <TenantOnboardingForm creating={creating} onCreate={handleCreate} />
+                  <TenantListPanel
+                    businesses={filteredBusinesses}
+                    selectedBusinessId={selectedBusinessId}
+                    loading={loadingWorkspace}
+                    onSelect={setSelectedBusinessId}
+                    searchValue={tenantSearchInput}
+                    onSearchChange={setTenantSearchInput}
+                    sortValue={tenantSort}
+                    onSortChange={setTenantSort}
+                    statusFilter={tenantStatusFilter}
+                    onStatusFilterChange={setTenantStatusFilter}
                   />
                 </div>
+
+                <div className="admin-editor-column">
+                  <div className="admin-editor-layout">
+                    <div className="admin-editor-pane">
+                      {loadingEditor ? (
+                        <Card className="admin-panel-card">
+                          <p className="admin-muted-copy">Carregando editor do tenant...</p>
+                        </Card>
+                      ) : (
+                        <TenantEditorPanel
+                          editor={editor}
+                          saving={saving}
+                          togglingStatus={togglingStatus}
+                          deleting={deleting}
+                          duplicating={duplicating}
+                          onSave={handleSave}
+                          onToggleStatus={handleToggleStatus}
+                          onDelete={handleDelete}
+                          onUpload={handleUpload}
+                          onDuplicate={handleDuplicate}
+                          onCopyPublicLink={handleCopyPublicLink}
+                        />
+                      )}
+                    </div>
+
+                    <TenantPreviewPanel
+                      previewUrl={previewUrl}
+                      publicUrl={selectedSummary?.publicUrl || ''}
+                      businessName={selectedSummary?.name || ''}
+                      status={selectedSummary?.status || ''}
+                      previewKey={previewRefreshKey}
+                      onRefresh={() => setPreviewRefreshKey((current) => current + 1)}
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <AdminAnalyticsView
+                overview={overview}
+                editor={editor}
+                selectedSummary={selectedSummary}
+                businesses={businesses}
+                selectedBusinessId={selectedBusinessId}
+                onSelectBusiness={setSelectedBusinessId}
+                onOpenWorkspace={() => setActiveView('workspace')}
+                loadingEditor={loadingEditor}
+              />
+            )}
           </div>
         )}
       </div>
