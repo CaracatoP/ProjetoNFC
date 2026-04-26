@@ -506,6 +506,30 @@ describe('DashboardHomePage', () => {
     });
   });
 
+  it('normalizes the tenant subdomain and updates the preview URL with the public site host', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+    expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
+
+    const editorCard = screen.getByText('Identidade do tenant').closest('section');
+    const editorScope = within(editorCard);
+    const subdomainInput = editorScope.getByPlaceholderText('studio-exemplo');
+
+    await user.clear(subdomainInput);
+    await user.type(subdomainInput, 'Studio Exemplo !!!');
+    await user.tab();
+
+    expect(subdomainInput).toHaveValue('studio-exemplo');
+    expect(editorScope.getAllByText('https://studio-exemplo.taplinkapp.vercel.app')).toHaveLength(2);
+  });
+
   it('blocks save when inline validation finds an invalid whatsapp', async () => {
     const user = userEvent.setup();
 

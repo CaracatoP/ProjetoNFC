@@ -22,6 +22,7 @@ import {
   newHourItem,
   newLinkItem,
   newServiceItem,
+  normalizeSubdomainInput,
   normalizeOptionalHost,
   normalizePhoneDigits,
   slugify,
@@ -252,6 +253,7 @@ export function TenantEditorPanel({
             <AdminField
               label="Subdominio do cliente"
               description="Opcional. Exemplo: studio-exemplo gera um preview como studio-exemplo.seu-dominio.com."
+              error={validationErrors['business.domains.subdomain']}
             >
               <input
                 value={draft.business.domains?.subdomain || ''}
@@ -261,7 +263,7 @@ export function TenantEditorPanel({
                     ...current.business,
                     domains: {
                       ...(current.business.domains || {}),
-                      subdomain: slugify(event.target.value, { preserveTrailingSeparator: true }),
+                      subdomain: normalizeSubdomainInput(event.target.value, { preserveTrailingSeparator: true }),
                     },
                   },
                 }))}
@@ -271,11 +273,12 @@ export function TenantEditorPanel({
                     ...current.business,
                     domains: {
                       ...(current.business.domains || {}),
-                      subdomain: slugify(event.target.value),
+                      subdomain: normalizeSubdomainInput(event.target.value),
                     },
                   },
                 }))}
                 placeholder="studio-exemplo"
+                {...getInputState(validationErrors['business.domains.subdomain'])}
               />
             </AdminField>
             <AdminField

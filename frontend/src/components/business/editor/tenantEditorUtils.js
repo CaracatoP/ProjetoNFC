@@ -1,6 +1,14 @@
 import { getCanonicalSectionType, normalizeOptionalHost, slugify } from '@shared/utils/tenantIdentity.js';
+import { appConfig } from '@/config/appConfig.js';
 
 export { normalizeOptionalHost, slugify };
+
+export function normalizeSubdomainInput(value, options = {}) {
+  return slugify(value, {
+    maxLength: 63,
+    ...options,
+  });
+}
 
 export function cloneDeep(value) {
   return JSON.parse(JSON.stringify(value));
@@ -122,7 +130,26 @@ export function normalizeHexColor(value, fallback = '#000000') {
 }
 
 function getEnvironmentOrigin(fallbackUrl = '') {
+  const configuredPublicOrigin = String(appConfig.publicSiteBaseUrl || '').trim().replace(/\/$/, '');
   const browserOrigin = typeof window !== 'undefined' ? String(window.location.origin || '').replace(/\/$/, '') : '';
+
+  try {
+    if (configuredPublicOrigin) {
+      return new URL(configuredPublicOrigin).origin;
+    }
+  } catch {
+    // Ignore invalid frontend config and continue with safe fallbacks.
+  }
+
+  try {
+    const fallback = new URL(fallbackUrl);
+
+    if (fallback.pathname.startsWith('/site/')) {
+      return fallback.origin;
+    }
+  } catch {
+    // Ignore invalid fallback URLs and continue with browser/final fallback handling.
+  }
 
   if (browserOrigin) {
     return browserOrigin;
@@ -136,7 +163,7 @@ function getEnvironmentOrigin(fallbackUrl = '') {
 }
 
 function buildSubdomainPreviewUrl(subdomain, fallbackUrl = '') {
-  const normalizedSubdomain = slugify(subdomain);
+  const normalizedSubdomain = normalizeSubdomainInput(subdomain);
 
   if (!normalizedSubdomain) {
     return '';
@@ -155,7 +182,7 @@ function buildSubdomainPreviewUrl(subdomain, fallbackUrl = '') {
 export function buildTenantPublicUrlPreview(business = {}, fallbackUrl = '') {
   const slug = slugify(business.slug);
   const customDomain = normalizeOptionalHost(business.domains?.customDomain);
-  const subdomain = slugify(business.domains?.subdomain);
+  const subdomain = normalizeSubdomainInput(business.domains?.subdomain);
   const origin = getEnvironmentOrigin(fallbackUrl);
   const slugUrl = slug && origin ? `${origin}/site/${slug}` : slug ? `/site/${slug}` : '';
   const subdomainUrl = buildSubdomainPreviewUrl(subdomain, fallbackUrl);
