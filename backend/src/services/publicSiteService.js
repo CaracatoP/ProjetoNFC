@@ -10,7 +10,12 @@ import {
   normalizeCreatorSignatureCtaSection,
 } from '../utils/adminDefaults.js';
 import { BUSINESS_STATUS } from '../../../shared/constants/index.js';
-import { getCanonicalSectionType, normalizePhoneActionValue } from '../../../shared/utils/tenantIdentity.js';
+import {
+  getCanonicalSectionType,
+  normalizeManagedLinkAction,
+  normalizeManagedLinkActions,
+  normalizePhoneActionValue,
+} from '../../../shared/utils/tenantIdentity.js';
 
 function isManagedLinkMatch(link, action) {
   const url = String(link?.url || '').toLowerCase();
@@ -34,10 +39,58 @@ function isManagedLinkMatch(link, action) {
   }
 }
 
-function mergePrimaryLinks(links, business) {
-  const managedLinks = buildManagedPrimaryLinks(business);
+function getManagedLinkAction(link) {
+  const explicitAction = normalizeManagedLinkAction(link?.metadata?.action);
+
+  if (explicitAction) {
+    return explicitAction;
+  }
+
+  const url = String(link?.url || '').toLowerCase();
+  const icon = String(link?.icon || '').toLowerCase();
+  const type = String(link?.type || '').toLowerCase();
+
+  if (icon === 'whatsapp' || url.startsWith('https://wa.me/')) {
+    return 'whatsapp';
+  }
+
+  if (icon === 'phone' || url.startsWith('tel:')) {
+    return 'phone';
+  }
+
+  if (icon === 'mail' || url.startsWith('mailto:')) {
+    return 'email';
+  }
+
+  if (type === 'wifi') {
+    return 'wifi';
+  }
+
+  if (type === 'pix') {
+    return 'pix';
+  }
+
+  return '';
+}
+
+function getQuickActionHiddenActions(section = {}) {
+  return normalizeManagedLinkActions(section?.settings?.hiddenActions || []);
+}
+
+function mergePrimaryLinks(links, business, section = {}) {
+  const hiddenActions = new Set(getQuickActionHiddenActions(section));
+  const visibleManagedActions = new Set(
+    links
+      .filter((link) => link.group === 'primary')
+      .map((link) => getManagedLinkAction(link))
+      .filter(Boolean),
+  );
+  const managedLinks = buildManagedPrimaryLinks(business).filter((link) => {
+    const action = getManagedLinkAction(link);
+    return !hiddenActions.has(action) || visibleManagedActions.has(action);
+  });
   const managedActions = managedLinks
-    .map((link) => String(link.metadata?.action || '').toLowerCase())
+    .map((link) => getManagedLinkAction(link))
     .filter(Boolean);
 
   const customPrimaryLinks = links.filter(
@@ -238,7 +291,7 @@ function hydrateSection(section, business, links) {
         ...normalizedSection,
         items:
           (settings.group || 'primary') === 'primary'
-            ? mergePrimaryLinks(links, business)
+            ? mergePrimaryLinks(links, business, normalizedSection)
             : links.filter((link) => link.group === (settings.group || 'primary')),
         settings,
       };

@@ -1,4 +1,10 @@
-import { getCanonicalSectionType, normalizeOptionalHost, slugify } from '@shared/utils/tenantIdentity.js';
+import {
+  getCanonicalSectionType,
+  normalizeManagedLinkAction,
+  normalizeManagedLinkActions,
+  normalizeOptionalHost,
+  slugify,
+} from '@shared/utils/tenantIdentity.js';
 import { appConfig } from '@/config/appConfig.js';
 
 export { normalizeOptionalHost, slugify };
@@ -224,6 +230,61 @@ export function ensureSection(draft, key, fallbackType = 'custom') {
 export function updateSectionDraft(draft, key, fallbackType, updater) {
   const section = ensureSection(draft, key, fallbackType);
   updater(section);
+}
+
+function getManagedLinkAction(link) {
+  const explicitAction = normalizeManagedLinkAction(link?.metadata?.action);
+
+  if (explicitAction) {
+    return explicitAction;
+  }
+
+  const url = String(link?.url || '').toLowerCase();
+  const icon = String(link?.icon || '').toLowerCase();
+  const type = String(link?.type || '').toLowerCase();
+
+  if (icon === 'whatsapp' || url.startsWith('https://wa.me/')) {
+    return 'whatsapp';
+  }
+
+  if (icon === 'phone' || url.startsWith('tel:')) {
+    return 'phone';
+  }
+
+  if (icon === 'mail' || url.startsWith('mailto:')) {
+    return 'email';
+  }
+
+  if (type === 'wifi') {
+    return 'wifi';
+  }
+
+  if (type === 'pix') {
+    return 'pix';
+  }
+
+  return '';
+}
+
+export function removeQuickActionFromDraft(draft, linkIndex) {
+  const linkToRemove = draft.links[linkIndex];
+  const managedAction = getManagedLinkAction(linkToRemove);
+
+  draft.links = draft.links.filter((_, itemIndex) => itemIndex !== linkIndex);
+
+  if (!managedAction) {
+    return;
+  }
+
+  updateSectionDraft(draft, 'quick-actions', 'links', (section) => {
+    section.settings = {
+      ...(section.settings || {}),
+      hiddenActions: normalizeManagedLinkActions([
+        ...(section.settings?.hiddenActions || []),
+        managedAction,
+      ]),
+    };
+  });
 }
 
 export function newLinkItem() {

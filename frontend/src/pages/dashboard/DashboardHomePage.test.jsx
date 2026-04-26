@@ -550,4 +550,38 @@ describe('DashboardHomePage', () => {
     expect(await screen.findByText(/Corrija os campos destacados antes de salvar\./i)).toBeInTheDocument();
     expect(adminService.updateAdminBusiness).not.toHaveBeenCalled();
   });
+
+  it('persists removed quick actions in the save payload instead of recreating them', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+    expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Links/i }));
+
+    const linksCard = screen.getByText('Links e atalhos').closest('section');
+    const linksScope = within(linksCard);
+
+    await user.click(linksScope.getByRole('button', { name: /^Remover$/i }));
+    expect(linksScope.queryByDisplayValue('Enviar mensagem')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Salvar alteracoes/i }));
+
+    await waitFor(() => {
+      const saveCall = adminService.updateAdminBusiness.mock.calls
+        .filter((call) => call[0] === 'admin-token' && call[1] === 'business-1')
+        .at(-1);
+
+      expect(saveCall?.[2]?.links).toEqual([]);
+      expect(
+        saveCall?.[2]?.sections.find((section) => section.key === 'quick-actions')?.settings?.hiddenActions,
+      ).toEqual(['whatsapp']);
+    });
+  });
 });

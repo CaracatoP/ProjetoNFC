@@ -356,6 +356,55 @@ describe('Admin routes', () => {
     expect(persistedEditorResponse.body.data.business.seo.imagePublicId).toBe('taplink/barbearia-estilo-vivo/site-icon-demo');
   });
 
+  it('keeps removed quick actions deleted after saving and refreshing the tenant', async () => {
+    const listResponse = await request(app)
+      .get('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const targetBusiness = listResponse.body.data.find((item) => item.slug === 'barbearia-estilo-vivo');
+    const targetId = targetBusiness.id;
+    const detailResponse = await request(app)
+      .get(`/api/admin/businesses/${targetId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const { business, theme, links, sections, nfcTag } = detailResponse.body.data;
+    const nextLinks = links.filter((link) => link.metadata?.action !== 'whatsapp');
+    const nextSections = sections.map((section) =>
+      section.key === 'quick-actions'
+        ? {
+            ...section,
+            settings: {
+              ...(section.settings || {}),
+              hiddenActions: ['whatsapp'],
+            },
+          }
+        : section,
+    );
+
+    const updateResponse = await request(app)
+      .put(`/api/admin/businesses/${targetId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ business, theme, links: nextLinks, sections: nextSections, nfcTag });
+
+    expect(updateResponse.status).toBe(200);
+    expect(updateResponse.body.data.business.contact.whatsapp).toBe('5511998765432');
+    expect(updateResponse.body.data.links.some((link) => link.metadata?.action === 'whatsapp')).toBe(false);
+
+    const refreshedEditor = await request(app)
+      .get(`/api/admin/businesses/${targetId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(refreshedEditor.status).toBe(200);
+    expect(refreshedEditor.body.data.links.some((link) => link.metadata?.action === 'whatsapp')).toBe(false);
+
+    const publicResponse = await request(app).get('/api/public/site/barbearia-estilo-vivo');
+    const quickActions = publicResponse.body.data.sections.find((section) => section.key === 'quick-actions');
+
+    expect(publicResponse.status).toBe(200);
+    expect(quickActions.items.some((item) => item.metadata?.action === 'whatsapp')).toBe(false);
+    expect(quickActions.items.some((item) => String(item.url || '').startsWith('https://wa.me/'))).toBe(false);
+  });
+
   it('returns dashboard overview and accepts image uploads', async () => {
     const overviewResponse = await request(app)
       .get('/api/admin/dashboard/overview')

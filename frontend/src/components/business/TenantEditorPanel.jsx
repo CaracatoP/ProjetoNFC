@@ -25,6 +25,7 @@ import {
   normalizeSubdomainInput,
   normalizeOptionalHost,
   normalizePhoneDigits,
+  removeQuickActionFromDraft,
   slugify,
   updateSectionDraft,
   uploadImageAndPatch,
@@ -870,10 +871,11 @@ export function TenantEditorPanel({
                   <Button
                     variant="secondary"
                     className="button--danger-tone"
-                    onClick={() => setDraft((current) => ({
-                      ...current,
-                      links: current.links.filter((_, itemIndex) => itemIndex !== index),
-                    }))}
+                    onClick={() => setDraft((current) => {
+                      const nextDraft = cloneDeep(current);
+                      removeQuickActionFromDraft(nextDraft, index);
+                      return nextDraft;
+                    })}
                   >
                     Remover
                   </Button>
