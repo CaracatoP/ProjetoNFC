@@ -195,6 +195,87 @@ describe('Admin routes', () => {
     expect(updateResponse.body.data.history.some((entry) => entry.field === 'business.name')).toBe(true);
   });
 
+  it('rejects saving a duplicated tenant through the original route and keeps the original slug untouched', async () => {
+    const listResponse = await request(app)
+      .get('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const originalBusiness = listResponse.body.data.find((item) => item.slug === 'barbearia-estilo-vivo');
+    const originalId = originalBusiness.id;
+    const originalDetailResponse = await request(app)
+      .get(`/api/admin/businesses/${originalId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const duplicatePayload = {
+      business: {
+        ...originalDetailResponse.body.data.business,
+        name: 'Barbearia Estilo Vivo Copy',
+        slug: 'barbearia-estilo-vivo-copy',
+        domains: {
+          subdomain: '',
+          customDomain: '',
+        },
+      },
+      theme: originalDetailResponse.body.data.theme,
+      links: originalDetailResponse.body.data.links,
+      sections: originalDetailResponse.body.data.sections,
+      nfcTag: {
+        ...(originalDetailResponse.body.data.nfcTag || {}),
+        code: '',
+      },
+    };
+
+    const createDuplicateResponse = await request(app)
+      .post('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(duplicatePayload);
+
+    expect(createDuplicateResponse.status).toBe(201);
+    const duplicateId = createDuplicateResponse.body.data.business.id;
+
+    const duplicatedEditorPayload = {
+      business: {
+        ...createDuplicateResponse.body.data.business,
+        id: duplicateId,
+        slug: 'barbearia-estilo-vivo-copy-editado',
+      },
+      theme: createDuplicateResponse.body.data.theme,
+      links: createDuplicateResponse.body.data.links,
+      sections: createDuplicateResponse.body.data.sections,
+      nfcTag: createDuplicateResponse.body.data.nfcTag,
+    };
+
+    const mismatchResponse = await request(app)
+      .put(`/api/admin/businesses/${originalId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(duplicatedEditorPayload);
+
+    expect(mismatchResponse.status).toBe(409);
+    expect(mismatchResponse.body.error.code).toBe('business_id_mismatch');
+
+    const originalAfterMismatchResponse = await request(app)
+      .get(`/api/admin/businesses/${originalId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(originalAfterMismatchResponse.status).toBe(200);
+    expect(originalAfterMismatchResponse.body.data.business.slug).toBe('barbearia-estilo-vivo');
+
+    const validDuplicateUpdateResponse = await request(app)
+      .put(`/api/admin/businesses/${duplicateId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(duplicatedEditorPayload);
+
+    expect(validDuplicateUpdateResponse.status).toBe(200);
+    expect(validDuplicateUpdateResponse.body.data.business.slug).toBe('barbearia-estilo-vivo-copy-editado');
+
+    const originalFinalResponse = await request(app)
+      .get(`/api/admin/businesses/${originalId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(originalFinalResponse.status).toBe(200);
+    expect(originalFinalResponse.body.data.business.slug).toBe('barbearia-estilo-vivo');
+  });
+
   it('toggles the tenant status and blocks public rendering while inactive', async () => {
     const listResponse = await request(app)
       .get('/api/admin/businesses')

@@ -262,6 +262,23 @@ function normalizeBusinessPayload(payload = {}) {
   };
 }
 
+function assertEditorBusinessIdMatchesTarget(businessId, payload = {}) {
+  const editorBusinessId = String(payload?.business?.id || '').trim();
+
+  if (!editorBusinessId) {
+    return;
+  }
+
+  if (editorBusinessId !== String(businessId)) {
+    throw new AppError(
+      'O tenant aberto no editor nao corresponde ao tenant salvo',
+      409,
+      'business_id_mismatch',
+      [{ path: 'business.id', message: 'Atualize o editor antes de salvar para evitar sobrescrever outro tenant' }],
+    );
+  }
+}
+
 async function assertBusinessSlugAvailable(slug, excludedBusinessId = null) {
   if (!slug) {
     return;
@@ -692,6 +709,7 @@ export async function createAdminBusiness(input) {
 }
 
 export async function updateAdminBusiness(businessId, input) {
+  assertEditorBusinessIdMatchesTarget(businessId, input);
   const existingGraph = await findBusinessGraphForAdmin(businessId);
   const businessPayload = normalizeBusinessPayload(input.business || {});
   const themePayload = normalizeThemePayload(input.theme || {});

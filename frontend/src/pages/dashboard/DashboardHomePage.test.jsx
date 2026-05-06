@@ -576,6 +576,96 @@ describe('DashboardHomePage', () => {
     });
   });
 
+  it('saves the duplicated tenant using the copy id without overwriting the original tenant', async () => {
+    const user = userEvent.setup();
+    const duplicatedBusinessFixture = {
+      ...businessFixture,
+      id: 'business-2',
+      name: 'Barbearia Estilo Vivo (copy)',
+      slug: 'barbearia-estilo-vivo-copy',
+      publicUrl: 'https://taplinkapp.vercel.app/site/barbearia-estilo-vivo-copy',
+    };
+    const duplicatedEditorFixture = {
+      ...editorFixture,
+      business: {
+        ...editorFixture.business,
+        id: 'business-2',
+        name: 'Barbearia Estilo Vivo (copy)',
+        slug: 'barbearia-estilo-vivo-copy',
+        publicUrl: 'https://taplinkapp.vercel.app/site/barbearia-estilo-vivo-copy',
+      },
+    };
+
+    adminService.listAdminBusinesses.mockReset();
+    adminService.listAdminBusinesses
+      .mockResolvedValueOnce([businessFixture])
+      .mockResolvedValueOnce([businessFixture, duplicatedBusinessFixture])
+      .mockResolvedValue([businessFixture, duplicatedBusinessFixture]);
+
+    adminService.getAdminBusiness.mockReset();
+    adminService.getAdminBusiness
+      .mockResolvedValueOnce(editorFixture)
+      .mockResolvedValueOnce(duplicatedEditorFixture)
+      .mockResolvedValue({
+        ...duplicatedEditorFixture,
+        business: {
+          ...duplicatedEditorFixture.business,
+          slug: 'barbearia-estilo-vivo-copy-2',
+          publicUrl: 'https://taplinkapp.vercel.app/site/barbearia-estilo-vivo-copy-2',
+        },
+      });
+
+    adminService.createAdminBusiness.mockResolvedValueOnce(duplicatedEditorFixture);
+    adminService.updateAdminBusiness.mockResolvedValueOnce({
+      ...duplicatedEditorFixture,
+      business: {
+        ...duplicatedEditorFixture.business,
+        slug: 'barbearia-estilo-vivo-copy-2',
+        publicUrl: 'https://taplinkapp.vercel.app/site/barbearia-estilo-vivo-copy-2',
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+    expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Duplicar tenant/i }));
+
+    await waitFor(() => {
+      expect(adminService.getAdminBusiness).toHaveBeenCalledWith('admin-token', 'business-2');
+    });
+
+    const editorCard = screen.getByText('Identidade do tenant').closest('section');
+    const slugInput = within(editorCard).getByLabelText('Slug publico');
+    await user.clear(slugInput);
+    await user.type(slugInput, 'barbearia-estilo-vivo-copy-2');
+    await user.click(screen.getByRole('button', { name: /Salvar alteracoes/i }));
+
+    await waitFor(() => {
+      expect(adminService.updateAdminBusiness).toHaveBeenCalledWith(
+        'admin-token',
+        'business-2',
+        expect.objectContaining({
+          business: expect.objectContaining({
+            id: 'business-2',
+            slug: 'barbearia-estilo-vivo-copy-2',
+          }),
+        }),
+      );
+    });
+
+    expect(
+      adminService.updateAdminBusiness.mock.calls.some(
+        (call) => call[0] === 'admin-token' && call[1] === 'business-1' && call[2]?.business?.slug === 'barbearia-estilo-vivo-copy-2',
+      ),
+    ).toBe(false);
+  });
+
   it('normalizes the tenant subdomain and updates the preview URL with the public site host', async () => {
     const user = userEvent.setup();
 
