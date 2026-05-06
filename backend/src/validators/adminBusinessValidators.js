@@ -102,6 +102,7 @@ const optionalCustomDomainSchema = z.preprocess(
 );
 
 const businessBodySchema = z.object({
+  id: optionalString,
   name: z.string().min(2),
   legalName: optionalString,
   slug: slugSchema,

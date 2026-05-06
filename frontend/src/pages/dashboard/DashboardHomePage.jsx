@@ -22,6 +22,10 @@ import {
   uploadAdminImage,
 } from '@/services/adminService.js';
 
+function cloneTenantSnapshot(value) {
+  return JSON.parse(JSON.stringify(value || null));
+}
+
 function buildUniqueSuffix(baseValue, existingValues = [], formatter) {
   const existing = new Set(existingValues.filter(Boolean).map((item) => String(item).trim().toLowerCase()));
   let attempt = 1;
@@ -36,10 +40,12 @@ function buildUniqueSuffix(baseValue, existingValues = [], formatter) {
 }
 
 function buildDuplicatePayload(editor, businesses = []) {
-  const nextName = buildUniqueSuffix(editor.business.name || 'Novo tenant', businesses.map((business) => business.name), (value, attempt) =>
+  const sourceEditor = cloneTenantSnapshot(editor) || {};
+  const sourceBusiness = sourceEditor.business || {};
+  const nextName = buildUniqueSuffix(sourceBusiness.name || 'Novo tenant', businesses.map((business) => business.name), (value, attempt) =>
     attempt === 1 ? `${value} (copy)` : `${value} (copy ${attempt})`,
   );
-  const nextSlug = buildUniqueSuffix(editor.business.slug || slugify(nextName), businesses.map((business) => business.slug), (value, attempt) => {
+  const nextSlug = buildUniqueSuffix(sourceBusiness.slug || slugify(nextName), businesses.map((business) => business.slug), (value, attempt) => {
     const base = slugify(`${value}-copy`);
     return attempt === 1 ? base : `${base}-${attempt}`;
   });
@@ -52,7 +58,7 @@ function buildDuplicatePayload(editor, businesses = []) {
     analytics: _analytics,
     publicUrl: _publicUrl,
     ...businessForClone
-  } = editor.business || {};
+  } = sourceBusiness;
 
   return {
     business: {
@@ -66,10 +72,10 @@ function buildDuplicatePayload(editor, businesses = []) {
         customDomainVerifiedAt: undefined,
       },
     },
-    theme: editor.theme,
-    links: editor.links,
-    sections: editor.sections,
-    nfcTag: editor.nfcTag ? { status: editor.nfcTag.status || 'active', code: '' } : null,
+    theme: sourceEditor.theme || {},
+    links: sourceEditor.links || [],
+    sections: sourceEditor.sections || [],
+    nfcTag: sourceEditor.nfcTag ? { status: sourceEditor.nfcTag.status || 'active', code: '' } : null,
   };
 }
 
@@ -209,7 +215,11 @@ export function DashboardHomePage() {
     setOverview(nextOverview);
     setBusinesses(nextBusinesses);
     setSelectedBusinessId((current) => {
-      const candidate = preferredBusinessId || current;
+      if (preferredBusinessId) {
+        return preferredBusinessId;
+      }
+
+      const candidate = current;
 
       if (candidate && nextBusinesses.some((business) => business.id === candidate)) {
         return candidate;
@@ -324,6 +334,7 @@ export function DashboardHomePage() {
 
     try {
       const duplicatedEditor = await createAdminBusiness(token, buildDuplicatePayload(editor, businesses));
+      setSelectedBusinessId(duplicatedEditor.business.id);
       setEditor(duplicatedEditor);
       await refreshCollections(duplicatedEditor.business.id);
       setPreviewRefreshKey((current) => current + 1);
