@@ -457,7 +457,7 @@ describe('DashboardHomePage', () => {
     });
   });
 
-  it('rebuilds derived theme tokens when the admin changes the palette', async () => {
+  it('keeps brand colors independent and updates the live preview when only the background changes', async () => {
     const user = userEvent.setup();
 
     render(
@@ -469,8 +469,17 @@ describe('DashboardHomePage', () => {
     expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
     expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Configuracoes/i }));
-    const primaryColorInput = screen.getByLabelText('Cor primaria');
-    fireEvent.change(primaryColorInput, { target: { value: '#22c55e' } });
+
+    expect(screen.getByText('Personalizacao de Cores')).toBeInTheDocument();
+
+    const backgroundColorInput = screen.getByLabelText('Cor de fundo');
+    fireEvent.change(backgroundColorInput, { target: { value: '#f3ecdf' } });
+
+    const livePreview = screen.getByTestId('theme-live-preview');
+    expect(livePreview.style.getPropertyValue('--theme-background')).toBe('#f3ecdf');
+    expect(livePreview.style.getPropertyValue('--theme-primary')).toBe('#f97316');
+    expect(livePreview.style.getPropertyValue('--theme-secondary')).toBe('#fb7185');
+
     fireEvent.click(screen.getByRole('button', { name: /Salvar alteracoes/i }));
 
     await waitFor(() => {
@@ -478,9 +487,45 @@ describe('DashboardHomePage', () => {
         .filter((call) => call[0] === 'admin-token' && call[1] === 'business-1')
         .at(-1);
 
-      expect(saveCall?.[2]?.theme?.colors?.primary).toBe('#22c55e');
-      expect(saveCall?.[2]?.theme?.colors?.accent).toContain('34, 197, 94');
-      expect(saveCall?.[2]?.theme?.buttons?.primary?.background).toContain('#22c55e');
+      expect(saveCall?.[2]?.theme?.colors?.background).toBe('#f3ecdf');
+      expect(saveCall?.[2]?.theme?.colors?.primary).toBe('#f97316');
+      expect(saveCall?.[2]?.theme?.colors?.secondary).toBe('#fb7185');
+      expect(saveCall?.[2]?.theme?.buttons?.primary?.background).toContain('#f97316');
+    });
+  });
+
+  it('applies a preset palette and still lets the admin fine-tune colors individually', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+    expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Configuracoes/i }));
+
+    await user.click(screen.getByRole('button', { name: /Escuro premium/i }));
+
+    expect(screen.getByLabelText('Cor primaria')).toHaveValue('#d4a24c');
+    expect(screen.getByLabelText('Cor secundaria')).toHaveValue('#5b6cff');
+    expect(screen.getByLabelText('Cor de fundo')).toHaveValue('#0d1321');
+    expect(screen.getByLabelText('Cor do texto')).toHaveValue('#f5f1e8');
+
+    fireEvent.change(screen.getByLabelText('Cor secundaria'), { target: { value: '#ff4d6d' } });
+    fireEvent.click(screen.getByRole('button', { name: /Salvar alteracoes/i }));
+
+    await waitFor(() => {
+      const saveCall = adminService.updateAdminBusiness.mock.calls
+        .filter((call) => call[0] === 'admin-token' && call[1] === 'business-1')
+        .at(-1);
+
+      expect(saveCall?.[2]?.theme?.colors?.background).toBe('#0d1321');
+      expect(saveCall?.[2]?.theme?.colors?.primary).toBe('#d4a24c');
+      expect(saveCall?.[2]?.theme?.colors?.secondary).toBe('#ff4d6d');
+      expect(saveCall?.[2]?.theme?.colors?.text).toBe('#f5f1e8');
     });
   });
 

@@ -39,6 +39,7 @@ import {
   normalizeManagedLinkAction,
   normalizeManagedLinkActions,
 } from '../../../shared/utils/tenantIdentity.js';
+import { buildTenantTheme } from '../../../shared/utils/theme.js';
 
 function normalizeCoordinate(value) {
   if (value === '' || value === null || value === undefined) {
@@ -346,15 +347,7 @@ async function assertBusinessDomainsAvailable(domains = {}, excludedBusinessId =
 }
 
 function normalizeThemePayload(payload = {}) {
-  return {
-    colors: payload.colors || {},
-    typography: payload.typography || {},
-    spacing: payload.spacing || {},
-    radius: payload.radius || {},
-    layout: payload.layout || {},
-    buttons: payload.buttons || {},
-    customCss: String(payload.customCss || ''),
-  };
+  return buildTenantTheme(payload);
 }
 
 function normalizeLinksPayload(links = []) {

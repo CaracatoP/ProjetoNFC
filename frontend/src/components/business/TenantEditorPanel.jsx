@@ -3,7 +3,6 @@ import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 import { EmptyState } from '@/components/common/EmptyState.jsx';
 import {
-  buildDerivedTheme,
   buildTenantPublicUrlPreview,
   buildValidationErrors,
   cloneDeep,
@@ -33,10 +32,10 @@ import {
   PreviewImage,
   SectionEyebrow,
   SensitiveInput,
-  ThemeColorField,
 } from './editor/TenantEditorPrimitives.jsx';
 import { TenantEditorHeader } from './editor/TenantEditorHeader.jsx';
 import { TenantEditorStepper } from './editor/TenantEditorStepper.jsx';
+import { ThemeCustomizationSection } from './editor/ThemeCustomizationSection.jsx';
 export function TenantEditorPanel({
   editor,
   saving,
@@ -1187,43 +1186,16 @@ export function TenantEditorPanel({
                 }))}
               />
             </AdminField>
-            <ThemeColorField
-              label="Cor primaria"
-              value={draft.theme.colors?.primary || '#f97316'}
-              fallback="#f97316"
-              onChange={(nextValue) => setDraft((current) => ({
-                ...current,
-                theme: buildDerivedTheme(current.theme, { primary: nextValue }),
-              }))}
-            />
-            <ThemeColorField
-              label="Cor secundaria"
-              value={draft.theme.colors?.secondary || '#fb7185'}
-              fallback="#fb7185"
-              onChange={(nextValue) => setDraft((current) => ({
-                ...current,
-                theme: buildDerivedTheme(current.theme, { secondary: nextValue }),
-              }))}
-            />
-            <ThemeColorField
-              label="Fundo"
-              value={draft.theme.colors?.background || '#140d09'}
-              fallback="#140d09"
-              onChange={(nextValue) => setDraft((current) => ({
-                ...current,
-                theme: buildDerivedTheme(current.theme, { background: nextValue }),
-              }))}
-            />
-            <ThemeColorField
-              label="Texto"
-              value={draft.theme.colors?.text || '#fff8f2'}
-              fallback="#fff8f2"
-              onChange={(nextValue) => setDraft((current) => ({
-                ...current,
-                theme: buildDerivedTheme(current.theme, { text: nextValue }),
-              }))}
-            />
           </div>
+
+          <ThemeCustomizationSection
+            theme={draft.theme}
+            businessName={draft.business.name}
+            onChange={(nextTheme) => setDraft((current) => ({
+              ...current,
+              theme: nextTheme,
+            }))}
+          />
 
           <div id="tenant-footer-signature" className="admin-subpanel admin-subpanel--highlight">
             <div className="admin-panel-card__header">

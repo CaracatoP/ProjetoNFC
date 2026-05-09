@@ -1,4 +1,5 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Button } from '@/components/common/Button.jsx';
 import { resolveMediaUrl } from '@/utils/formatters.js';
 import { getInputState, isHexColor, normalizeHexColor } from './tenantEditorUtils.js';
 
@@ -38,8 +39,7 @@ export function SensitiveInput({ label, value, onChange, placeholder, error }) {
   );
 }
 
-export function ThemeColorField({ label, value, fallback, onChange }) {
-  const pickerId = useId();
+export function ThemeColorCard({ label, description, value, fallback, onChange, onReset }) {
   const normalizedValue = normalizeHexColor(value, fallback);
   const [textValue, setTextValue] = useState(normalizedValue);
 
@@ -54,50 +54,78 @@ export function ThemeColorField({ label, value, fallback, onChange }) {
   }
 
   return (
-    <AdminField label={label} description="Use um valor hexadecimal, por exemplo #f97316.">
-      <div className="admin-color-control">
-        <input
-          aria-label={label}
-          value={textValue}
-          onChange={(event) => {
-            const nextValue = event.target.value;
-            setTextValue(nextValue);
-
-            const candidate = nextValue.startsWith('#') ? nextValue : `#${nextValue}`;
-            if (isHexColor(candidate)) {
-              onChange?.(normalizeHexColor(nextValue, normalizedValue));
-            }
-          }}
-          onBlur={(event) => commit(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              commit(textValue);
-            }
-          }}
-          placeholder={fallback}
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck="false"
-        />
-        <button
-          type="button"
-          className="admin-color-swatch"
-          aria-label={`Selecionar ${label}`}
-          style={{ background: normalizedValue }}
-          onClick={() => document.getElementById(pickerId)?.click()}
-        />
-        <input
-          id={pickerId}
-          type="color"
-          className="admin-color-picker"
-          value={normalizedValue}
-          onChange={(event) => commit(event.target.value)}
-          tabIndex={-1}
-          aria-hidden="true"
-        />
+    <section className="theme-color-card">
+      <div className="theme-color-card__preview">
+        <span className="theme-color-card__eyebrow">{label}</span>
+        <strong>{normalizedValue.toUpperCase()}</strong>
+        <small>{description}</small>
+        <span className="theme-color-card__swatch" style={{ background: normalizedValue }} aria-hidden="true" />
       </div>
-    </AdminField>
+
+      <div className="theme-color-card__controls">
+        <label className="theme-color-card__picker">
+          <span>Seletor</span>
+          <input
+            type="color"
+            aria-label={`Selecionar ${label}`}
+            value={normalizedValue}
+            onChange={(event) => commit(event.target.value)}
+          />
+        </label>
+
+        <label className="theme-color-card__input">
+          <span>Hexadecimal</span>
+          <input
+            aria-label={label}
+            value={textValue}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setTextValue(nextValue);
+
+              const candidate = nextValue.startsWith('#') ? nextValue : `#${nextValue}`;
+              if (isHexColor(candidate)) {
+                onChange?.(normalizeHexColor(nextValue, normalizedValue));
+              }
+            }}
+            onBlur={(event) => commit(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                commit(textValue);
+              }
+            }}
+            placeholder={fallback}
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck="false"
+          />
+        </label>
+
+        <Button
+          variant="secondary"
+          className="theme-color-card__reset"
+          onClick={() => {
+            setTextValue(fallback);
+            onReset?.();
+          }}
+        >
+          Restaurar padrao
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+export function ThemeColorField({ label, value, fallback, onChange }) {
+  return (
+    <ThemeColorCard
+      label={label}
+      description="Use um valor hexadecimal, por exemplo #f97316."
+      value={value}
+      fallback={fallback}
+      onChange={onChange}
+      onReset={() => onChange?.(fallback)}
+    />
   );
 }
 

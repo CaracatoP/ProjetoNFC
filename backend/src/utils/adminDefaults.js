@@ -1,63 +1,6 @@
 import { BUSINESS_STATUS, LINK_GROUPS, LINK_TYPES, SECTION_TYPES } from '../../../shared/constants/index.js';
 import { normalizePhoneActionValue, slugify } from '../../../shared/utils/tenantIdentity.js';
-
-function createDefaultTheme() {
-  return {
-    colors: {
-      primary: '#f97316',
-      secondary: '#fb7185',
-      background: '#140d09',
-      surface: 'rgba(31, 20, 16, 0.92)',
-      surfaceAlt: 'rgba(48, 32, 24, 0.86)',
-      text: '#fff8f2',
-      textMuted: '#f4d5c3',
-      border: 'rgba(255, 255, 255, 0.12)',
-      success: '#22c55e',
-      danger: '#ef4444',
-      accent: 'rgba(249, 115, 22, 0.18)',
-    },
-    typography: {
-      headingFamily: "'Space Grotesk', sans-serif",
-      bodyFamily: "'Manrope', sans-serif",
-      baseSize: '16px',
-      heroSize: 'clamp(2.2rem, 5.8vw, 4rem)',
-      sectionTitleSize: 'clamp(1.15rem, 2.8vw, 1.7rem)',
-    },
-    spacing: {
-      xs: '0.35rem',
-      sm: '0.65rem',
-      md: '1rem',
-      lg: '1.4rem',
-      xl: '1.8rem',
-      xxl: '2.4rem',
-    },
-    radius: {
-      sm: '0.9rem',
-      md: '1.4rem',
-      lg: '2rem',
-      pill: '999px',
-    },
-    layout: {
-      maxWidth: '1180px',
-      pagePadding: 'clamp(1rem, 3vw, 2rem)',
-      sectionGap: '1.1rem',
-      cardGap: '0.85rem',
-    },
-    buttons: {
-      primary: {
-        background: 'linear-gradient(135deg, #f97316, #fb7185)',
-        color: '#ffffff',
-        border: 'none',
-      },
-      secondary: {
-        background: 'rgba(255, 255, 255, 0.06)',
-        color: '#fff8f2',
-        border: '1px solid rgba(255, 255, 255, 0.12)',
-      },
-    },
-    customCss: '',
-  };
-}
+import { createDefaultTheme } from '../../../shared/utils/theme.js';
 
 function buildMailToLink(email) {
   return `mailto:${String(email || '').trim()}`;

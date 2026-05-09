@@ -5,9 +5,119 @@ import {
   normalizeOptionalHost,
   slugify,
 } from '@shared/utils/tenantIdentity.js';
+import {
+  DEFAULT_TENANT_THEME_COLORS,
+  buildTenantTheme,
+  buildThemeCssVariables,
+  getContrastRatio,
+  isHexColor as isValidHexColor,
+  normalizeHexColor as normalizeThemeHexColor,
+} from '@shared/utils/theme.js';
 import { appConfig } from '@/config/appConfig.js';
 
 export { normalizeOptionalHost, slugify };
+export const THEME_COLOR_DEFAULTS = DEFAULT_TENANT_THEME_COLORS;
+export const THEME_COLOR_PRESETS = [
+  {
+    id: 'classico',
+    label: 'Classico',
+    description: 'Laranja caloroso com apoio rosado e leitura aconchegante.',
+    colors: {
+      background: '#140d09',
+      primary: '#f97316',
+      secondary: '#fb7185',
+      text: '#fff8f2',
+    },
+  },
+  {
+    id: 'escuro-premium',
+    label: 'Escuro premium',
+    description: 'Base marinho profunda com dourado sofisticado.',
+    colors: {
+      background: '#0d1321',
+      primary: '#d4a24c',
+      secondary: '#5b6cff',
+      text: '#f5f1e8',
+    },
+  },
+  {
+    id: 'minimalista-claro',
+    label: 'Minimalista claro',
+    description: 'Clareza editorial com contraste elegante e limpo.',
+    colors: {
+      background: '#f5f1e8',
+      primary: '#1f2937',
+      secondary: '#0ea5e9',
+      text: '#111827',
+    },
+  },
+  {
+    id: 'luxo-dourado',
+    label: 'Luxo dourado',
+    description: 'Carvao refinado com dourado quente para marcas premium.',
+    colors: {
+      background: '#120f0c',
+      primary: '#c9a227',
+      secondary: '#7a5c2e',
+      text: '#fff7e6',
+    },
+  },
+  {
+    id: 'barbearia',
+    label: 'Barbearia',
+    description: 'Madeira escura com cobre e vinho para identidade classica.',
+    colors: {
+      background: '#0f0b09',
+      primary: '#b08968',
+      secondary: '#7f1d1d',
+      text: '#f7f1e8',
+    },
+  },
+  {
+    id: 'acougue',
+    label: 'Acougue',
+    description: 'Vermelho marcante com fundo robusto para alto impacto.',
+    colors: {
+      background: '#1a0b0d',
+      primary: '#d62828',
+      secondary: '#f77f00',
+      text: '#fff4ef',
+    },
+  },
+  {
+    id: 'restaurante',
+    label: 'Restaurante',
+    description: 'Paleta gastronomica com cobre, oliva e fundo intimista.',
+    colors: {
+      background: '#16110d',
+      primary: '#c27c2c',
+      secondary: '#7b9e45',
+      text: '#fff7ee',
+    },
+  },
+  {
+    id: 'clinica',
+    label: 'Clinica',
+    description: 'Ambiente leve, confiavel e arejado para saude e bem-estar.',
+    colors: {
+      background: '#edf7f8',
+      primary: '#0f766e',
+      secondary: '#38bdf8',
+      text: '#12343b',
+    },
+  },
+  {
+    id: 'loja-moderna',
+    label: 'Loja moderna',
+    description: 'Look digital com violeta, ciano e contraste nitido.',
+    colors: {
+      background: '#0b1020',
+      primary: '#7c3aed',
+      secondary: '#06b6d4',
+      text: '#f8fafc',
+    },
+  },
+];
 
 export function normalizeSubdomainInput(value, options = {}) {
   return slugify(value, {
@@ -20,119 +130,29 @@ export function cloneDeep(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function hexToRgb(value) {
-  const hex = String(value || '').trim().replace('#', '');
-
-  if (!/^[\da-fA-F]{6}$/.test(hex)) {
-    return null;
-  }
-
-  return {
-    r: Number.parseInt(hex.slice(0, 2), 16),
-    g: Number.parseInt(hex.slice(2, 4), 16),
-    b: Number.parseInt(hex.slice(4, 6), 16),
-  };
-}
-
-function hexToRgba(value, alpha) {
-  const rgb = hexToRgb(value);
-
-  if (!rgb) {
-    return value;
-  }
-
-  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
-}
-
-function mixHexColors(base, mixWith, weight) {
-  const first = hexToRgb(base);
-  const second = hexToRgb(mixWith);
-
-  if (!first || !second) {
-    return base;
-  }
-
-  const mixChannel = (channel) =>
-    Math.round(first[channel] * (1 - weight) + second[channel] * weight)
-      .toString(16)
-      .padStart(2, '0');
-
-  return `#${mixChannel('r')}${mixChannel('g')}${mixChannel('b')}`;
-}
-
-function getReadableTextColor(background) {
-  const rgb = hexToRgb(background);
-
-  if (!rgb) {
-    return '#ffffff';
-  }
-
-  const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
-  return luminance > 0.58 ? '#1a120f' : '#ffffff';
-}
-
 export function buildDerivedTheme(theme, overrides) {
-  const palette = {
-    primary: overrides.primary || theme.colors?.primary || '#f97316',
-    secondary: overrides.secondary || theme.colors?.secondary || '#fb7185',
-    background: overrides.background || theme.colors?.background || '#140d09',
-    text: overrides.text || theme.colors?.text || '#fff8f2',
-  };
+  return buildTenantTheme(theme, overrides);
+}
 
-  const elevatedSurface = mixHexColors(palette.background, '#ffffff', 0.08);
-  const alternateSurface = mixHexColors(palette.background, '#ffffff', 0.16);
+export function applyThemePreset(theme, colors) {
+  return buildTenantTheme(theme, colors);
+}
 
-  return {
-    ...theme,
-    colors: {
-      ...theme.colors,
-      primary: palette.primary,
-      secondary: palette.secondary,
-      background: palette.background,
-      surface: hexToRgba(elevatedSurface, 0.92),
-      surfaceAlt: hexToRgba(alternateSurface, 0.86),
-      text: palette.text,
-      textMuted: hexToRgba(palette.text, 0.74),
-      border: hexToRgba(palette.text, 0.12),
-      accent: hexToRgba(palette.primary, 0.18),
-      success: theme.colors?.success || '#22c55e',
-      danger: theme.colors?.danger || '#ef4444',
-    },
-    buttons: {
-      ...theme.buttons,
-      primary: {
-        ...(theme.buttons?.primary || {}),
-        background: `linear-gradient(135deg, ${palette.primary}, ${palette.secondary})`,
-        color: getReadableTextColor(mixHexColors(palette.primary, palette.secondary, 0.5)),
-        border: 'none',
-      },
-      secondary: {
-        ...(theme.buttons?.secondary || {}),
-        background: hexToRgba(palette.text, 0.06),
-        color: palette.text,
-        border: `1px solid ${hexToRgba(palette.text, 0.12)}`,
-      },
-    },
-  };
+export function buildThemePreviewCssVariables(theme) {
+  return buildThemeCssVariables(buildTenantTheme(theme));
+}
+
+export function getThemeTextContrast(theme) {
+  const resolvedTheme = buildTenantTheme(theme);
+  return getContrastRatio(resolvedTheme.colors.background, resolvedTheme.colors.text);
 }
 
 export function isHexColor(value) {
-  return /^#([\da-fA-F]{6}|[\da-fA-F]{3})$/.test(String(value || '').trim());
+  return isValidHexColor(value);
 }
 
 export function normalizeHexColor(value, fallback = '#000000') {
-  const trimmed = String(value || '').trim();
-  const withHash = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
-
-  if (!isHexColor(withHash)) {
-    return fallback;
-  }
-
-  if (withHash.length === 4) {
-    return `#${withHash[1]}${withHash[1]}${withHash[2]}${withHash[2]}${withHash[3]}${withHash[3]}`.toLowerCase();
-  }
-
-  return withHash.toLowerCase();
+  return normalizeThemeHexColor(value, fallback);
 }
 
 function getEnvironmentOrigin(fallbackUrl = '') {
