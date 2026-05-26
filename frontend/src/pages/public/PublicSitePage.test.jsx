@@ -190,6 +190,7 @@ describe('PublicSitePage', () => {
   let realtimeCallbacks;
 
   beforeEach(() => {
+    document.documentElement.removeAttribute('style');
     publicSiteService.getPublicSiteBySlug.mockResolvedValue(siteFixture);
     analyticsService.trackEvent.mockClear();
     tenantRealtimeService.subscribeToTenantUpdates.mockImplementation((_target, callbacks = {}) => {
@@ -254,8 +255,13 @@ describe('PublicSitePage', () => {
     );
 
     await waitFor(() => {
-      expect(document.documentElement.style.getPropertyValue('--theme-primary')).toBe('#f97316');
+      expect(document.documentElement.style.getPropertyValue('--theme-primary-button')).toBe('#f97316');
+      expect(document.documentElement.style.getPropertyValue('--theme-card')).toBe('#211410');
+      expect(document.documentElement.style.getPropertyValue('--theme-button-hover')).toBe('#2b1d16');
+      expect(document.documentElement.style.getPropertyValue('--theme-secondary-area')).toBe('#fb7185');
     });
+
+    expect(document.querySelector("meta[name='theme-color']")?.getAttribute('content')).toBe('#140d09');
   });
 
   it('shows a neutral message when the tenant is inactive', async () => {
@@ -314,5 +320,27 @@ describe('PublicSitePage', () => {
     await waitFor(() => {
       expect(publicSiteService.getPublicSiteBySlug.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
+  });
+
+  it('cleans inline tenant theme variables when the public page unmounts', async () => {
+    const view = render(
+      <TenantProvider>
+        <MemoryRouter initialEntries={['/site/barbearia-estilo-vivo']}>
+          <Routes>
+            <Route path="/site/:slug" element={<PublicSitePage />} />
+          </Routes>
+        </MemoryRouter>
+      </TenantProvider>,
+    );
+
+    await waitFor(() => {
+      expect(document.documentElement.style.getPropertyValue('--theme-card')).toBe('#211410');
+    });
+
+    view.unmount();
+
+    expect(document.documentElement.style.getPropertyValue('--theme-card')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--theme-primary-button')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--theme-secondary-area')).toBe('');
   });
 });

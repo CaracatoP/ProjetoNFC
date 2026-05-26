@@ -1,11 +1,19 @@
-export const DEFAULT_TENANT_THEME_COLORS = Object.freeze({
-  primary: '#f97316',
-  secondary: '#fb7185',
-  background: '#140d09',
-  text: '#fff8f2',
-  success: '#22c55e',
-  danger: '#ef4444',
+export const TENANT_THEME_VERSION = 2;
+
+export const DEFAULT_TENANT_THEME_RAW = Object.freeze({
+  version: TENANT_THEME_VERSION,
+  backgroundColor: '#111111',
+  cardColor: '#1d1d1d',
+  buttonHoverColor: '#2b2b2b',
+  primaryButtonColor: '#c8a46a',
+  textColor: '#f5f5f5',
+  accentColor: '#c8a46a',
+  borderColor: '#333333',
+  secondaryColor: '#8a6b4a',
 });
+
+// Backward-compatible alias kept because parts of the editor import this symbol.
+export const DEFAULT_TENANT_THEME_COLORS = DEFAULT_TENANT_THEME_RAW;
 
 const DEFAULT_TENANT_THEME_TYPOGRAPHY = Object.freeze({
   headingFamily: "'Space Grotesk', sans-serif",
@@ -38,6 +46,28 @@ const DEFAULT_TENANT_THEME_LAYOUT = Object.freeze({
   cardGap: '0.85rem',
 });
 
+const RAW_THEME_KEYS = Object.freeze([
+  'backgroundColor',
+  'cardColor',
+  'buttonHoverColor',
+  'primaryButtonColor',
+  'textColor',
+  'accentColor',
+  'borderColor',
+  'secondaryColor',
+]);
+
+const LEGACY_OVERRIDE_KEY_MAP = Object.freeze({
+  background: 'backgroundColor',
+  surface: 'cardColor',
+  surfaceAlt: 'cardColor',
+  primary: 'primaryButtonColor',
+  text: 'textColor',
+  accent: 'accentColor',
+  border: 'borderColor',
+  secondary: 'secondaryColor',
+});
+
 export function isHexColor(value) {
   return /^#([\da-fA-F]{6}|[\da-fA-F]{3})$/.test(String(value || '').trim());
 }
@@ -55,6 +85,11 @@ export function normalizeHexColor(value, fallback = '#000000') {
   }
 
   return withHash.toLowerCase();
+}
+
+function extractFirstHexColor(value) {
+  const match = String(value || '').match(/#(?:[\da-fA-F]{3}|[\da-fA-F]{6})\b|\b(?:[\da-fA-F]{3}|[\da-fA-F]{6})\b/);
+  return match ? normalizeHexColor(match[0], '') : '';
 }
 
 function hexToRgb(value) {
@@ -86,7 +121,7 @@ export function mixHexColors(base, mixWith, weight) {
   const second = hexToRgb(mixWith);
 
   if (!first || !second) {
-    return normalizeHexColor(base, DEFAULT_TENANT_THEME_COLORS.background);
+    return normalizeHexColor(base, DEFAULT_TENANT_THEME_RAW.backgroundColor);
   }
 
   const mixChannel = (channel) =>
@@ -138,45 +173,47 @@ export function getReadableTextColor(background, options = {}) {
   return darkContrast >= lightContrast ? darkColor : lightColor;
 }
 
-function buildPrimaryButtonBackground(primary) {
-  const highlight = mixHexColors(primary, isLightColor(primary) ? '#000000' : '#ffffff', isLightColor(primary) ? 0.14 : 0.18);
-  return `linear-gradient(135deg, ${primary}, ${highlight})`;
+function hasOwnRawThemeFields(theme = {}) {
+  return RAW_THEME_KEYS.some((key) => theme[key] !== undefined);
 }
 
-function buildSecondaryButtonBackground(background, secondary) {
-  const backgroundIsLight = isLightColor(background);
-  const firstStop = mixHexColors(background, secondary, backgroundIsLight ? 0.18 : 0.28);
-  const secondStop = mixHexColors(background, secondary, backgroundIsLight ? 0.08 : 0.16);
-  return `linear-gradient(135deg, ${firstStop}, ${secondStop})`;
-}
-
-export function buildTenantTheme(theme = {}, overrides = {}) {
+function mapLegacyValueToRawColor(theme = {}, rawKey) {
   const themeColors = theme.colors || {};
-  const primary = normalizeHexColor(overrides.primary ?? themeColors.primary, DEFAULT_TENANT_THEME_COLORS.primary);
-  const secondary = normalizeHexColor(overrides.secondary ?? themeColors.secondary, DEFAULT_TENANT_THEME_COLORS.secondary);
-  const background = normalizeHexColor(overrides.background ?? themeColors.background, DEFAULT_TENANT_THEME_COLORS.background);
-  const text = normalizeHexColor(overrides.text ?? themeColors.text, DEFAULT_TENANT_THEME_COLORS.text);
-  const success = normalizeHexColor(themeColors.success, DEFAULT_TENANT_THEME_COLORS.success);
-  const danger = normalizeHexColor(themeColors.danger, DEFAULT_TENANT_THEME_COLORS.danger);
-  const backgroundIsLight = isLightColor(background);
-  const surfaceBase = mixHexColors(background, backgroundIsLight ? '#000000' : '#ffffff', backgroundIsLight ? 0.04 : 0.08);
-  const surfaceAltBase = mixHexColors(background, backgroundIsLight ? '#000000' : '#ffffff', backgroundIsLight ? 0.08 : 0.16);
-  const secondaryButtonBase = mixHexColors(background, secondary, backgroundIsLight ? 0.18 : 0.28);
 
+  switch (rawKey) {
+    case 'backgroundColor':
+      return extractFirstHexColor(themeColors.background);
+    case 'cardColor':
+      return (
+        extractFirstHexColor(theme.cardColor)
+        || extractFirstHexColor(themeColors.card)
+        || extractFirstHexColor(themeColors.surface)
+        || ''
+      );
+    case 'buttonHoverColor':
+      return (
+        extractFirstHexColor(theme.buttonHoverColor)
+        || extractFirstHexColor(themeColors.hover)
+        || extractFirstHexColor(themeColors.surfaceAlt)
+        || ''
+      );
+    case 'primaryButtonColor':
+      return extractFirstHexColor(theme.primaryButtonColor || themeColors.primary || theme.buttons?.primary?.background);
+    case 'textColor':
+      return extractFirstHexColor(theme.textColor || themeColors.text);
+    case 'accentColor':
+      return extractFirstHexColor(theme.accentColor || themeColors.accent || themeColors.primary);
+    case 'borderColor':
+      return extractFirstHexColor(theme.borderColor || themeColors.border);
+    case 'secondaryColor':
+      return extractFirstHexColor(theme.secondaryColor || themeColors.secondary);
+    default:
+      return '';
+  }
+}
+
+function buildLegacyMetadata(theme = {}) {
   return {
-    colors: {
-      primary,
-      secondary,
-      background,
-      surface: hexToRgba(surfaceBase, backgroundIsLight ? 0.92 : 0.92),
-      surfaceAlt: hexToRgba(surfaceAltBase, backgroundIsLight ? 0.9 : 0.86),
-      text,
-      textMuted: hexToRgba(text, backgroundIsLight ? 0.72 : 0.74),
-      border: hexToRgba(text, backgroundIsLight ? 0.16 : 0.12),
-      success,
-      danger,
-      accent: hexToRgba(primary, backgroundIsLight ? 0.14 : 0.18),
-    },
     typography: {
       ...DEFAULT_TENANT_THEME_TYPOGRAPHY,
       ...(theme.typography || {}),
@@ -193,19 +230,126 @@ export function buildTenantTheme(theme = {}, overrides = {}) {
       ...DEFAULT_TENANT_THEME_LAYOUT,
       ...(theme.layout || {}),
     },
+    customCss: String(theme.customCss || ''),
+  };
+}
+
+function normalizeRawOverrides(overrides = {}) {
+  if (!overrides || typeof overrides !== 'object') {
+    return {};
+  }
+
+  return Object.entries(overrides).reduce((accumulator, [key, value]) => {
+    const rawKey = RAW_THEME_KEYS.includes(key) ? key : LEGACY_OVERRIDE_KEY_MAP[key];
+
+    if (rawKey) {
+      accumulator[rawKey] = value;
+    }
+
+    return accumulator;
+  }, {});
+}
+
+export function normalizeRawTenantTheme(theme = {}, overrides = {}) {
+  const baseTheme = theme?.raw && typeof theme.raw === 'object' ? theme.raw : theme;
+  const rawOverrides = normalizeRawOverrides(overrides);
+  const legacyMetadata = buildLegacyMetadata(theme);
+
+  const resolvedRaw = RAW_THEME_KEYS.reduce((accumulator, key) => {
+    const candidateValue =
+      rawOverrides[key]
+      ?? baseTheme?.[key]
+      ?? mapLegacyValueToRawColor(baseTheme, key)
+      ?? mapLegacyValueToRawColor(theme, key)
+      ?? DEFAULT_TENANT_THEME_RAW[key];
+
+    accumulator[key] = normalizeHexColor(candidateValue, DEFAULT_TENANT_THEME_RAW[key]);
+    return accumulator;
+  }, { version: TENANT_THEME_VERSION });
+
+  return {
+    ...resolvedRaw,
+    ...legacyMetadata,
+  };
+}
+
+function buildPrimaryButtonBackground(primary) {
+  return primary;
+}
+
+function buildSecondaryButtonBackground(cardColor) {
+  return cardColor;
+}
+
+export function buildTenantTheme(theme = {}, overrides = {}) {
+  const normalizedTheme = normalizeRawTenantTheme(theme, overrides);
+  const background = normalizedTheme.backgroundColor;
+  const card = normalizedTheme.cardColor;
+  const hover = normalizedTheme.buttonHoverColor;
+  const primary = normalizedTheme.primaryButtonColor;
+  const text = normalizedTheme.textColor;
+  const accent = normalizedTheme.accentColor;
+  const border = normalizedTheme.borderColor;
+  const secondary = normalizedTheme.secondaryColor;
+  const backgroundIsLight = isLightColor(background);
+  const cardAlt = mixHexColors(card, backgroundIsLight ? '#000000' : '#ffffff', backgroundIsLight ? 0.08 : 0.08);
+  const textMuted = hexToRgba(text, backgroundIsLight ? 0.68 : 0.72);
+  const accentSoft = hexToRgba(accent, backgroundIsLight ? 0.18 : 0.24);
+  const secondarySoft = hexToRgba(secondary, backgroundIsLight ? 0.16 : 0.24);
+
+  return {
+    version: TENANT_THEME_VERSION,
+    raw: {
+      version: TENANT_THEME_VERSION,
+      backgroundColor: background,
+      cardColor: card,
+      buttonHoverColor: hover,
+      primaryButtonColor: primary,
+      textColor: text,
+      accentColor: accent,
+      borderColor: border,
+      secondaryColor: secondary,
+    },
+    colors: {
+      background,
+      card,
+      cardAlt,
+      hover,
+      primary,
+      secondary,
+      text,
+      textMuted,
+      border,
+      accent,
+      accentSoft,
+      secondarySoft,
+      // Backward-compatible aliases for existing UI code.
+      surface: card,
+      surfaceAlt: cardAlt,
+    },
+    typography: normalizedTheme.typography,
+    spacing: normalizedTheme.spacing,
+    radius: normalizedTheme.radius,
+    layout: normalizedTheme.layout,
     buttons: {
       primary: {
         background: buildPrimaryButtonBackground(primary),
-        color: getReadableTextColor(primary, { dark: '#1f1720' }),
-        border: 'none',
+        hoverBackground: hover,
+        color: getReadableTextColor(primary, { dark: '#161616' }),
+        border: `1px solid ${primary}`,
       },
       secondary: {
-        background: buildSecondaryButtonBackground(background, secondary),
-        color: getReadableTextColor(secondaryButtonBase, { dark: '#1f1720' }),
-        border: `1px solid ${hexToRgba(secondary, backgroundIsLight ? 0.38 : 0.34)}`,
+        background: buildSecondaryButtonBackground(card),
+        hoverBackground: hover,
+        color: text,
+        border: `1px solid ${border}`,
       },
     },
-    customCss: String(theme.customCss || ''),
+    areas: {
+      headerBackground: secondary,
+      specialBackground: mixHexColors(secondary, background, backgroundIsLight ? 0.14 : 0.32),
+    },
+    customCss: normalizedTheme.customCss,
   };
 }
 
@@ -217,17 +361,24 @@ export function buildThemeCssVariables(theme = {}) {
   const resolvedTheme = buildTenantTheme(theme);
 
   return {
-    '--theme-primary': resolvedTheme.colors.primary,
-    '--theme-secondary': resolvedTheme.colors.secondary,
     '--theme-background': resolvedTheme.colors.background,
-    '--theme-surface': resolvedTheme.colors.surface,
-    '--theme-surface-alt': resolvedTheme.colors.surfaceAlt || resolvedTheme.colors.surface,
+    '--theme-card': resolvedTheme.colors.card,
+    '--theme-card-alt': resolvedTheme.colors.cardAlt,
+    '--theme-button-hover': resolvedTheme.colors.hover,
+    '--theme-primary-button': resolvedTheme.colors.primary,
+    '--theme-secondary-area': resolvedTheme.colors.secondary,
     '--theme-text': resolvedTheme.colors.text,
     '--theme-text-muted': resolvedTheme.colors.textMuted,
     '--theme-border': resolvedTheme.colors.border,
-    '--theme-accent': resolvedTheme.colors.accent || 'rgba(255,255,255,0.08)',
-    '--theme-danger': resolvedTheme.colors.danger || DEFAULT_TENANT_THEME_COLORS.danger,
-    '--theme-success': resolvedTheme.colors.success || DEFAULT_TENANT_THEME_COLORS.success,
+    '--theme-accent': resolvedTheme.colors.accentSoft,
+    '--theme-accent-solid': resolvedTheme.colors.accent,
+    '--theme-success': '#22c55e',
+    '--theme-danger': '#ef4444',
+    // Backward-compatible aliases for current styling.
+    '--theme-primary': resolvedTheme.colors.primary,
+    '--theme-secondary': resolvedTheme.colors.secondary,
+    '--theme-surface': resolvedTheme.colors.surface,
+    '--theme-surface-alt': resolvedTheme.colors.surfaceAlt,
     '--font-heading': resolvedTheme.typography.headingFamily,
     '--font-body': resolvedTheme.typography.bodyFamily,
     '--font-base-size': resolvedTheme.typography.baseSize,
@@ -248,10 +399,12 @@ export function buildThemeCssVariables(theme = {}) {
     '--layout-section-gap': resolvedTheme.layout.sectionGap,
     '--layout-card-gap': resolvedTheme.layout.cardGap,
     '--button-primary-bg': resolvedTheme.buttons.primary.background,
+    '--button-primary-hover-bg': resolvedTheme.buttons.primary.hoverBackground,
     '--button-primary-color': resolvedTheme.buttons.primary.color,
-    '--button-primary-border': resolvedTheme.buttons.primary.border || 'none',
+    '--button-primary-border': resolvedTheme.buttons.primary.border,
     '--button-secondary-bg': resolvedTheme.buttons.secondary.background,
+    '--button-secondary-hover-bg': resolvedTheme.buttons.secondary.hoverBackground,
     '--button-secondary-color': resolvedTheme.buttons.secondary.color,
-    '--button-secondary-border': resolvedTheme.buttons.secondary.border || 'none',
+    '--button-secondary-border': resolvedTheme.buttons.secondary.border,
   };
 }

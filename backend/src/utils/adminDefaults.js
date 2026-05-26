@@ -284,7 +284,7 @@ export function buildDefaultTenantSetup(input = {}) {
 
   return {
     business,
-    theme: createDefaultTheme(),
+    theme: createDefaultTheme().raw,
     links: buildManagedPrimaryLinks(business),
     sections: buildSections(business),
     nfcTag: {

@@ -8,6 +8,7 @@ let disconnectDatabase;
 let seedDemoData;
 let Subscription;
 let User;
+let BusinessTheme;
 let mongoServer;
 let adminToken;
 
@@ -41,6 +42,7 @@ describe('Admin routes', () => {
     ({ seedDemoData } = await import('../utils/seedDemoData.js'));
     ({ Subscription } = await import('../models/Subscription.js'));
     ({ User } = await import('../models/User.js'));
+    ({ BusinessTheme } = await import('../models/BusinessTheme.js'));
     ({ default: app } = await import('../app.js'));
 
     await connectDatabase();
@@ -148,6 +150,30 @@ describe('Admin routes', () => {
 
     expect(listResponse.status).toBe(200);
     expect(listResponse.body.data.some((item) => item.slug === 'restaurante-vista-boa')).toBe(true);
+  });
+
+  it('falls back to a default v2 theme when a tenant has no persisted theme record', async () => {
+    const listResponse = await request(app)
+      .get('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const targetId = listResponse.body.data[0].id;
+    await BusinessTheme.deleteMany({ businessId: targetId });
+
+    const detailResponse = await request(app)
+      .get(`/api/admin/businesses/${targetId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const publicResponse = await request(app).get(`/api/public/site/${listResponse.body.data[0].slug}`);
+
+    expect(detailResponse.status).toBe(200);
+    expect(detailResponse.body.data.theme.raw.version).toBe(2);
+    expect(detailResponse.body.data.theme.raw.backgroundColor).toBe('#111111');
+    expect(detailResponse.body.data.theme.raw.cardColor).toBe('#1d1d1d');
+
+    expect(publicResponse.status).toBe(200);
+    expect(publicResponse.body.data.theme.raw.version).toBe(2);
+    expect(publicResponse.body.data.theme.raw.backgroundColor).toBe('#111111');
   });
 
   it('returns a clear conflict when trying to create a tenant with duplicate slug', async () => {
@@ -359,6 +385,108 @@ describe('Admin routes', () => {
 
     expect(updateResponse.status).toBe(200);
     expect(updateResponse.body.data.business.slug).toBe('barbearia-sao-joao-2026');
+  });
+
+  it('accepts a partial v2 theme payload and persists canonical hex values with safe defaults', async () => {
+    const listResponse = await request(app)
+      .get('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const targetBusiness = listResponse.body.data.find((item) => item.slug === 'barbearia-estilo-vivo');
+    const targetId = targetBusiness.id;
+    const detailResponse = await request(app)
+      .get(`/api/admin/businesses/${targetId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const { business, links, sections, nfcTag } = detailResponse.body.data;
+
+    const updateResponse = await request(app)
+      .put(`/api/admin/businesses/${targetId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        business,
+        links,
+        sections,
+        nfcTag,
+        theme: {
+          version: 2,
+          backgroundColor: 'FFF',
+          primaryButtonColor: 'C8A46A',
+        },
+      });
+
+    expect(updateResponse.status).toBe(200);
+    expect(updateResponse.body.data.theme.raw.version).toBe(2);
+    expect(updateResponse.body.data.theme.raw.backgroundColor).toBe('#ffffff');
+    expect(updateResponse.body.data.theme.raw.primaryButtonColor).toBe('#c8a46a');
+    expect(updateResponse.body.data.theme.raw.cardColor).toBe('#1d1d1d');
+    expect(updateResponse.body.data.theme.raw.textColor).toBe('#f5f5f5');
+  });
+
+  it('keeps duplicate tenant theme isolated from the original after later edits', async () => {
+    const listResponse = await request(app)
+      .get('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const originalBusiness = listResponse.body.data.find((item) => item.slug === 'barbearia-estilo-vivo');
+    const originalId = originalBusiness.id;
+    const originalDetailResponse = await request(app)
+      .get(`/api/admin/businesses/${originalId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const createDuplicateResponse = await request(app)
+      .post('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        business: {
+          ...originalDetailResponse.body.data.business,
+          name: 'Barbearia Estilo Vivo Copy Theme',
+          slug: 'barbearia-estilo-vivo-copy-theme',
+          domains: {
+            subdomain: '',
+            customDomain: '',
+          },
+        },
+        theme: originalDetailResponse.body.data.theme,
+        links: originalDetailResponse.body.data.links,
+        sections: originalDetailResponse.body.data.sections,
+        nfcTag: {
+          ...(originalDetailResponse.body.data.nfcTag || {}),
+          code: '',
+        },
+      });
+
+    const duplicateId = createDuplicateResponse.body.data.business.id;
+
+    const duplicateUpdateResponse = await request(app)
+      .put(`/api/admin/businesses/${duplicateId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        business: {
+          ...createDuplicateResponse.body.data.business,
+          id: duplicateId,
+        },
+        theme: {
+          ...createDuplicateResponse.body.data.theme.raw,
+          backgroundColor: '#ffffff',
+          primaryButtonColor: '#111111',
+        },
+        links: createDuplicateResponse.body.data.links,
+        sections: createDuplicateResponse.body.data.sections,
+        nfcTag: createDuplicateResponse.body.data.nfcTag,
+      });
+
+    const originalAfterDuplicateEditResponse = await request(app)
+      .get(`/api/admin/businesses/${originalId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(duplicateUpdateResponse.status).toBe(200);
+    expect(duplicateUpdateResponse.body.data.theme.raw.backgroundColor).toBe('#ffffff');
+    expect(duplicateUpdateResponse.body.data.theme.raw.primaryButtonColor).toBe('#111111');
+
+    expect(originalAfterDuplicateEditResponse.status).toBe(200);
+    expect(originalAfterDuplicateEditResponse.body.data.theme.raw.backgroundColor).not.toBe('#ffffff');
+    expect(originalAfterDuplicateEditResponse.body.data.theme.raw.primaryButtonColor).not.toBe('#111111');
   });
 
   it('reflects admin-managed business fields on the public site and keeps them after a normal demo seed boot', async () => {

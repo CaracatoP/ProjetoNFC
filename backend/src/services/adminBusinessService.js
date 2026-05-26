@@ -347,6 +347,20 @@ async function assertBusinessDomainsAvailable(domains = {}, excludedBusinessId =
 }
 
 function normalizeThemePayload(payload = {}) {
+  const resolvedTheme = buildTenantTheme(payload);
+
+  return {
+    version: resolvedTheme.raw.version,
+    ...resolvedTheme.raw,
+    typography: resolvedTheme.typography,
+    spacing: resolvedTheme.spacing,
+    radius: resolvedTheme.radius,
+    layout: resolvedTheme.layout,
+    customCss: resolvedTheme.customCss,
+  };
+}
+
+function resolveThemeOutput(payload = {}) {
   return buildTenantTheme(payload);
 }
 
@@ -605,7 +619,7 @@ async function hydrateEditorResponse(businessId) {
       ...normalizeBusinessPayload(graph.business),
       publicUrl: buildBusinessPublicUrl(graph.business),
     },
-    theme: graph.theme ? normalizeThemePayload(graph.theme) : buildDefaultTenantSetup(graph.business).theme,
+    theme: resolveThemeOutput(graph.theme || buildDefaultTenantSetup(graph.business).theme),
     links: normalizeLinksPayload(graph.links),
     sections: normalizeSectionsPayload(graph.sections),
     nfcTag: graph.nfcTag

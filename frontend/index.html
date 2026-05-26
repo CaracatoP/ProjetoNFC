@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#07070d" />
+    <meta name="theme-color" content="#000000" />
     <title>TapLink</title>
     <link rel="icon" type="image/svg+xml" sizes="any" href="/src/assets/taplink-mark.svg" />
     <link rel="alternate icon" href="/src/assets/taplink-mark.svg" />
@@ -16,21 +16,28 @@
       rel="stylesheet"
     />
     <style>
+      html,
       body {
+        min-height: 100%;
         margin: 0;
         font-family: 'Manrope', sans-serif;
-        background: #07070d;
-        color: #f8f5ff;
+        background: #000000;
+        color: #f5f7fa;
+      }
+
+      #root {
+        min-height: 100vh;
+        background: #000000;
       }
 
       .boot-message {
-        max-width: 720px;
-        margin: 10vh auto;
-        padding: 24px;
+        max-width: 680px;
+        margin: 12vh auto;
+        padding: 28px;
         border-radius: 24px;
-        background: rgba(17, 15, 30, 0.92);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        box-shadow: 0 24px 60px rgba(91, 44, 255, 0.18);
+        background: linear-gradient(180deg, #0f1115 0%, #141821 100%);
+        border: 1px solid #252932;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
       }
 
       .boot-message h1 {
@@ -43,7 +50,8 @@
         margin: 4px 0;
         padding: 4px 8px;
         border-radius: 999px;
-        background: rgba(91, 44, 255, 0.22);
+        background: #181b22;
+        border: 1px solid #252932;
       }
     </style>
   </head>

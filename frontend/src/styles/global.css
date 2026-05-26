@@ -1,13 +1,19 @@
 :root {
-  --theme-primary: #6f31ff;
-  --theme-secondary: #ff3a93;
-  --theme-background: #07070d;
-  --theme-surface: rgba(18, 16, 32, 0.92);
-  --theme-surface-alt: rgba(29, 24, 46, 0.88);
-  --theme-text: #f8f5ff;
-  --theme-text-muted: #cdbfe8;
-  --theme-border: rgba(255, 255, 255, 0.12);
-  --theme-accent: rgba(111, 49, 255, 0.18);
+  --theme-primary: #d1d5db;
+  --theme-secondary: #9aa4b2;
+  --theme-background: #0f1115;
+  --theme-card: #181b22;
+  --theme-card-alt: #20242d;
+  --theme-button-hover: #20242d;
+  --theme-primary-button: #d1d5db;
+  --theme-secondary-area: #20242d;
+  --theme-surface: #181b22;
+  --theme-surface-alt: #20242d;
+  --theme-text: #f5f7fa;
+  --theme-text-muted: #9aa4b2;
+  --theme-border: #252932;
+  --theme-accent: rgba(209, 213, 219, 0.12);
+  --theme-accent-solid: #d1d5db;
   --theme-success: #22c55e;
   --theme-danger: #ef4444;
   --font-heading: 'Space Grotesk', sans-serif;
@@ -29,12 +35,14 @@
   --layout-page-padding: clamp(1rem, 3vw, 2rem);
   --layout-section-gap: 1.5rem;
   --layout-card-gap: 1rem;
-  --button-primary-bg: linear-gradient(135deg, #6f31ff, #8b63ff);
-  --button-primary-color: #ffffff;
-  --button-primary-border: none;
-  --button-secondary-bg: linear-gradient(135deg, #35214f, #23182f);
-  --button-secondary-color: #f8f5ff;
-  --button-secondary-border: 1px solid rgba(255, 58, 147, 0.34);
+  --button-primary-bg: linear-gradient(180deg, #1b2029 0%, #141821 100%);
+  --button-primary-hover-bg: #20242d;
+  --button-primary-color: #f5f7fa;
+  --button-primary-border: 1px solid #252932;
+  --button-secondary-bg: #181b22;
+  --button-secondary-hover-bg: #20242d;
+  --button-secondary-color: #f5f7fa;
+  --button-secondary-border: 1px solid #252932;
 }
 
 * {
@@ -51,15 +59,7 @@ body {
   margin: 0;
   font-family: var(--font-body);
   font-size: var(--font-base-size);
-  background:
-    radial-gradient(circle at 10% 10%, color-mix(in srgb, var(--theme-secondary) 18%, transparent), transparent 28%),
-    radial-gradient(circle at 90% 0%, color-mix(in srgb, var(--theme-primary) 16%, transparent), transparent 22%),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--theme-background) 92%, black) 0%,
-      color-mix(in srgb, var(--theme-background) 80%, black) 52%,
-      color-mix(in srgb, var(--theme-background) 72%, black) 100%
-    );
+  background: var(--theme-background);
   color: var(--theme-text);
 }
 
@@ -104,7 +104,7 @@ img {
   width: 62px;
   height: 62px;
   border-radius: 18px;
-  box-shadow: 0 18px 36px rgba(111, 49, 255, 0.22);
+  box-shadow: 0 18px 36px color-mix(in srgb, var(--theme-background) 54%, black);
 }
 
 .app-shell__brand-copy {
@@ -171,7 +171,7 @@ img {
 .social-row,
 .review-card,
 .gallery-card {
-  background: var(--theme-surface);
+  background: var(--theme-card, var(--theme-surface));
   border: 1px solid var(--theme-border);
   border-radius: var(--radius-lg);
   backdrop-filter: blur(16px);
@@ -194,7 +194,11 @@ img {
   border-radius: var(--radius-pill);
   border: none;
   cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease;
   font-weight: 700;
 }
 
@@ -220,6 +224,16 @@ img {
   border: var(--button-secondary-border);
 }
 
+.button--primary:hover,
+.button--primary:focus-visible {
+  background: var(--button-primary-hover-bg);
+}
+
+.button--secondary:hover,
+.button--secondary:focus-visible {
+  background: var(--button-secondary-hover-bg);
+}
+
 .section-header {
   display: grid;
   gap: 0.55rem;
@@ -235,7 +249,7 @@ img {
   padding: 0.35rem 0.8rem;
   border-radius: var(--radius-pill);
   background: var(--theme-accent);
-  color: var(--theme-text);
+  color: color-mix(in srgb, var(--theme-text) 86%, var(--theme-accent-solid, var(--theme-primary)));
   font-size: 0.85rem;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -246,14 +260,23 @@ img {
   position: relative;
   min-height: 100vh;
   overflow: hidden;
+  background:
+    radial-gradient(circle at 12% 14%, color-mix(in srgb, var(--theme-secondary-area, var(--theme-secondary)) 18%, transparent), transparent 30%),
+    radial-gradient(circle at 88% 0%, color-mix(in srgb, var(--theme-primary-button, var(--theme-primary)) 14%, transparent), transparent 24%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--theme-background) 96%, black) 0%,
+      color-mix(in srgb, var(--theme-background) 90%, black) 50%,
+      color-mix(in srgb, var(--theme-background) 82%, black) 100%
+    );
 }
 
 .public-site__mesh {
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--theme-primary) 12%, transparent), transparent 24%),
-    radial-gradient(circle at 80% 15%, color-mix(in srgb, var(--theme-secondary) 12%, transparent), transparent 22%),
+    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--theme-primary-button, var(--theme-primary)) 12%, transparent), transparent 24%),
+    radial-gradient(circle at 80% 15%, color-mix(in srgb, var(--theme-secondary-area, var(--theme-secondary)) 14%, transparent), transparent 22%),
     radial-gradient(circle at 50% 100%, rgba(255, 255, 255, 0.04), transparent 28%);
   pointer-events: none;
 }
@@ -308,7 +331,7 @@ img {
 .public-site__status {
   padding: 0.4rem 0.75rem;
   border-radius: var(--radius-pill);
-  background: var(--theme-surface-alt);
+  background: color-mix(in srgb, var(--theme-secondary-area, var(--theme-secondary)) 72%, var(--theme-card-alt, var(--theme-surface-alt)));
   border: 1px solid var(--theme-border);
 }
 
@@ -332,7 +355,12 @@ img {
   gap: clamp(1.1rem, 2vw, 1.6rem);
   padding: clamp(1rem, 1.8vw, 1.5rem);
   overflow: hidden;
-  background: linear-gradient(145deg, var(--theme-surface), var(--theme-surface-alt));
+  background:
+    linear-gradient(
+      145deg,
+      var(--theme-card, var(--theme-surface)),
+      color-mix(in srgb, var(--theme-secondary-area, var(--theme-secondary)) 42%, var(--theme-card-alt, var(--theme-surface-alt)))
+    );
 }
 
 .hero-card__content {
@@ -366,7 +394,7 @@ img {
   min-width: min(100%, 220px);
   padding: 0.75rem 0.9rem;
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--theme-accent) 60%, var(--theme-surface));
+  background: color-mix(in srgb, var(--theme-accent) 72%, var(--theme-card, var(--theme-surface)));
   border: 1px solid var(--theme-border);
 }
 
@@ -457,8 +485,8 @@ img {
   overflow: hidden;
   border-color: var(--theme-border);
   background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--theme-secondary) 18%, transparent), transparent 34%),
-    linear-gradient(180deg, var(--theme-surface-alt), var(--theme-surface));
+    radial-gradient(circle at top right, color-mix(in srgb, var(--theme-secondary-area, var(--theme-secondary)) 22%, transparent), transparent 34%),
+    linear-gradient(180deg, var(--theme-card-alt, var(--theme-surface-alt)), var(--theme-card, var(--theme-surface)));
   transition:
     transform 0.18s ease,
     filter 0.18s ease,
@@ -470,7 +498,7 @@ img {
 .action-tile--showcase:hover {
   transform: translateY(-3px);
   filter: brightness(1.04);
-  border-color: color-mix(in srgb, var(--theme-primary) 34%, var(--theme-border));
+  border-color: color-mix(in srgb, var(--theme-accent-solid, var(--theme-primary)) 34%, var(--theme-border));
   box-shadow: 0 18px 36px rgba(0, 0, 0, 0.18);
 }
 
@@ -519,11 +547,11 @@ img {
   border-radius: 14px;
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, var(--theme-text) 11%, transparent),
+    color-mix(in srgb, var(--theme-accent-solid, var(--theme-primary)) 14%, transparent),
     color-mix(in srgb, var(--theme-text) 5%, transparent)
   );
   color: var(--action-icon-glyph);
-  border: 1px solid color-mix(in srgb, var(--theme-text) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--theme-accent-solid, var(--theme-primary)) 16%, transparent);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.16),
     0 12px 24px color-mix(in srgb, var(--theme-background) 22%, transparent);
@@ -550,7 +578,7 @@ img {
 }
 
 .action-icon--generic {
-  --action-icon-glyph: var(--text-color, var(--theme-text));
+  --action-icon-glyph: var(--text-color, var(--theme-accent-solid, var(--theme-text)));
 }
 
 .action-icon--brand {
@@ -609,8 +637,8 @@ img {
   background:
     linear-gradient(
       145deg,
-      color-mix(in srgb, var(--theme-surface-alt) 72%, transparent),
-      color-mix(in srgb, var(--theme-surface) 94%, transparent)
+      color-mix(in srgb, var(--theme-card-alt, var(--theme-surface-alt)) 72%, transparent),
+      color-mix(in srgb, var(--theme-card, var(--theme-surface)) 94%, transparent)
     );
 }
 
@@ -620,7 +648,7 @@ img {
   overflow: hidden;
   border-radius: calc(var(--radius-md) + 0.25rem);
   border: 1px solid var(--theme-border);
-  background: color-mix(in srgb, var(--theme-surface-alt) 78%, transparent);
+  background: color-mix(in srgb, var(--theme-card-alt, var(--theme-surface-alt)) 78%, transparent);
 }
 
 .service-card__image {
@@ -851,13 +879,13 @@ img {
 }
 
 .review-card span {
-  color: color-mix(in srgb, var(--theme-secondary) 52%, var(--theme-primary));
+  color: color-mix(in srgb, var(--theme-accent-solid, var(--theme-primary)) 72%, var(--theme-secondary-area, var(--theme-secondary)));
 }
 
 .cta-card {
   background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--theme-primary) 18%, transparent), transparent 24%),
-    linear-gradient(135deg, var(--theme-surface), var(--theme-surface-alt));
+    radial-gradient(circle at top left, color-mix(in srgb, var(--theme-primary-button, var(--theme-primary)) 18%, transparent), transparent 24%),
+    linear-gradient(135deg, var(--theme-card, var(--theme-surface)), var(--theme-card-alt, var(--theme-surface-alt)));
 }
 
 .cta-card--footer {
@@ -915,8 +943,61 @@ img {
   padding: 0.8rem 1rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--theme-border);
-  background: color-mix(in srgb, var(--theme-surface-alt) 62%, transparent);
+  background: color-mix(in srgb, var(--theme-card-alt, var(--theme-surface-alt)) 62%, transparent);
   color: var(--theme-text);
+}
+
+.site-loading-screen {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1rem;
+  padding: 2rem;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.06), transparent 28%),
+    #000000;
+  color: #f5f7fa;
+  text-align: center;
+}
+
+.site-loading-screen strong {
+  font-family: var(--font-heading);
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+  letter-spacing: -0.03em;
+}
+
+.site-loading-screen span {
+  max-width: 34ch;
+  color: rgba(245, 247, 250, 0.72);
+  line-height: 1.65;
+}
+
+.site-loading-screen__pulse {
+  width: 76px;
+  height: 76px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+    #0a0a0a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 24px 48px rgba(0, 0, 0, 0.28);
+  animation: site-loading-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes site-loading-pulse {
+  0%,
+  100% {
+    transform: scale(0.98);
+    opacity: 0.88;
+  }
+
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .field input::placeholder {
@@ -2211,19 +2292,30 @@ img {
 
 .dashboard-shell .button--primary {
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 94%, white), color-mix(in srgb, var(--theme-secondary) 88%, white)),
-    var(--theme-primary);
-  box-shadow: 0 14px 28px color-mix(in srgb, var(--theme-primary) 24%, transparent);
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--theme-card-alt, var(--theme-surface-alt)) 84%, black),
+      color-mix(in srgb, var(--theme-background) 92%, black)
+    ),
+    var(--theme-card, var(--theme-surface));
+  color: var(--theme-text);
+  border: 1px solid color-mix(in srgb, var(--theme-border) 86%, #3a404c);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 14px 28px rgba(0, 0, 0, 0.18);
 }
 
 .dashboard-shell .button--secondary {
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--theme-card, var(--theme-surface)) 92%, black);
+  color: var(--theme-text);
+  border: 1px solid color-mix(in srgb, var(--theme-border) 92%, transparent);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .dashboard-shell .button--secondary:hover,
 .dashboard-shell .button--primary:hover {
+  background: var(--theme-button-hover, #20242d);
+  border-color: color-mix(in srgb, var(--theme-accent-solid, var(--theme-primary)) 18%, var(--theme-border));
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.18);
 }
 
