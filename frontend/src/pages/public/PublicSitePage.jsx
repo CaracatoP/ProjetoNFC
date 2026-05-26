@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { BusinessPixModal } from '@/components/business/BusinessPixModal.jsx';
 import { BusinessWifiModal } from '@/components/business/BusinessWifiModal.jsx';
 import { EmptyState } from '@/components/common/EmptyState.jsx';
@@ -61,8 +61,17 @@ function TenantLoadingScreen() {
 
 export function PublicSitePage() {
   const { slug = '' } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
-  const { status, data: site, error, reload } = useBusinessSite(slug);
+  const previewQuery = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+
+    return {
+      preview: params.get('preview') === '1',
+      cacheBust: params.get('t') || '',
+    };
+  }, [location.search]);
+  const { status, data: site, error, reload } = useBusinessSite(slug, previewQuery);
   const { setSite } = useTenant();
   const { trackAction, trackPageView } = useAnalytics(site);
   const trackedSlugRef = useRef('');
@@ -116,14 +125,19 @@ export function PublicSitePage() {
     return subscribeToTenantUpdates(subscriptionTarget, {
       onTenantUpdated(payload) {
         if (payload?.slug && payload.slug !== slug) {
-          navigate(`/site/${payload.slug}`, { replace: true });
+          const previewSearch = previewQuery.preview ? `?preview=1&t=${Date.now()}` : '';
+          navigate(`/site/${payload.slug}${previewSearch}`, { replace: true });
           return;
         }
 
-        reload();
+        reload({
+          preview: previewQuery.preview,
+          bypassCache: true,
+          cacheBust: String(Date.now()),
+        });
       },
     });
-  }, [navigate, reload, site?.business?.id, slug]);
+  }, [navigate, previewQuery.preview, reload, site?.business?.id, slug]);
 
   function scrollToSection(sectionKey) {
     const element = document.getElementById(getSectionAnchor(sectionKey));

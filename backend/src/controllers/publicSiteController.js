@@ -2,13 +2,29 @@ import { successResponse } from '../utils/apiResponse.js';
 import { getPublicSiteByHost, getPublicSiteBySlug, resolveTagToSite } from '../services/publicSiteService.js';
 import { subscribeToTenantUpdates } from '../services/tenantRealtimeService.js';
 
+function isPreviewRequest(req) {
+  const previewValue = req.query?.preview ?? req.validated?.query?.preview;
+  return previewValue === '1' || previewValue === 'true' || previewValue === true;
+}
+
+function applyPublicSiteCacheHeaders(req, res) {
+  res.setHeader(
+    'Cache-Control',
+    isPreviewRequest(req)
+      ? 'no-store'
+      : 'public, max-age=30, stale-while-revalidate=120',
+  );
+}
+
 export async function getSiteBySlug(req, res) {
   const payload = await getPublicSiteBySlug(req.validated.params.slug);
+  applyPublicSiteCacheHeaders(req, res);
   return successResponse(res, payload, { resolvedBy: 'slug' });
 }
 
 export async function getSiteByHost(req, res) {
   const payload = await getPublicSiteByHost(req.validated?.query?.host || req.query?.host);
+  applyPublicSiteCacheHeaders(req, res);
   return successResponse(res, payload, { resolvedBy: 'host' });
 }
 

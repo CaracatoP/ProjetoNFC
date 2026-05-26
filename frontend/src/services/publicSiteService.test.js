@@ -1,4 +1,4 @@
-import { getPublicSiteBySlug } from './publicSiteService.js';
+import { getPublicSiteBySlug, resetPublicSiteCache } from './publicSiteService.js';
 import { buildTenantTheme } from '@shared/utils/theme.js';
 
 const baseTheme = buildTenantTheme({
@@ -14,6 +14,7 @@ const baseTheme = buildTenantTheme({
 
 describe('publicSiteService', () => {
   afterEach(() => {
+    resetPublicSiteCache();
     vi.unstubAllGlobals();
   });
 
@@ -88,5 +89,97 @@ describe('publicSiteService', () => {
         imageUrl: undefined,
       }),
     ]);
+  });
+
+  it('deduplicates simultaneous public slug requests and reuses the cached payload', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          business: {
+            id: 'business-1',
+            slug: 'barbearia-estilo-vivo',
+            name: 'Barbearia Estilo Vivo',
+            status: 'active',
+            hours: [],
+            contact: {},
+            seo: {
+              title: 'Barbearia Estilo Vivo',
+              description: 'Pagina publica',
+            },
+          },
+          theme: baseTheme,
+          sections: [],
+          links: [],
+          seo: {
+            title: 'Barbearia Estilo Vivo',
+            description: 'Pagina publica',
+          },
+        },
+      }),
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const [firstSite, secondSite] = await Promise.all([
+      getPublicSiteBySlug('barbearia-estilo-vivo'),
+      getPublicSiteBySlug('barbearia-estilo-vivo'),
+    ]);
+    const thirdSite = await getPublicSiteBySlug('barbearia-estilo-vivo');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(firstSite.business.slug).toBe('barbearia-estilo-vivo');
+    expect(secondSite).toEqual(firstSite);
+    expect(thirdSite).toEqual(firstSite);
+  });
+
+  it('bypasses the public cache for preview fetches and forwards preview query params to the API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          business: {
+            id: 'business-1',
+            slug: 'barbearia-estilo-vivo',
+            name: 'Barbearia Estilo Vivo',
+            status: 'active',
+            hours: [],
+            contact: {},
+            seo: {
+              title: 'Barbearia Estilo Vivo',
+              description: 'Pagina publica',
+            },
+          },
+          theme: baseTheme,
+          sections: [],
+          links: [],
+          seo: {
+            title: 'Barbearia Estilo Vivo',
+            description: 'Pagina publica',
+          },
+        },
+      }),
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getPublicSiteBySlug('barbearia-estilo-vivo');
+    await getPublicSiteBySlug('barbearia-estilo-vivo', {
+      preview: true,
+      bypassCache: true,
+      cacheBust: '1700000000000',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0]).toContain('/public/site/barbearia-estilo-vivo?preview=1&t=1700000000000');
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({
+      headers: expect.objectContaining({
+        'Cache-Control': 'no-store',
+      }),
+    });
   });
 });

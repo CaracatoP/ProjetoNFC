@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card } from '@/components/common/Card.jsx';
 import { SectionHeader } from '@/components/common/SectionHeader.jsx';
+import { resolveMediaUrl } from '@/utils/formatters.js';
 
 export function BusinessGallerySection({ section }) {
   const images = section.items || [];
@@ -8,6 +9,11 @@ export function BusinessGallerySection({ section }) {
   const totalImages = images.length;
   const safeIndex = totalImages ? activeIndex % totalImages : 0;
   const activeImage = images[safeIndex];
+  const activeImageUrl = resolveMediaUrl(activeImage?.imageUrl, {
+    width: 1200,
+    height: 900,
+    fit: 'fill',
+  });
 
   useEffect(() => {
     if (totalImages <= 1) {
@@ -37,7 +43,14 @@ export function BusinessGallerySection({ section }) {
       <div className="gallery-carousel">
         <div className="gallery-carousel__frame">
           <figure key={activeImage.id} className="gallery-card gallery-card--active">
-            <img src={activeImage.imageUrl} alt={activeImage.alt || section.title} loading="lazy" />
+            <img
+              src={activeImageUrl}
+              alt={activeImage.alt || section.title}
+              width="1200"
+              height="900"
+              loading="lazy"
+              decoding="async"
+            />
           </figure>
 
           {totalImages > 1 ? (

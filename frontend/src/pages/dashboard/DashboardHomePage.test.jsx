@@ -748,6 +748,31 @@ describe('DashboardHomePage', () => {
     expect(editorScope.getAllByText('https://studio-exemplo.taplinkapp.vercel.app')).toHaveLength(2);
   });
 
+  it('builds the preview iframe URL with preview mode and refresh timestamp', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+
+    const iframe = screen.getByTitle('Preview Barbearia Estilo Vivo');
+    const firstPreviewUrl = iframe.getAttribute('src') || '';
+
+    expect(firstPreviewUrl).toContain('/site/barbearia-estilo-vivo?preview=1&t=');
+
+    await user.click(screen.getByRole('button', { name: /Atualizar preview/i }));
+
+    await waitFor(() => {
+      const refreshedPreviewUrl = screen.getByTitle('Preview Barbearia Estilo Vivo').getAttribute('src') || '';
+      expect(refreshedPreviewUrl).toContain('/site/barbearia-estilo-vivo?preview=1&t=');
+      expect(refreshedPreviewUrl).not.toBe(firstPreviewUrl);
+    });
+  });
+
   it('blocks save when inline validation finds an invalid whatsapp', async () => {
     const user = userEvent.setup();
 

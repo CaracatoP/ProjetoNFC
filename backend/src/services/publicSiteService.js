@@ -1,8 +1,13 @@
 import { AppError } from '../utils/appError.js';
-import { findBusinessByHost, findBusinessBySlug, findBusinessBySlugStrict } from '../repositories/businessRepository.js';
+import {
+  findBusinessByHost,
+  findBusinessBySlug,
+  findPublicBusinessByHost,
+  findPublicBusinessBySlugStrict,
+} from '../repositories/businessRepository.js';
 import { findThemeByBusinessId } from '../repositories/themeRepository.js';
-import { listVisibleSectionsByBusinessId } from '../repositories/sectionRepository.js';
-import { listVisibleLinksByBusinessId } from '../repositories/linkRepository.js';
+import { listPublicVisibleSectionsByBusinessId } from '../repositories/sectionRepository.js';
+import { listPublicVisibleLinksByBusinessId } from '../repositories/linkRepository.js';
 import { findTagByCode, touchTag } from '../repositories/nfcTagRepository.js';
 import { env } from '../config/env.js';
 import {
@@ -373,8 +378,8 @@ async function getPublicSiteByBusiness(business) {
 
   const [theme, sections, links] = await Promise.all([
     findThemeByBusinessId(business._id),
-    listVisibleSectionsByBusinessId(business._id),
-    listVisibleLinksByBusinessId(business._id),
+    listPublicVisibleSectionsByBusinessId(business._id),
+    listPublicVisibleLinksByBusinessId(business._id),
   ]);
   const resolvedTheme = buildTenantTheme(theme || {});
 
@@ -443,12 +448,12 @@ async function getPublicSiteByBusiness(business) {
 }
 
 export async function getPublicSiteBySlug(slug) {
-  const business = await findBusinessBySlugStrict(slug);
+  const business = await findPublicBusinessBySlugStrict(slug);
   return getPublicSiteByBusiness(business);
 }
 
 export async function getPublicSiteByHost(host) {
-  const business = await findBusinessByHost(host);
+  const business = await findPublicBusinessByHost(host);
   return getPublicSiteByBusiness(business);
 }
 

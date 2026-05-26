@@ -43,10 +43,20 @@ describe('Public routes', () => {
     const response = await request(app).get('/api/public/site/barbearia-estilo-vivo');
 
     expect(response.status).toBe(200);
+    expect(response.headers['cache-control']).toBe('public, max-age=30, stale-while-revalidate=120');
     expect(response.body.success).toBe(true);
     expect(response.body.data.business.slug).toBe('barbearia-estilo-vivo');
     expect(response.body.data.sections[0].type).toBe('hero');
     expect(response.body.data.sections.some((section) => section.type === 'pix')).toBe(true);
+  });
+
+  it('returns no-store cache headers for preview public requests by slug', async () => {
+    const response = await request(app)
+      .get('/api/public/site/barbearia-estilo-vivo')
+      .query({ preview: '1', t: '1700000000000' });
+
+    expect(response.status).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
   });
 
   it('normalizes the public section copy for legacy seeded tenants', async () => {
@@ -171,8 +181,23 @@ describe('Public routes', () => {
     const response = await request(app).get('/api/public/site').query({ host: 'estilo-vivo.tenant.local' });
 
     expect(response.status).toBe(200);
+    expect(response.headers['cache-control']).toBe('public, max-age=30, stale-while-revalidate=120');
     expect(response.body.data.business.slug).toBe('barbearia-estilo-vivo');
     expect(response.body.meta.resolvedBy).toBe('host');
+  });
+
+  it('returns no-store cache headers for preview public requests by host', async () => {
+    await Business.findOneAndUpdate(
+      { slug: 'barbearia-estilo-vivo' },
+      { domains: { subdomain: 'estilo-vivo', customDomain: '' } },
+    );
+
+    const response = await request(app)
+      .get('/api/public/site')
+      .query({ host: 'estilo-vivo.tenant.local', preview: '1', t: '1700000000000' });
+
+    expect(response.status).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
   });
 
   it('resolves the tenant by configured custom domain host', async () => {

@@ -1,5 +1,6 @@
 import { Card } from '@/components/common/Card.jsx';
 import { SectionHeader } from '@/components/common/SectionHeader.jsx';
+import { resolveMediaUrl } from '@/utils/formatters.js';
 
 function normalizeComparableText(value) {
   return String(value || '')
@@ -29,14 +30,31 @@ export function BusinessHeroSection({ business, section }) {
   const shouldHideDuplicateBadge =
     normalizeComparableText(badge) && normalizeComparableText(badge) === normalizeComparableText(title);
   const description = business.description || section.description;
-  const logoUrl = business.logoUrl || settings.logoUrl;
-  const bannerUrl = business.bannerUrl || settings.bannerUrl;
+  const logoUrl = resolveMediaUrl(business.logoUrl || settings.logoUrl, {
+    width: 168,
+    height: 168,
+    fit: 'fill',
+  });
+  const bannerUrl = resolveMediaUrl(business.bannerUrl || settings.bannerUrl, {
+    width: 1280,
+    height: 720,
+    fit: 'fill',
+  });
   return (
     <Card className="hero-card">
       <div className="hero-card__content">
         {logoUrl ? (
           <div className="hero-card__branding">
-            <img className="hero-card__logo" src={logoUrl} alt={`Logo ${business.name}`} />
+            <img
+              className="hero-card__logo"
+              src={logoUrl}
+              alt={`Logo ${business.name}`}
+              width="168"
+              height="168"
+              loading="eager"
+              decoding="async"
+              fetchPriority="high"
+            />
           </div>
         ) : null}
 
@@ -58,7 +76,17 @@ export function BusinessHeroSection({ business, section }) {
       </div>
 
       <div className="hero-card__visual">
-        {bannerUrl ? <img src={bannerUrl} alt={business.name} /> : null}
+        {bannerUrl ? (
+          <img
+            src={bannerUrl}
+            alt={business.name}
+            width="1280"
+            height="720"
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
+          />
+        ) : null}
       </div>
     </Card>
   );

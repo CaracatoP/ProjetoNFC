@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { slugify } from '@shared/utils/tenantIdentity.js';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
@@ -112,9 +112,13 @@ export function DashboardHomePage() {
   const [tenantSearchInput, setTenantSearchInput] = useState('');
   const [tenantSort, setTenantSort] = useState('newest');
   const [tenantStatusFilter, setTenantStatusFilter] = useState('all');
-  const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
+  const [previewRefreshKey, setPreviewRefreshKey] = useState(() => Date.now());
   const [activeView, setActiveView] = useState('workspace');
   const debouncedTenantSearch = useDebouncedValue(tenantSearchInput, 300);
+
+  const refreshPreview = useCallback(() => {
+    setPreviewRefreshKey((current) => Math.max(Date.now(), current + 1));
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -238,7 +242,7 @@ export function DashboardHomePage() {
       const createdEditor = await createAdminBusiness(token, payload);
       setEditor(createdEditor);
       await refreshCollections(createdEditor.business.id);
-      setPreviewRefreshKey((current) => current + 1);
+      refreshPreview();
       setMessage('Tenant criado com sucesso. Agora voce pode completar o conteudo no editor.');
     } catch (createError) {
       setError(getErrorMessage(createError));
@@ -256,7 +260,7 @@ export function DashboardHomePage() {
       const updatedEditor = await updateAdminBusiness(token, draft.business.id, draft);
       setEditor(updatedEditor);
       await refreshCollections(draft.business.id);
-      setPreviewRefreshKey((current) => current + 1);
+      refreshPreview();
       setMessage('Alteracoes salvas e analytics atualizados.');
     } catch (saveError) {
       setError(getErrorMessage(saveError));
@@ -278,7 +282,7 @@ export function DashboardHomePage() {
       await deleteAdminBusiness(token, businessId);
       setEditor(null);
       await refreshCollections('');
-      setPreviewRefreshKey((current) => current + 1);
+      refreshPreview();
       setMessage('Tenant removido com sucesso.');
     } catch (deleteError) {
       setError(getErrorMessage(deleteError));
@@ -296,7 +300,7 @@ export function DashboardHomePage() {
       const updatedEditor = await updateAdminBusinessStatus(token, businessId, nextStatus);
       setEditor(updatedEditor);
       await refreshCollections(businessId);
-      setPreviewRefreshKey((current) => current + 1);
+      refreshPreview();
       setMessage(
         nextStatus === 'active'
           ? 'Site ativado com sucesso. A pagina publica voltou a ficar disponivel.'
@@ -337,7 +341,7 @@ export function DashboardHomePage() {
       setSelectedBusinessId(duplicatedEditor.business.id);
       setEditor(duplicatedEditor);
       await refreshCollections(duplicatedEditor.business.id);
-      setPreviewRefreshKey((current) => current + 1);
+      refreshPreview();
       setMessage('Tenant duplicado com sucesso. O codigo NFC foi limpo para evitar conflito no clone.');
     } catch (duplicateError) {
       setError(getErrorMessage(duplicateError));
@@ -402,7 +406,7 @@ export function DashboardHomePage() {
   const selectedSummary = businesses.find((business) => business.id === selectedBusinessId) || null;
   const previewUrl =
     selectedSummary?.slug && typeof window !== 'undefined'
-      ? `${window.location.origin}/site/${selectedSummary.slug}`
+      ? `${window.location.origin}/site/${selectedSummary.slug}?preview=1&t=${previewRefreshKey}`
       : selectedSummary?.publicUrl || '';
 
   return (
@@ -554,7 +558,7 @@ export function DashboardHomePage() {
                       businessName={selectedSummary?.name || ''}
                       status={selectedSummary?.status || ''}
                       previewKey={previewRefreshKey}
-                      onRefresh={() => setPreviewRefreshKey((current) => current + 1)}
+                      onRefresh={refreshPreview}
                     />
                   </div>
                 </div>

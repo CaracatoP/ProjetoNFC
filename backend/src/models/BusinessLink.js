@@ -20,6 +20,7 @@ const businessLinkSchema = new mongoose.Schema(
   baseSchemaOptions,
 );
 
+businessLinkSchema.index({ businessId: 1, visible: 1, order: 1, createdAt: 1 });
+
 export const BusinessLink =
   mongoose.models.BusinessLink || mongoose.model('BusinessLink', businessLinkSchema);
-

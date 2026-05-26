@@ -12,13 +12,25 @@ export function BusinessServicesSection({ section }) {
       <SectionHeader title={section.title} description={section.description} />
       <div className="service-grid">
         {section.items.map((service) => {
-          const serviceImageUrl = resolveMediaUrl(service.imageUrl);
+          const serviceImageUrl = resolveMediaUrl(service.imageUrl, {
+            width: 640,
+            height: 360,
+            fit: 'fill',
+          });
 
           return (
             <article key={service.id} className="service-card">
               {serviceImageUrl ? (
                 <div className="service-card__media">
-                  <img className="service-card__image" src={serviceImageUrl} alt={service.name} />
+                  <img
+                    className="service-card__image"
+                    src={serviceImageUrl}
+                    alt={service.name}
+                    width="640"
+                    height="360"
+                    loading="lazy"
+                    decoding="async"
+                  />
                 </div>
               ) : null}
 

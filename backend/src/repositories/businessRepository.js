@@ -1,18 +1,42 @@
 import { normalizeHost } from '../../../shared/utils/tenantIdentity.js';
 import { Business } from '../models/Business.js';
 
+const PUBLIC_BUSINESS_PROJECTION = {
+  slug: 1,
+  name: 1,
+  legalName: 1,
+  description: 1,
+  logoUrl: 1,
+  bannerUrl: 1,
+  badge: 1,
+  status: 1,
+  domains: 1,
+  address: 1,
+  hours: 1,
+  rating: 1,
+  contact: 1,
+  seo: 1,
+};
+
 function buildExcludedBusinessFilter(excludedBusinessId = null) {
   return excludedBusinessId ? { _id: { $ne: excludedBusinessId } } : {};
 }
 
-export async function findBusinessByHost(host) {
+function findLeanBusiness(filter, projection = null) {
+  return Business.findOne(filter, projection).lean();
+}
+
+export async function findBusinessByHost(host, projection = null) {
   const normalizedHost = normalizeHost(host);
 
   if (!normalizedHost) {
     return null;
   }
 
-  const exactCustomDomainMatch = await Business.findOne({ 'domains.customDomain': normalizedHost }).lean();
+  const exactCustomDomainMatch = await findLeanBusiness(
+    { 'domains.customDomain': normalizedHost },
+    projection,
+  );
 
   if (exactCustomDomainMatch) {
     return exactCustomDomainMatch;
@@ -24,21 +48,29 @@ export async function findBusinessByHost(host) {
     return null;
   }
 
-  return Business.findOne({ 'domains.subdomain': hostParts[0] }).lean();
+  return findLeanBusiness({ 'domains.subdomain': hostParts[0] }, projection);
 }
 
-export async function findBusinessBySlugStrict(slug) {
+export async function findBusinessBySlugStrict(slug, projection = null) {
   const normalizedSlug = String(slug || '').trim();
 
   if (!normalizedSlug) {
     return null;
   }
 
-  return Business.findOne({ slug: normalizedSlug }).lean();
+  return findLeanBusiness({ slug: normalizedSlug }, projection);
 }
 
-export async function findBusinessBySlug(slug) {
-  return Business.findOne({ slug }).lean();
+export async function findBusinessBySlug(slug, projection = null) {
+  return findLeanBusiness({ slug }, projection);
+}
+
+export async function findPublicBusinessByHost(host) {
+  return findBusinessByHost(host, PUBLIC_BUSINESS_PROJECTION);
+}
+
+export async function findPublicBusinessBySlugStrict(slug) {
+  return findBusinessBySlugStrict(slug, PUBLIC_BUSINESS_PROJECTION);
 }
 
 export async function isBusinessSlugTaken(slug, excludedBusinessId = null) {

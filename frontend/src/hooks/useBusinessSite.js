@@ -5,26 +5,53 @@ const initialState = {
   status: 'idle',
   data: null,
   error: null,
+  isRefreshing: false,
 };
 
-export function useBusinessSite(slug) {
+export function useBusinessSite(slug, options = {}) {
   const deferredSlug = useDeferredValue(slug);
   const [state, setState] = useState(initialState);
-  const [reloadKey, setReloadKey] = useState(0);
+  const [reloadState, setReloadState] = useState({ key: 0, options: {} });
 
-  const reload = useCallback(() => {
-    setReloadKey((current) => current + 1);
+  const reload = useCallback((reloadOptions = {}) => {
+    setReloadState((current) => ({
+      key: current.key + 1,
+      options: reloadOptions || {},
+    }));
   }, []);
 
   useEffect(() => {
     if (!deferredSlug) {
+      setState(initialState);
       return undefined;
     }
 
     let cancelled = false;
-    setState((current) => ({ ...current, status: 'loading', error: null }));
+    const requestOptions = {
+      ...options,
+      ...(reloadState.options || {}),
+    };
 
-    getPublicSiteBySlug(deferredSlug)
+    if (requestOptions.preview) {
+      requestOptions.bypassCache = true;
+    }
+
+    setState((current) =>
+      current.data
+        ? {
+            ...current,
+            error: null,
+            isRefreshing: true,
+          }
+        : {
+            ...current,
+            status: 'loading',
+            error: null,
+            isRefreshing: true,
+          },
+    );
+
+    getPublicSiteBySlug(deferredSlug, requestOptions)
       .then((payload) => {
         if (cancelled) {
           return;
@@ -35,6 +62,7 @@ export function useBusinessSite(slug) {
             status: 'success',
             data: payload,
             error: null,
+            isRefreshing: false,
           });
         });
       })
@@ -43,17 +71,26 @@ export function useBusinessSite(slug) {
           return;
         }
 
-        setState({
-          status: 'error',
-          data: null,
-          error,
-        });
+        setState((current) =>
+          current.data
+            ? {
+                ...current,
+                error,
+                isRefreshing: false,
+              }
+            : {
+                status: 'error',
+                data: null,
+                error,
+                isRefreshing: false,
+              },
+        );
       });
 
     return () => {
       cancelled = true;
     };
-  }, [deferredSlug, reloadKey]);
+  }, [deferredSlug, options, reloadState]);
 
   return {
     ...state,

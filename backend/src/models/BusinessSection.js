@@ -29,6 +29,7 @@ const businessSectionSchema = new mongoose.Schema(
 );
 
 businessSectionSchema.index({ businessId: 1, key: 1 }, { unique: true });
+businessSectionSchema.index({ businessId: 1, visible: 1, order: 1, createdAt: 1 });
 
 export const BusinessSection =
   mongoose.models.BusinessSection || mongoose.model('BusinessSection', businessSectionSchema);

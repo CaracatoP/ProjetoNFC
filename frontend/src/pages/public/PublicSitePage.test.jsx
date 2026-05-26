@@ -322,6 +322,29 @@ describe('PublicSitePage', () => {
     });
   });
 
+  it('forces a fresh fetch when the public page is opened in preview mode', async () => {
+    render(
+      <TenantProvider>
+        <MemoryRouter initialEntries={['/site/barbearia-estilo-vivo?preview=1&t=1700000000000']}>
+          <Routes>
+            <Route path="/site/:slug" element={<PublicSitePage />} />
+          </Routes>
+        </MemoryRouter>
+      </TenantProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Barbearia Estilo Vivo' })).toBeInTheDocument();
+
+    expect(publicSiteService.getPublicSiteBySlug).toHaveBeenCalledWith(
+      'barbearia-estilo-vivo',
+      expect.objectContaining({
+        preview: true,
+        bypassCache: true,
+        cacheBust: '1700000000000',
+      }),
+    );
+  });
+
   it('cleans inline tenant theme variables when the public page unmounts', async () => {
     const view = render(
       <TenantProvider>
