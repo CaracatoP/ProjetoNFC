@@ -166,14 +166,38 @@ const businessBodySchema = z.object({
 });
 
 const themeBodySchema = z.object({
-  colors: z.record(z.string()),
-  typography: z.record(z.string()),
-  spacing: z.record(z.string()),
-  radius: z.record(z.string()),
-  layout: z.record(z.string()),
-  buttons: z.record(z.any()),
+  version: z.literal(2).optional(),
+  raw: z
+    .object({
+      version: z.literal(2).optional(),
+      backgroundColor: optionalString,
+      cardColor: optionalString,
+      buttonHoverColor: optionalString,
+      primaryButtonColor: optionalString,
+      textColor: optionalString,
+      accentColor: optionalString,
+      borderColor: optionalString,
+      secondaryColor: optionalString,
+    })
+    .partial()
+    .optional(),
+  backgroundColor: optionalString,
+  cardColor: optionalString,
+  buttonHoverColor: optionalString,
+  primaryButtonColor: optionalString,
+  textColor: optionalString,
+  accentColor: optionalString,
+  borderColor: optionalString,
+  secondaryColor: optionalString,
+  colors: z.record(z.string()).optional(),
+  typography: z.record(z.string()).optional(),
+  spacing: z.record(z.string()).optional(),
+  radius: z.record(z.string()).optional(),
+  layout: z.record(z.string()).optional(),
+  buttons: z.record(z.any()).optional(),
+  areas: z.record(z.any()).optional(),
   customCss: optionalString,
-});
+}).passthrough();
 
 const linksBodySchema = z.array(
   z.object({

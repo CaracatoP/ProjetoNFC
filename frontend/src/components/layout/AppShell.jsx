@@ -14,6 +14,18 @@ function upsertHeadLink(rel, attributes = {}) {
   return element;
 }
 
+function upsertThemeColor(content) {
+  let element = document.head.querySelector("meta[name='theme-color']");
+
+  if (!element) {
+    element = document.createElement('meta');
+    element.setAttribute('name', 'theme-color');
+    document.head.appendChild(element);
+  }
+
+  element.setAttribute('content', content);
+}
+
 export function AppShell({
   eyebrow,
   title,
@@ -26,6 +38,7 @@ export function AppShell({
 }) {
   useEffect(() => {
     document.title = pageTitle;
+    upsertThemeColor('#0f1115');
     upsertHeadLink('icon', { href: taplinkMarkUrl, type: 'image/svg+xml', sizes: 'any' });
     upsertHeadLink('alternate icon', { href: taplinkMarkUrl });
     upsertHeadLink('shortcut icon', { href: taplinkMarkUrl });

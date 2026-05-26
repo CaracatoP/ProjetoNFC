@@ -10,6 +10,9 @@ export function useTenantTheme(theme) {
     const resolvedTheme = buildTenantTheme(theme);
     const root = document.documentElement;
     const entries = Object.entries(buildThemeCssVariables(resolvedTheme));
+    const previousValues = new Map(
+      entries.map(([name]) => [name, root.style.getPropertyValue(name)]),
+    );
 
     entries.forEach(([name, value]) => root.style.setProperty(name, value));
 
@@ -23,6 +26,17 @@ export function useTenantTheme(theme) {
     }
 
     return () => {
+      entries.forEach(([name]) => {
+        const previousValue = previousValues.get(name) || '';
+
+        if (previousValue) {
+          root.style.setProperty(name, previousValue);
+          return;
+        }
+
+        root.style.removeProperty(name);
+      });
+
       if (styleTag) {
         styleTag.remove();
       }

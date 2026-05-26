@@ -1,30 +1,16 @@
 import { getPublicSiteBySlug } from './publicSiteService.js';
+import { buildTenantTheme } from '@shared/utils/theme.js';
 
-const baseTheme = {
-  colors: {
-    primary: '#f97316',
-    secondary: '#fb7185',
-    background: '#140d09',
-    surface: '#211410',
-    text: '#fff8f2',
-    textMuted: '#f4d5c3',
-    border: 'rgba(255,255,255,.12)',
-  },
-  typography: {
-    headingFamily: "'Space Grotesk', sans-serif",
-    bodyFamily: "'Manrope', sans-serif",
-    baseSize: '16px',
-    heroSize: '4rem',
-    sectionTitleSize: '2rem',
-  },
-  spacing: { xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '24px', xxl: '32px' },
-  radius: { sm: '8px', md: '16px', lg: '24px', pill: '999px' },
-  layout: { maxWidth: '1180px', pagePadding: '24px', sectionGap: '24px', cardGap: '16px' },
-  buttons: {
-    primary: { background: '#f97316', color: '#ffffff' },
-    secondary: { background: '#211410', color: '#fff8f2' },
-  },
-};
+const baseTheme = buildTenantTheme({
+  backgroundColor: '#140d09',
+  cardColor: '#211410',
+  buttonHoverColor: '#2b1d16',
+  primaryButtonColor: '#f97316',
+  textColor: '#fff8f2',
+  accentColor: '#f97316',
+  borderColor: '#4d372e',
+  secondaryColor: '#fb7185',
+});
 
 describe('publicSiteService', () => {
   afterEach(() => {

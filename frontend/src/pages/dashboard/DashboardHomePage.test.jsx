@@ -171,18 +171,15 @@ const editorFixture = {
     },
   },
   theme: {
-    colors: {
-      primary: '#f97316',
-      secondary: '#fb7185',
-      background: '#140d09',
-      text: '#fff8f2',
-    },
-    typography: {},
-    spacing: {},
-    radius: {},
-    layout: {},
-    buttons: {},
-    customCss: '',
+    version: 2,
+    backgroundColor: '#140d09',
+    cardColor: '#221612',
+    buttonHoverColor: '#2c1c17',
+    primaryButtonColor: '#f97316',
+    textColor: '#fff8f2',
+    accentColor: '#fb7185',
+    borderColor: '#4b342d',
+    secondaryColor: '#7c3aed',
   },
   links: [
     {
@@ -457,7 +454,7 @@ describe('DashboardHomePage', () => {
     });
   });
 
-  it('keeps brand colors independent and updates the live preview when only the background changes', async () => {
+  it('renders the eight visual customization controls and keeps the live preview independent when only the background changes', async () => {
     const user = userEvent.setup();
 
     render(
@@ -470,15 +467,25 @@ describe('DashboardHomePage', () => {
     expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Configuracoes/i }));
 
-    expect(screen.getByText('Personalizacao de Cores')).toBeInTheDocument();
+    expect(screen.getByText('Personalizacao Visual')).toBeInTheDocument();
 
-    const backgroundColorInput = screen.getByLabelText('Cor de fundo');
+    expect(screen.getByLabelText('Cor de fundo principal')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cor dos cards/botoes')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cor de hover dos botoes')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cor do botao principal/destaque')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cor do texto principal')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cor dos icones/detalhes')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cor das bordas/linhas')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cor secundaria')).toBeInTheDocument();
+
+    const backgroundColorInput = screen.getByLabelText('Cor de fundo principal');
     fireEvent.change(backgroundColorInput, { target: { value: '#f3ecdf' } });
 
     const livePreview = screen.getByTestId('theme-live-preview');
     expect(livePreview.style.getPropertyValue('--theme-background')).toBe('#f3ecdf');
-    expect(livePreview.style.getPropertyValue('--theme-primary')).toBe('#f97316');
-    expect(livePreview.style.getPropertyValue('--theme-secondary')).toBe('#fb7185');
+    expect(livePreview.style.getPropertyValue('--theme-primary-button')).toBe('#f97316');
+    expect(livePreview.style.getPropertyValue('--theme-card')).toBe('#221612');
+    expect(livePreview.style.getPropertyValue('--theme-secondary-area')).toBe('#7c3aed');
 
     fireEvent.click(screen.getByRole('button', { name: /Salvar alteracoes/i }));
 
@@ -487,10 +494,11 @@ describe('DashboardHomePage', () => {
         .filter((call) => call[0] === 'admin-token' && call[1] === 'business-1')
         .at(-1);
 
-      expect(saveCall?.[2]?.theme?.colors?.background).toBe('#f3ecdf');
-      expect(saveCall?.[2]?.theme?.colors?.primary).toBe('#f97316');
-      expect(saveCall?.[2]?.theme?.colors?.secondary).toBe('#fb7185');
-      expect(saveCall?.[2]?.theme?.buttons?.primary?.background).toContain('#f97316');
+      expect(saveCall?.[2]?.theme?.raw?.version).toBe(2);
+      expect(saveCall?.[2]?.theme?.raw?.backgroundColor).toBe('#f3ecdf');
+      expect(saveCall?.[2]?.theme?.raw?.primaryButtonColor).toBe('#f97316');
+      expect(saveCall?.[2]?.theme?.raw?.cardColor).toBe('#221612');
+      expect(saveCall?.[2]?.theme?.raw?.secondaryColor).toBe('#7c3aed');
     });
   });
 
@@ -509,10 +517,14 @@ describe('DashboardHomePage', () => {
 
     await user.click(screen.getByRole('button', { name: /Escuro premium/i }));
 
-    expect(screen.getByLabelText('Cor primaria')).toHaveValue('#d4a24c');
+    expect(screen.getByLabelText('Cor do botao principal/destaque')).toHaveValue('#d4a24c');
     expect(screen.getByLabelText('Cor secundaria')).toHaveValue('#5b6cff');
-    expect(screen.getByLabelText('Cor de fundo')).toHaveValue('#0d1321');
-    expect(screen.getByLabelText('Cor do texto')).toHaveValue('#f5f1e8');
+    expect(screen.getByLabelText('Cor de fundo principal')).toHaveValue('#0d1321');
+    expect(screen.getByLabelText('Cor do texto principal')).toHaveValue('#f5f1e8');
+    expect(screen.getByLabelText('Cor dos cards/botoes')).toHaveValue('#171f31');
+    expect(screen.getByLabelText('Cor de hover dos botoes')).toHaveValue('#243048');
+    expect(screen.getByLabelText('Cor dos icones/detalhes')).toHaveValue('#d4a24c');
+    expect(screen.getByLabelText('Cor das bordas/linhas')).toHaveValue('#32405d');
 
     fireEvent.change(screen.getByLabelText('Cor secundaria'), { target: { value: '#ff4d6d' } });
     fireEvent.click(screen.getByRole('button', { name: /Salvar alteracoes/i }));
@@ -522,10 +534,11 @@ describe('DashboardHomePage', () => {
         .filter((call) => call[0] === 'admin-token' && call[1] === 'business-1')
         .at(-1);
 
-      expect(saveCall?.[2]?.theme?.colors?.background).toBe('#0d1321');
-      expect(saveCall?.[2]?.theme?.colors?.primary).toBe('#d4a24c');
-      expect(saveCall?.[2]?.theme?.colors?.secondary).toBe('#ff4d6d');
-      expect(saveCall?.[2]?.theme?.colors?.text).toBe('#f5f1e8');
+      expect(saveCall?.[2]?.theme?.raw?.backgroundColor).toBe('#0d1321');
+      expect(saveCall?.[2]?.theme?.raw?.primaryButtonColor).toBe('#d4a24c');
+      expect(saveCall?.[2]?.theme?.raw?.secondaryColor).toBe('#ff4d6d');
+      expect(saveCall?.[2]?.theme?.raw?.textColor).toBe('#f5f1e8');
+      expect(saveCall?.[2]?.theme?.raw?.cardColor).toBe('#171f31');
     });
   });
 

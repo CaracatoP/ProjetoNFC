@@ -1,11 +1,14 @@
 /**
  * @typedef {Object} ThemeTokens
+ * @property {number} version
+ * @property {Object} raw
  * @property {Object} colors
  * @property {Object} typography
  * @property {Object} spacing
  * @property {Object} radius
  * @property {Object} layout
  * @property {Object} buttons
+ * @property {Object} [areas]
  */
 
 /**
@@ -24,4 +27,3 @@
  */
 
 export {};
-

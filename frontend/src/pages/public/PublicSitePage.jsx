@@ -49,6 +49,16 @@ function getPublicErrorContent(error) {
   };
 }
 
+function TenantLoadingScreen() {
+  return (
+    <div className="site-loading-screen" role="status" aria-live="polite">
+      <div className="site-loading-screen__pulse" aria-hidden="true" />
+      <strong>Carregando pagina NFC</strong>
+      <span>Preparando o conteudo do tenant com o tema mais recente.</span>
+    </div>
+  );
+}
+
 export function PublicSitePage() {
   const { slug = '' } = useParams();
   const navigate = useNavigate();
@@ -158,11 +168,7 @@ export function PublicSitePage() {
   }
 
   if (status === 'loading' || status === 'idle') {
-    return (
-      <PublicSiteLayout business={{ slug: slug || 'carregando', status: 'loading' }}>
-        <EmptyState title="Carregando pagina NFC" description="Buscando conteudo dinamico do tenant." />
-      </PublicSiteLayout>
-    );
+    return <TenantLoadingScreen />;
   }
 
   if (status === 'error') {

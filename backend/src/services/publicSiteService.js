@@ -16,6 +16,7 @@ import {
   normalizeManagedLinkActions,
   normalizePhoneActionValue,
 } from '../../../shared/utils/tenantIdentity.js';
+import { buildTenantTheme } from '../../../shared/utils/theme.js';
 
 function isManagedLinkMatch(link, action) {
   const url = String(link?.url || '').toLowerCase();
@@ -375,10 +376,7 @@ async function getPublicSiteByBusiness(business) {
     listVisibleSectionsByBusinessId(business._id),
     listVisibleLinksByBusinessId(business._id),
   ]);
-
-  if (!theme) {
-    throw new AppError('Tema do negocio nao encontrado', 500, 'business_theme_missing');
-  }
+  const resolvedTheme = buildTenantTheme(theme || {});
 
   const hydratedSections = sections
     .map((section) => hydrateSection(section, business, links))
@@ -407,15 +405,7 @@ async function getPublicSiteByBusiness(business) {
         imageUrl: business.seo?.imageUrl,
       },
     },
-    theme: {
-      colors: theme.colors,
-      typography: theme.typography,
-      spacing: theme.spacing,
-      radius: theme.radius,
-      layout: theme.layout,
-      buttons: theme.buttons,
-      customCss: theme.customCss,
-    },
+    theme: resolvedTheme,
     sections: hydratedSections.map((section) => ({
       id: section._id.toString(),
       key: section.key,
