@@ -5,6 +5,11 @@ import { BusinessLink } from '../models/BusinessLink.js';
 import { BusinessSection } from '../models/BusinessSection.js';
 import { BusinessTheme } from '../models/BusinessTheme.js';
 import { NfcTag } from '../models/NfcTag.js';
+import { Product } from '../models/Product.js';
+import { Professional } from '../models/Professional.js';
+import { AppointmentService } from '../models/AppointmentService.js';
+import { AppointmentRequest } from '../models/AppointmentRequest.js';
+import { Order } from '../models/Order.js';
 import { Subscription } from '../models/Subscription.js';
 import { SHORTCUT_TARGET_TYPES } from '../utils/adminAnalytics.js';
 
@@ -122,6 +127,11 @@ export async function deleteBusinessGraphRecords(businessId) {
     BusinessLink.deleteMany({ businessId }),
     NfcTag.deleteMany({ businessId }),
     AnalyticsEvent.deleteMany({ businessId }),
+    Product.deleteMany({ businessId }),
+    Professional.deleteMany({ businessId }),
+    AppointmentService.deleteMany({ businessId }),
+    AppointmentRequest.deleteMany({ businessId }),
+    Order.deleteMany({ businessId }),
     Subscription.deleteMany({ businessId }),
   ]);
 }

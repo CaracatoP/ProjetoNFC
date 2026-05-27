@@ -423,6 +423,7 @@ export const EDITOR_STEPS = [
   { id: 'basic', label: 'Identidade', description: 'Dados do tenant, contato, dominio e horarios.' },
   { id: 'visual', label: 'Visual', description: 'Logo, banner, favicon e midia principal.' },
   { id: 'content', label: 'Conteudo', description: 'Servicos, galeria e texto principal.' },
+  { id: 'modules', label: 'Modulos', description: 'Segmento da empresa, modulos ativos e operacao do tenant.' },
   { id: 'links', label: 'Links', description: 'Acessos rapidos e atalhos publicos.' },
   { id: 'payments', label: 'Pagamentos', description: 'PIX e Wi-Fi usados nas acoes do site.' },
   { id: 'settings', label: 'Configuracoes', description: 'SEO, tema, secoes e historico de alteracoes.' },
@@ -548,6 +549,10 @@ export function getFieldStep(path) {
 
   if (path.startsWith('links.') || path.includes('primaryAction.href')) {
     return 'links';
+  }
+
+  if (path.startsWith('business.segment') || path.startsWith('business.modules') || path.startsWith('modulesData.')) {
+    return 'modules';
   }
 
   if (path.startsWith('sections.gallery') || path.startsWith('sections.services')) {

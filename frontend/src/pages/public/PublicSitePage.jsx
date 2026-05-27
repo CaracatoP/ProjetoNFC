@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { buildBusinessSegmentState } from '@shared/utils/segments.js';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { BusinessAppointmentsSection } from '@/components/business/BusinessAppointmentsSection.jsx';
+import { BusinessCatalogSection } from '@/components/business/BusinessCatalogSection.jsx';
 import { BusinessPixModal } from '@/components/business/BusinessPixModal.jsx';
+import { BusinessLoyaltySection } from '@/components/business/BusinessLoyaltySection.jsx';
 import { BusinessWifiModal } from '@/components/business/BusinessWifiModal.jsx';
 import { EmptyState } from '@/components/common/EmptyState.jsx';
 import { PublicSiteLayout } from '@/components/layout/PublicSiteLayout.jsx';
 import { SectionRenderer } from '@/components/business/SectionRenderer.jsx';
 import { useAnalytics } from '@/hooks/useAnalytics.js';
 import { useBusinessSite } from '@/hooks/useBusinessSite.js';
+import { createPublicAppointmentRequest, createPublicOrder } from '@/services/publicSiteService.js';
 import { subscribeToTenantUpdates } from '@/services/tenantRealtimeService.js';
 import { useTenantTheme } from '@/hooks/useTenantTheme.js';
 import { useTenant } from '@/context/TenantContext.jsx';
@@ -74,6 +79,7 @@ export function PublicSitePage() {
   const { status, data: site, error, reload } = useBusinessSite(slug, previewQuery);
   const { setSite } = useTenant();
   const { trackAction, trackPageView } = useAnalytics(site);
+  const segmentState = useMemo(() => buildBusinessSegmentState(site?.business || {}), [site?.business]);
   const trackedSlugRef = useRef('');
   const [activeModal, setActiveModal] = useState(null);
 
@@ -181,6 +187,22 @@ export function PublicSitePage() {
     }
   }
 
+  async function handleAppointmentRequest(payload) {
+    if (!site?.business?.slug) {
+      return;
+    }
+
+    return createPublicAppointmentRequest(site.business.slug, payload);
+  }
+
+  async function handleOrder(payload) {
+    if (!site?.business?.slug) {
+      return;
+    }
+
+    return createPublicOrder(site.business.slug, payload);
+  }
+
   if (status === 'loading' || status === 'idle') {
     return <TenantLoadingScreen />;
   }
@@ -206,6 +228,32 @@ export function PublicSitePage() {
           onTrackAction={trackAction}
         />
       ))}
+      {segmentState.modules.catalog ? (
+        <BusinessCatalogSection
+          tenantSlug={site.business.slug}
+          modules={segmentState.modules}
+          segmentConfig={segmentState.segmentConfig}
+          products={site.modulesData?.products || []}
+          onSubmitOrder={handleOrder}
+          onTrackAction={trackAction}
+        />
+      ) : null}
+      {segmentState.modules.appointments ? (
+        <BusinessAppointmentsSection
+          segmentConfig={segmentState.segmentConfig}
+          professionals={site.modulesData?.professionals || []}
+          appointmentServices={site.modulesData?.appointmentServices || []}
+          onSubmitAppointment={handleAppointmentRequest}
+          onTrackAction={trackAction}
+        />
+      ) : null}
+      {segmentState.modules.loyalty ? (
+        <BusinessLoyaltySection
+          business={site.business}
+          segmentConfig={segmentState.segmentConfig}
+          onTrackAction={trackAction}
+        />
+      ) : null}
       <BusinessWifiModal
         open={activeModal === 'wifi'}
         wifi={site.business.contact?.wifi}

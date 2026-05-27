@@ -35,6 +35,7 @@ export function normalizeEditorPayload(editor = {}) {
     ...editor,
     business: normalizeBusinessMedia(editor.business),
     sections: normalizeMediaSections(editor.sections || []),
+    modulesData: normalizeModulesDataMedia(editor.modulesData || {}),
   };
 }
 
@@ -43,11 +44,26 @@ export function normalizePublicSiteMedia(site = {}) {
     ...site,
     business: normalizeBusinessMedia(site.business || {}),
     sections: normalizeMediaSections(site.sections || []),
+    modulesData: normalizeModulesDataMedia(site.modulesData || {}),
     seo: site.seo
       ? {
           ...site.seo,
           imageUrl: resolveMediaUrl(site.seo.imageUrl),
         }
       : site.seo,
+  };
+}
+
+export function normalizeModulesDataMedia(modulesData = {}) {
+  return {
+    ...modulesData,
+    professionals: (modulesData.professionals || []).map((professional) => ({
+      ...professional,
+      avatar: resolveMediaUrl(professional.avatar),
+    })),
+    products: (modulesData.products || []).map((product) => ({
+      ...product,
+      image: resolveMediaUrl(product.image),
+    })),
   };
 }

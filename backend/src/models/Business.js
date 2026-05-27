@@ -1,6 +1,9 @@
 import mongoose from 'mongoose';
-import { BUSINESS_STATUS_VALUES } from '../../../shared/constants/index.js';
+import { BUSINESS_SEGMENT_VALUES, BUSINESS_STATUS_VALUES } from '../../../shared/constants/index.js';
+import { buildBusinessSegmentState } from '../../../shared/utils/segments.js';
 import { baseSchemaOptions } from '../utils/mongoose.js';
+
+const defaultSegmentState = buildBusinessSegmentState();
 
 const businessSchema = new mongoose.Schema(
   {
@@ -15,6 +18,15 @@ const businessSchema = new mongoose.Schema(
     badge: { type: String, trim: true },
     status: { type: String, enum: BUSINESS_STATUS_VALUES, default: 'draft', index: true },
     rating: { type: String, trim: true },
+    segment: { type: String, enum: BUSINESS_SEGMENT_VALUES, default: defaultSegmentState.segment, index: true },
+    modules: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({ ...defaultSegmentState.modules }),
+    },
+    segmentConfig: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({ ...defaultSegmentState.segmentConfig }),
+    },
     domains: {
       subdomain: { type: String, trim: true, lowercase: true },
       customDomain: { type: String, trim: true, lowercase: true },

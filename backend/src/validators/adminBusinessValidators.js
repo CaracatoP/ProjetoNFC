@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
   BUSINESS_STATUS,
+  BUSINESS_MODULE_KEY_VALUES,
+  BUSINESS_SEGMENT_VALUES,
   BUSINESS_STATUS_VALUES,
   LINK_GROUPS,
   LINK_TYPE_VALUES,
@@ -114,6 +116,16 @@ const businessBodySchema = z.object({
   badge: optionalString,
   status: z.enum(BUSINESS_STATUS_VALUES),
   rating: optionalString,
+  segment: z.enum(BUSINESS_SEGMENT_VALUES).default('other'),
+  modules: z
+    .object(
+      BUSINESS_MODULE_KEY_VALUES.reduce((shape, key) => {
+        shape[key] = z.boolean().optional();
+        return shape;
+      }, {}),
+    )
+    .default({}),
+  segmentConfig: z.record(z.any()).default({}),
   domains: z
     .object({
       subdomain: optionalSubdomainSchema,

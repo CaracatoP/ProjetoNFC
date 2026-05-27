@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { buildBusinessSegmentState } from '@shared/utils/segments.js';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 import { EmptyState } from '@/components/common/EmptyState.jsx';
@@ -34,8 +35,35 @@ import {
   SensitiveInput,
 } from './editor/TenantEditorPrimitives.jsx';
 import { TenantEditorHeader } from './editor/TenantEditorHeader.jsx';
+import { TenantModuleManagementSection } from './editor/TenantModuleManagementSection.jsx';
 import { TenantEditorStepper } from './editor/TenantEditorStepper.jsx';
 import { ThemeCustomizationSection } from './editor/ThemeCustomizationSection.jsx';
+
+function buildEditorDraft(editor) {
+  if (!editor) {
+    return null;
+  }
+
+  const nextEditor = cloneDeep(editor);
+  const segmentState = buildBusinessSegmentState(nextEditor.business || {});
+
+  nextEditor.business = {
+    ...(nextEditor.business || {}),
+    segment: segmentState.segment,
+    modules: segmentState.modules,
+    segmentConfig: segmentState.segmentConfig,
+  };
+  nextEditor.modulesData = {
+    professionals: nextEditor.modulesData?.professionals || [],
+    appointmentServices: nextEditor.modulesData?.appointmentServices || [],
+    appointmentRequests: nextEditor.modulesData?.appointmentRequests || [],
+    products: nextEditor.modulesData?.products || [],
+    orders: nextEditor.modulesData?.orders || [],
+  };
+
+  return nextEditor;
+}
+
 export function TenantEditorPanel({
   editor,
   saving,
@@ -48,14 +76,16 @@ export function TenantEditorPanel({
   onToggleStatus,
   onDuplicate,
   onCopyPublicLink,
+  moduleActions,
+  moduleBusyKey,
 }) {
-  const [draft, setDraft] = useState(editor ? cloneDeep(editor) : null);
+  const [draft, setDraft] = useState(buildEditorDraft(editor));
   const [uploadingField, setUploadingField] = useState('');
   const [activeStep, setActiveStep] = useState('basic');
   const [localError, setLocalError] = useState('');
 
   useEffect(() => {
-    setDraft(editor ? cloneDeep(editor) : null);
+    setDraft(buildEditorDraft(editor));
     setActiveStep('basic');
     setLocalError('');
   }, [editor]);
@@ -1131,6 +1161,18 @@ export function TenantEditorPanel({
           </section>
           </div>
         </Card>
+        ) : null}
+
+        {activeStep === 'modules' ? (
+          <Card id="tenant-modules" className="admin-panel-card admin-panel-card--span-2">
+            <TenantModuleManagementSection
+              draft={draft}
+              onDraftChange={setDraft}
+              moduleActions={moduleActions}
+              busyKey={moduleBusyKey}
+              onUpload={onUpload}
+            />
+          </Card>
         ) : null}
 
         {activeStep === 'settings' ? (

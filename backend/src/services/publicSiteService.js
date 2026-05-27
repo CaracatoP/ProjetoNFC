@@ -8,7 +8,10 @@ import {
 import { findThemeByBusinessId } from '../repositories/themeRepository.js';
 import { listPublicVisibleSectionsByBusinessId } from '../repositories/sectionRepository.js';
 import { listPublicVisibleLinksByBusinessId } from '../repositories/linkRepository.js';
+import { listAppointmentServicesByBusinessId } from '../repositories/appointmentServiceRepository.js';
 import { findTagByCode, touchTag } from '../repositories/nfcTagRepository.js';
+import { listProductsByBusinessId } from '../repositories/productRepository.js';
+import { listProfessionalsByBusinessId } from '../repositories/professionalRepository.js';
 import { env } from '../config/env.js';
 import {
   buildManagedPrimaryLinks,
@@ -21,6 +24,7 @@ import {
   normalizeManagedLinkActions,
   normalizePhoneActionValue,
 } from '../../../shared/utils/tenantIdentity.js';
+import { buildBusinessSegmentState } from '../../../shared/utils/segments.js';
 import { buildTenantTheme } from '../../../shared/utils/theme.js';
 
 function isManagedLinkMatch(link, action) {
@@ -376,12 +380,16 @@ async function getPublicSiteByBusiness(business) {
     );
   }
 
-  const [theme, sections, links] = await Promise.all([
+  const [theme, sections, links, professionals, appointmentServices, products] = await Promise.all([
     findThemeByBusinessId(business._id),
     listPublicVisibleSectionsByBusinessId(business._id),
     listPublicVisibleLinksByBusinessId(business._id),
+    listProfessionalsByBusinessId(business._id, { activeOnly: true }),
+    listAppointmentServicesByBusinessId(business._id, { activeOnly: true }),
+    listProductsByBusinessId(business._id, { activeOnly: true }),
   ]);
   const resolvedTheme = buildTenantTheme(theme || {});
+  const segmentState = buildBusinessSegmentState(business);
 
   const hydratedSections = sections
     .map((section) => hydrateSection(section, business, links))
@@ -399,6 +407,9 @@ async function getPublicSiteByBusiness(business) {
       bannerUrl: business.bannerUrl,
       badge: business.badge,
       status: business.status,
+      segment: segmentState.segment,
+      modules: segmentState.modules,
+      segmentConfig: segmentState.segmentConfig,
       domains: business.domains || {},
       address: business.address,
       hours: business.hours || [],
@@ -439,6 +450,33 @@ async function getPublicSiteByBusiness(business) {
       target: link.target,
       metadata: link.metadata || {},
     })),
+    modulesData: {
+      professionals: professionals.map((item) => ({
+        id: item._id.toString(),
+        name: item.name,
+        role: item.role || '',
+        avatar: item.avatar || '',
+        active: item.active !== false,
+      })),
+      appointmentServices: appointmentServices.map((item) => ({
+        id: item._id.toString(),
+        name: item.name,
+        price: Number(item.price || 0),
+        durationMinutes: Number(item.durationMinutes || 0),
+        description: item.description || '',
+        active: item.active !== false,
+      })),
+      products: products.map((item) => ({
+        id: item._id.toString(),
+        name: item.name,
+        description: item.description || '',
+        price: Number(item.price || 0),
+        image: item.image || '',
+        category: item.category || '',
+        active: item.active !== false,
+        options: Array.isArray(item.options) ? item.options : [],
+      })),
+    },
     seo: {
       title: business.seo?.title,
       description: business.seo?.description,

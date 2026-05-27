@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BUSINESS_STATUS_VALUES } from '../constants/index.js';
+import { BUSINESS_MODULE_KEY_VALUES, BUSINESS_SEGMENT_VALUES, BUSINESS_STATUS_VALUES } from '../constants/index.js';
 
 export const businessHourSchema = z.object({
   id: z.string(),
@@ -68,5 +68,27 @@ export const businessSchema = z.object({
   rating: z.string().optional(),
   domains: businessDomainsSchema.default({}),
   contact: businessContactSchema.default({}),
+  segment: z.enum(BUSINESS_SEGMENT_VALUES).default('other'),
+  modules: z
+    .object(
+      BUSINESS_MODULE_KEY_VALUES.reduce((shape, key) => {
+        shape[key] = z.boolean().default(false);
+        return shape;
+      }, {}),
+    )
+    .default({}),
+  segmentConfig: z
+    .object({
+      label: z.string().optional(),
+      description: z.string().optional(),
+      catalogTitle: z.string().optional(),
+      catalogDescription: z.string().optional(),
+      appointmentTitle: z.string().optional(),
+      appointmentDescription: z.string().optional(),
+      loyaltyTitle: z.string().optional(),
+      loyaltyDescription: z.string().optional(),
+    })
+    .passthrough()
+    .default({}),
   seo: seoSchema,
 });

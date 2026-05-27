@@ -1,9 +1,19 @@
 import { Router } from 'express';
 import { createEvent } from '../controllers/analyticsController.js';
+import {
+  createPublicAppointmentRequestController,
+  createPublicOrderController,
+  listPublicProductsController,
+} from '../controllers/moduleController.js';
 import { getSiteByHost, getSiteBySlug, resolveTag, streamTenantUpdates } from '../controllers/publicSiteController.js';
 import { resolveTenant } from '../middlewares/resolveTenant.js';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import { analyticsValidators } from '../validators/analyticsValidators.js';
+import {
+  appointmentRequestBodySchema,
+  orderBodySchema,
+  slugOnlyParamsSchema,
+} from '../validators/moduleValidators.js';
 import { publicSiteValidators } from '../validators/publicSiteValidators.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -24,6 +34,21 @@ router.get(
   resolveTenant,
   validateRequest(publicSiteValidators.siteBySlug),
   asyncHandler(getSiteBySlug),
+);
+router.get(
+  '/site/:slug/products',
+  validateRequest({ params: slugOnlyParamsSchema }),
+  asyncHandler(listPublicProductsController),
+);
+router.post(
+  '/site/:slug/appointment-requests',
+  validateRequest({ params: slugOnlyParamsSchema, body: appointmentRequestBodySchema }),
+  asyncHandler(createPublicAppointmentRequestController),
+);
+router.post(
+  '/site/:slug/orders',
+  validateRequest({ params: slugOnlyParamsSchema, body: orderBodySchema }),
+  asyncHandler(createPublicOrderController),
 );
 router.get(
   '/tags/:tagCode/resolve',

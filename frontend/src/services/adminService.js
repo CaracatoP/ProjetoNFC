@@ -91,3 +91,110 @@ export async function uploadAdminImage(token, file, options = {}) {
     url: resolveMediaUrl(response.data.url),
   };
 }
+
+export async function createTenantProfessional(token, businessId, payload) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/businesses/${businessId}/professionals`, {
+    method: 'POST',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return response.data;
+}
+
+export async function updateTenantProfessional(token, businessId, professionalId, payload) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/businesses/${businessId}/professionals/${professionalId}`, {
+    method: 'PUT',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return response.data;
+}
+
+export async function deleteTenantProfessional(token, businessId, professionalId) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/businesses/${businessId}/professionals/${professionalId}`, {
+    method: 'DELETE',
+    headers: buildAdminAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
+export async function createTenantAppointmentService(token, businessId, payload) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/businesses/${businessId}/appointment-services`, {
+    method: 'POST',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return response.data;
+}
+
+export async function updateTenantAppointmentService(token, businessId, serviceId, payload) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/businesses/${businessId}/appointment-services/${serviceId}`, {
+    method: 'PUT',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return response.data;
+}
+
+export async function deleteTenantAppointmentService(token, businessId, serviceId) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/businesses/${businessId}/appointment-services/${serviceId}`, {
+    method: 'DELETE',
+    headers: buildAdminAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
+export async function createTenantProduct(token, businessId, payload) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/businesses/${businessId}/products`, {
+    method: 'POST',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return response.data;
+}
+
+export async function updateTenantProduct(token, businessId, productId, payload) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/businesses/${businessId}/products/${productId}`, {
+    method: 'PUT',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return response.data;
+}
+
+export async function deleteTenantProduct(token, businessId, productId) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/businesses/${businessId}/products/${productId}`, {
+    method: 'DELETE',
+    headers: buildAdminAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
+export async function updateTenantAppointmentRequestStatus(token, businessId, requestId, status) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/businesses/${businessId}/appointment-requests/${requestId}/status`, {
+    method: 'PATCH',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify({ status }),
+  });
+
+  return response.data;
+}
+
+export async function updateTenantOrderStatus(token, businessId, orderId, status) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/businesses/${businessId}/orders/${orderId}/status`, {
+    method: 'PATCH',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify({ status }),
+  });
+
+  return response.data;
+}

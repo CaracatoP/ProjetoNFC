@@ -8,7 +8,13 @@ let disconnectDatabase;
 let seedDemoData;
 let Subscription;
 let User;
+let Business;
 let BusinessTheme;
+let Product;
+let Professional;
+let AppointmentService;
+let AppointmentRequest;
+let Order;
 let mongoServer;
 let adminToken;
 
@@ -42,7 +48,13 @@ describe('Admin routes', () => {
     ({ seedDemoData } = await import('../utils/seedDemoData.js'));
     ({ Subscription } = await import('../models/Subscription.js'));
     ({ User } = await import('../models/User.js'));
+    ({ Business } = await import('../models/Business.js'));
     ({ BusinessTheme } = await import('../models/BusinessTheme.js'));
+    ({ Product } = await import('../models/Product.js'));
+    ({ Professional } = await import('../models/Professional.js'));
+    ({ AppointmentService } = await import('../models/AppointmentService.js'));
+    ({ AppointmentRequest } = await import('../models/AppointmentRequest.js'));
+    ({ Order } = await import('../models/Order.js'));
     ({ default: app } = await import('../app.js'));
 
     await connectDatabase();
@@ -421,6 +433,371 @@ describe('Admin routes', () => {
     expect(updateResponse.body.data.theme.raw.primaryButtonColor).toBe('#c8a46a');
     expect(updateResponse.body.data.theme.raw.cardColor).toBe('#1d1d1d');
     expect(updateResponse.body.data.theme.raw.textColor).toBe('#f5f5f5');
+  });
+
+  it('applies the segment preset on tenant creation and keeps modules editable later', async () => {
+    const createResponse = await request(app)
+      .post('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        business: {
+          name: 'Clinica Prisma',
+          slug: 'clinica-prisma',
+          segment: 'clinic',
+        },
+      });
+
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.data.business.segment).toBe('clinic');
+    expect(createResponse.body.data.business.modules).toMatchObject({
+      appointments: true,
+      whatsapp: true,
+      catalog: false,
+      cart: false,
+      orders: false,
+      loyalty: false,
+      analytics: false,
+    });
+    expect(createResponse.body.data.business.segmentConfig.label).toBe('Clinica');
+
+    const detailResponse = await request(app)
+      .get(`/api/admin/businesses/${createResponse.body.data.business.id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const { business, theme, links, sections, nfcTag } = detailResponse.body.data;
+    business.modules.analytics = true;
+    business.modules.catalog = true;
+
+    const updateResponse = await request(app)
+      .put(`/api/admin/businesses/${business.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ business, theme, links, sections, nfcTag });
+
+    expect(updateResponse.status).toBe(200);
+    expect(updateResponse.body.data.business.modules.analytics).toBe(true);
+    expect(updateResponse.body.data.business.modules.catalog).toBe(true);
+    expect(updateResponse.body.data.business.segment).toBe('clinic');
+  });
+
+  it('returns a compatible default segment/modules state for legacy tenants without saved values', async () => {
+    const legacyInsert = await Business.collection.insertOne({
+      name: 'Tenant legado',
+      slug: 'tenant-legado',
+      status: 'active',
+      seo: {
+        title: 'Tenant legado',
+        description: 'Tenant sem dados de segmento persistidos.',
+      },
+    });
+    await Business.collection.updateOne(
+      { _id: legacyInsert.insertedId },
+      {
+        $unset: {
+          segment: '',
+          modules: '',
+          segmentConfig: '',
+        },
+      },
+    );
+
+    const detailResponse = await request(app)
+      .get(`/api/admin/businesses/${legacyInsert.insertedId.toString()}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(detailResponse.status).toBe(200);
+    expect(detailResponse.body.data.business.segment).toBe('other');
+    expect(detailResponse.body.data.business.modules).toMatchObject({
+      catalog: true,
+      whatsapp: true,
+      appointments: false,
+      cart: false,
+      orders: false,
+      loyalty: false,
+      analytics: false,
+    });
+    expect(detailResponse.body.data.business.segmentConfig.label).toBe('Outro');
+  });
+
+  it('creates and updates appointment module records scoped to the tenant', async () => {
+    const listResponse = await request(app)
+      .get('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const targetBusiness = listResponse.body.data.find((item) => item.slug === 'barbearia-estilo-vivo');
+    const targetId = targetBusiness.id;
+
+    const avatarUploadResponse = await request(app)
+      .post('/api/admin/uploads/image')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .field('tenantSlug', 'barbearia-estilo-vivo')
+      .field('assetType', 'professional')
+      .attach('file', Buffer.from('fake-professional-image'), {
+        filename: 'professional.png',
+        contentType: 'image/png',
+      });
+
+    const professionalResponse = await request(app)
+      .post(`/api/admin/businesses/${targetId}/professionals`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'Rafael Cortez',
+        role: 'Barbeiro senior',
+        avatar: avatarUploadResponse.body.data.url,
+        active: true,
+      });
+
+    expect(professionalResponse.status).toBe(201);
+    expect(professionalResponse.body.data.name).toBe('Rafael Cortez');
+    expect(professionalResponse.body.data.avatar).toContain('res.cloudinary.com');
+
+    const appointmentServiceResponse = await request(app)
+      .post(`/api/admin/businesses/${targetId}/appointment-services`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'Corte + barba',
+        price: 75,
+        durationMinutes: 60,
+        description: 'Atendimento completo',
+        active: true,
+      });
+
+    expect(appointmentServiceResponse.status).toBe(201);
+    expect(appointmentServiceResponse.body.data.durationMinutes).toBe(60);
+
+    const listProfessionalsResponse = await request(app)
+      .get(`/api/admin/businesses/${targetId}/professionals`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    const listServicesResponse = await request(app)
+      .get(`/api/admin/businesses/${targetId}/appointment-services`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(listProfessionalsResponse.status).toBe(200);
+    expect(listProfessionalsResponse.body.data.some((item) => item.name === 'Rafael Cortez')).toBe(true);
+    expect(listServicesResponse.status).toBe(200);
+    expect(listServicesResponse.body.data.some((item) => item.name === 'Corte + barba')).toBe(true);
+
+    const updateProfessionalResponse = await request(app)
+      .put(`/api/admin/businesses/${targetId}/professionals/${professionalResponse.body.data.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'Rafael Cortez',
+        role: 'Especialista em degradê',
+        avatar: avatarUploadResponse.body.data.url,
+        active: true,
+      });
+
+    expect(updateProfessionalResponse.status).toBe(200);
+    expect(updateProfessionalResponse.body.data.role).toBe('Especialista em degradê');
+
+    const updateServiceResponse = await request(app)
+      .put(`/api/admin/businesses/${targetId}/appointment-services/${appointmentServiceResponse.body.data.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'Corte + barba premium',
+        price: 85,
+        durationMinutes: 70,
+        description: 'Atendimento premium',
+        active: true,
+      });
+
+    expect(updateServiceResponse.status).toBe(200);
+    expect(updateServiceResponse.body.data.price).toBe(85);
+
+    expect(await Professional.countDocuments({ businessId: targetId })).toBeGreaterThan(0);
+    expect(await AppointmentService.countDocuments({ businessId: targetId })).toBeGreaterThan(0);
+  });
+
+  it('creates and updates product/order records scoped to the tenant', async () => {
+    const listResponse = await request(app)
+      .get('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const targetBusiness = listResponse.body.data.find((item) => item.slug === 'barbearia-estilo-vivo');
+    const targetId = targetBusiness.id;
+    const productImageUploadResponse = await request(app)
+      .post('/api/admin/uploads/image')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .field('tenantSlug', 'barbearia-estilo-vivo')
+      .field('assetType', 'product')
+      .attach('file', Buffer.from('fake-product-image'), {
+        filename: 'product.png',
+        contentType: 'image/png',
+      });
+
+    const createProductResponse = await request(app)
+      .post(`/api/admin/businesses/${targetId}/products`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'Pomada modeladora',
+        description: 'Acabamento fosco',
+        price: 39.9,
+        image: productImageUploadResponse.body.data.url,
+        category: 'Finalizacao',
+        active: true,
+      });
+
+    expect(createProductResponse.status).toBe(201);
+    expect(createProductResponse.body.data.name).toBe('Pomada modeladora');
+    expect(createProductResponse.body.data.image).toContain('res.cloudinary.com');
+
+    const listProductsResponse = await request(app)
+      .get(`/api/admin/businesses/${targetId}/products`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(listProductsResponse.status).toBe(200);
+    expect(listProductsResponse.body.data.some((item) => item.name === 'Pomada modeladora')).toBe(true);
+
+    const updateProductResponse = await request(app)
+      .put(`/api/admin/businesses/${targetId}/products/${createProductResponse.body.data.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'Pomada modeladora premium',
+        description: 'Acabamento fosco premium',
+        price: 44.9,
+        image: productImageUploadResponse.body.data.url,
+        category: 'Finalizacao',
+        active: true,
+      });
+
+    expect(updateProductResponse.status).toBe(200);
+    expect(updateProductResponse.body.data.price).toBe(44.9);
+    expect(await Product.countDocuments({ businessId: targetId })).toBeGreaterThan(0);
+  });
+
+  it('lists and updates inbound appointment requests and orders from the admin side', async () => {
+    const appointmentRequestResponse = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/appointment-requests')
+      .send({
+        professionalName: 'Equipe principal',
+        serviceName: 'Corte masculino',
+        customerName: 'Carlos',
+        customerPhone: '5511999999999',
+        requestedDate: '2026-06-10',
+        requestedTime: '14:00',
+        notes: 'Preferencia por navalha',
+      });
+
+    const orderResponse = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Carlos',
+        customerPhone: '5511999999999',
+        items: [
+          {
+            name: 'Pomada modeladora',
+            quantity: 2,
+            unitPrice: 39.9,
+            notes: '',
+          },
+        ],
+        deliveryType: 'pickup',
+        notes: 'Retirar as 18h',
+      });
+
+    expect(appointmentRequestResponse.status).toBe(201);
+    expect(orderResponse.status).toBe(201);
+
+    const businessListResponse = await request(app)
+      .get('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`);
+    const targetBusiness = businessListResponse.body.data.find((item) => item.slug === 'barbearia-estilo-vivo');
+    const targetId = targetBusiness.id;
+
+    const listAppointmentsResponse = await request(app)
+      .get(`/api/admin/businesses/${targetId}/appointment-requests`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    const listOrdersResponse = await request(app)
+      .get(`/api/admin/businesses/${targetId}/orders`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(listAppointmentsResponse.status).toBe(200);
+    expect(listAppointmentsResponse.body.data[0].status).toBe('pending');
+    expect(listOrdersResponse.status).toBe(200);
+    expect(listOrdersResponse.body.data[0].status).toBe('received');
+
+    const updateAppointmentStatusResponse = await request(app)
+      .patch(`/api/admin/businesses/${targetId}/appointment-requests/${listAppointmentsResponse.body.data[0].id}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'confirmed' });
+    const updateOrderStatusResponse = await request(app)
+      .patch(`/api/admin/businesses/${targetId}/orders/${listOrdersResponse.body.data[0].id}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'preparing' });
+
+    expect(updateAppointmentStatusResponse.status).toBe(200);
+    expect(updateAppointmentStatusResponse.body.data.status).toBe('confirmed');
+    expect(updateOrderStatusResponse.status).toBe(200);
+    expect(updateOrderStatusResponse.body.data.status).toBe('preparing');
+
+    expect(await AppointmentRequest.countDocuments({ businessId: targetId })).toBeGreaterThan(0);
+    expect(await Order.countDocuments({ businessId: targetId })).toBeGreaterThan(0);
+  });
+
+  it('rejects scoped module mutations when the resource belongs to another tenant', async () => {
+    const primaryBusiness = (await request(app)
+      .get('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`)).body.data.find((item) => item.slug === 'barbearia-estilo-vivo');
+
+    const secondaryBusinessResponse = await request(app)
+      .post('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        business: {
+          name: 'Mercado do Bairro',
+          slug: 'mercado-do-bairro',
+          description: 'Segundo tenant para teste de escopo.',
+          status: 'active',
+          segment: 'market',
+          modules: {
+            catalog: true,
+            appointments: false,
+            cart: true,
+            orders: true,
+            loyalty: false,
+            whatsapp: true,
+            analytics: false,
+          },
+          seo: {
+            title: 'Mercado do Bairro',
+            description: 'Teste de escopo multi-tenant.',
+          },
+        },
+        theme: {},
+        links: [],
+        sections: [],
+        nfcTag: null,
+      });
+
+    expect(secondaryBusinessResponse.status).toBe(201);
+
+    const productResponse = await request(app)
+      .post(`/api/admin/businesses/${primaryBusiness.id}/products`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'Navalha premium',
+        description: 'Acessorio da barbearia',
+        price: 89.9,
+        image: 'https://cdn.example.com/products/navalha.png',
+        category: 'Acessorios',
+        active: true,
+      });
+
+    expect(productResponse.status).toBe(201);
+
+    const wrongScopeUpdateResponse = await request(app)
+      .put(`/api/admin/businesses/${secondaryBusinessResponse.body.data.business.id}/products/${productResponse.body.data.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'Navalha premium',
+        description: 'Nao deveria atualizar em outro tenant',
+        price: 91.9,
+        image: 'https://cdn.example.com/products/navalha.png',
+        category: 'Acessorios',
+        active: true,
+      });
+
+    expect(wrongScopeUpdateResponse.status).toBe(404);
+    expect(wrongScopeUpdateResponse.body.error.code).toBe('module_resource_not_found');
   });
 
   it('keeps duplicate tenant theme isolated from the original after later edits', async () => {

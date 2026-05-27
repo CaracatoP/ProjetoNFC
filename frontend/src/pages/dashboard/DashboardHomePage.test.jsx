@@ -19,6 +19,17 @@ vi.mock('@/services/adminService.js', () => ({
   updateAdminBusinessStatus: vi.fn(),
   deleteAdminBusiness: vi.fn(),
   uploadAdminImage: vi.fn(),
+  createTenantProfessional: vi.fn(),
+  updateTenantProfessional: vi.fn(),
+  deleteTenantProfessional: vi.fn(),
+  createTenantAppointmentService: vi.fn(),
+  updateTenantAppointmentService: vi.fn(),
+  deleteTenantAppointmentService: vi.fn(),
+  createTenantProduct: vi.fn(),
+  updateTenantProduct: vi.fn(),
+  deleteTenantProduct: vi.fn(),
+  updateTenantAppointmentRequestStatus: vi.fn(),
+  updateTenantOrderStatus: vi.fn(),
 }));
 
 const overviewFixture = {
@@ -169,6 +180,23 @@ const editorFixture = {
       description: 'Pagina publica da barbearia',
       imageUrl: '',
     },
+    segment: 'barbershop',
+    modules: {
+      catalog: true,
+      appointments: true,
+      cart: false,
+      orders: false,
+      loyalty: true,
+      whatsapp: true,
+      analytics: false,
+    },
+    segmentConfig: {
+      label: 'Barbearia',
+      description: 'Ideal para agenda, vitrine de servicos e relacionamento recorrente.',
+      catalogTitle: 'Servicos e produtos',
+      appointmentTitle: 'Solicitar agendamento',
+      loyaltyTitle: 'Programa de fidelidade',
+    },
   },
   theme: {
     version: 2,
@@ -268,6 +296,13 @@ const editorFixture = {
     code: 'tag-demo-001',
     status: 'active',
   },
+  modulesData: {
+    professionals: [],
+    appointmentServices: [],
+    appointmentRequests: [],
+    products: [],
+    orders: [],
+  },
   analytics: {
     totalEvents: 24,
     last7DaysEvents: 10,
@@ -362,9 +397,46 @@ describe('DashboardHomePage', () => {
             name: 'Loja Nova',
             slug: 'loja-nova',
             status: 'active',
+            segment: 'other',
           }),
         }),
       );
+    });
+  });
+
+  it('shows segment presets in onboarding and sends the suggested modules when creating', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    const onboardingCard = (await screen.findByText('Novo comercio')).closest('section');
+    const onboardingScope = within(onboardingCard);
+
+    await user.selectOptions(onboardingScope.getByLabelText('Segmento da empresa'), 'restaurant');
+    await user.type(onboardingScope.getByLabelText('Nome do comercio'), 'Bistro TapLink');
+    await user.click(onboardingScope.getByRole('button', { name: /Criar tenant e abrir editor/i }));
+
+    await waitFor(() => {
+      expect(adminService.createAdminBusiness).toHaveBeenCalledWith(
+        'admin-token',
+        expect.objectContaining({
+          business: expect.objectContaining({
+            segment: 'restaurant',
+          }),
+        }),
+      );
+    });
+
+    const createdPayload = adminService.createAdminBusiness.mock.calls.at(-1)?.[1];
+    expect(createdPayload?.business?.modules).toMatchObject({
+      catalog: true,
+      cart: true,
+      orders: true,
+      whatsapp: true,
     });
   });
 

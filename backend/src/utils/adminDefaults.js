@@ -1,4 +1,5 @@
 import { BUSINESS_STATUS, LINK_GROUPS, LINK_TYPES, SECTION_TYPES } from '../../../shared/constants/index.js';
+import { buildBusinessSegmentState } from '../../../shared/utils/segments.js';
 import { normalizePhoneActionValue, slugify } from '../../../shared/utils/tenantIdentity.js';
 import { createDefaultTheme } from '../../../shared/utils/theme.js';
 
@@ -251,6 +252,7 @@ export function buildDefaultTenantSetup(input = {}) {
   const description = String(input.description || '').trim();
   const addressDisplay = String(input.address?.display || input.addressDisplay || '').trim();
   const mapUrl = String(input.address?.mapUrl || input.mapUrl || '').trim();
+  const segmentState = buildBusinessSegmentState(input);
 
   const business = {
     name,
@@ -262,6 +264,9 @@ export function buildDefaultTenantSetup(input = {}) {
     badge: String(input.badge || name).trim(),
     status: input.status || BUSINESS_STATUS.ACTIVE,
     rating: String(input.rating || '').trim(),
+    segment: segmentState.segment,
+    modules: segmentState.modules,
+    segmentConfig: segmentState.segmentConfig,
     address: {
       display: addressDisplay,
       mapUrl,

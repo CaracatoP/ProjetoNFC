@@ -10,6 +10,9 @@ const PUBLIC_BUSINESS_PROJECTION = {
   bannerUrl: 1,
   badge: 1,
   status: 1,
+  segment: 1,
+  modules: 1,
+  segmentConfig: 1,
   domains: 1,
   address: 1,
   hours: 1,
@@ -24,6 +27,14 @@ function buildExcludedBusinessFilter(excludedBusinessId = null) {
 
 function findLeanBusiness(filter, projection = null) {
   return Business.findOne(filter, projection).lean();
+}
+
+export async function findBusinessById(businessId, projection = null) {
+  if (!businessId) {
+    return null;
+  }
+
+  return Business.findById(businessId, projection).lean();
 }
 
 export async function findBusinessByHost(host, projection = null) {

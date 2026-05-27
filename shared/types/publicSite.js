@@ -18,8 +18,8 @@
  * @property {import('./business.js').ThemeTokens} theme
  * @property {BusinessSection[]} sections
  * @property {Array<Record<string, any>>} links
+ * @property {{professionals?: Array<Record<string, any>>, appointmentServices?: Array<Record<string, any>>, products?: Array<Record<string, any>>}} [modulesData]
  * @property {Object} seo
  */
 
 export {};
-

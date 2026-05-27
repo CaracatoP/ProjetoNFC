@@ -24,6 +24,11 @@ import {
   isBusinessSlugTaken,
   isBusinessSubdomainTaken,
 } from '../repositories/businessRepository.js';
+import { listAppointmentRequestsByBusinessId } from '../repositories/appointmentRequestRepository.js';
+import { listAppointmentServicesByBusinessId } from '../repositories/appointmentServiceRepository.js';
+import { listOrdersByBusinessId } from '../repositories/orderRepository.js';
+import { listProductsByBusinessId } from '../repositories/productRepository.js';
+import { listProfessionalsByBusinessId } from '../repositories/professionalRepository.js';
 import { ensureDefaultSubscriptionForBusiness } from './billingService.js';
 import { publishTenantUpdated } from './tenantRealtimeService.js';
 import {
@@ -39,6 +44,7 @@ import {
   normalizeManagedLinkAction,
   normalizeManagedLinkActions,
 } from '../../../shared/utils/tenantIdentity.js';
+import { buildBusinessSegmentState } from '../../../shared/utils/segments.js';
 import { buildTenantTheme } from '../../../shared/utils/theme.js';
 
 function normalizeCoordinate(value) {
@@ -204,6 +210,7 @@ function normalizeBusinessPayload(payload = {}) {
   const seoTitle = String(payload.seo?.title || '').trim() || (name ? `${name} | Pagina NFC` : '');
   const seoDescription =
     String(payload.seo?.description || '').trim() || description || (name ? `Pagina NFC oficial de ${name}.` : '');
+  const segmentState = buildBusinessSegmentState(payload);
 
   return {
     name,
@@ -217,6 +224,9 @@ function normalizeBusinessPayload(payload = {}) {
     badge: String(payload.badge || '').trim(),
     status: String(payload.status || 'draft').trim(),
     rating: String(payload.rating || '').trim(),
+    segment: segmentState.segment,
+    modules: segmentState.modules,
+    segmentConfig: segmentState.segmentConfig,
     domains: {
       subdomain: normalizeOptionalValue(payload.domains?.subdomain)?.toLowerCase(),
       customDomain: normalizeOptionalValue(normalizeHost(payload.domains?.customDomain)),
@@ -579,6 +589,8 @@ function serializeSummary(business, analyticsMap) {
     name: business.name,
     slug: business.slug,
     status: business.status,
+    segment: business.segment,
+    modules: buildBusinessSegmentState(business).modules,
     logoUrl: business.logoUrl,
     domains: {
       subdomain: business.domains?.subdomain || '',
@@ -604,7 +616,14 @@ async function hydrateEditorResponse(businessId) {
     throw new AppError('Negocio nao encontrado', 404, 'business_not_found');
   }
 
-  const analytics = await getBusinessAnalyticsSummary(businessId);
+  const [analytics, professionals, appointmentServices, appointmentRequests, products, orders] = await Promise.all([
+    getBusinessAnalyticsSummary(businessId),
+    listProfessionalsByBusinessId(businessId),
+    listAppointmentServicesByBusinessId(businessId),
+    listAppointmentRequestsByBusinessId(businessId),
+    listProductsByBusinessId(businessId),
+    listOrdersByBusinessId(businessId),
+  ]);
   const totalEvents = analytics.totals.totalEvents || 0;
   const pageViews = analytics.totals.pageViews || 0;
   const linkClicks = analytics.totals.linkClicks || 0;
@@ -666,6 +685,60 @@ async function hydrateEditorResponse(businessId) {
         newValue: entry.newValue,
         changedAt: entry.changedAt,
       })),
+    modulesData: {
+      professionals: professionals.map((item) => ({
+        id: String(item._id || item.id),
+        name: item.name,
+        role: item.role || '',
+        avatar: item.avatar || '',
+        active: item.active !== false,
+      })),
+      appointmentServices: appointmentServices.map((item) => ({
+        id: String(item._id || item.id),
+        name: item.name,
+        price: Number(item.price || 0),
+        durationMinutes: Number(item.durationMinutes || 0),
+        description: item.description || '',
+        active: item.active !== false,
+      })),
+      appointmentRequests: appointmentRequests.map((item) => ({
+        id: String(item._id || item.id),
+        professionalId: item.professionalId ? String(item.professionalId) : '',
+        serviceId: item.serviceId ? String(item.serviceId) : '',
+        professionalName: item.professionalName || '',
+        serviceName: item.serviceName || '',
+        customerName: item.customerName,
+        customerPhone: item.customerPhone,
+        requestedDate: item.requestedDate,
+        requestedTime: item.requestedTime,
+        status: item.status,
+        notes: item.notes || '',
+        createdAt: item.createdAt,
+      })),
+      products: products.map((item) => ({
+        id: String(item._id || item.id),
+        name: item.name,
+        description: item.description || '',
+        price: Number(item.price || 0),
+        image: item.image || '',
+        imagePublicId: item.imagePublicId || '',
+        category: item.category || '',
+        active: item.active !== false,
+        options: Array.isArray(item.options) ? item.options : [],
+      })),
+      orders: orders.map((item) => ({
+        id: String(item._id || item.id),
+        customerName: item.customerName,
+        customerPhone: item.customerPhone,
+        items: Array.isArray(item.items) ? item.items : [],
+        total: Number(item.total || 0),
+        deliveryType: item.deliveryType || 'pickup',
+        address: item.address || '',
+        status: item.status,
+        notes: item.notes || '',
+        createdAt: item.createdAt,
+      })),
+    },
   };
 }
 

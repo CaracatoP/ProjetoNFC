@@ -23,6 +23,9 @@
  * @property {Object} [address]
  * @property {Array<{id:string,label:string,value:string}>} hours
  * @property {Object} contact
+ * @property {'barbershop'|'restaurant'|'clothing_store'|'pharmacy'|'butcher'|'petshop'|'clinic'|'real_estate'|'market'|'other'} [segment]
+ * @property {{catalog?:boolean,appointments?:boolean,cart?:boolean,orders?:boolean,loyalty?:boolean,whatsapp?:boolean,analytics?:boolean}} [modules]
+ * @property {Record<string, any>} [segmentConfig]
  * @property {Object} seo
  */
 

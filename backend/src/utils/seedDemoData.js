@@ -3,6 +3,9 @@ import { BusinessLink } from '../models/BusinessLink.js';
 import { BusinessSection } from '../models/BusinessSection.js';
 import { BusinessTheme } from '../models/BusinessTheme.js';
 import { NfcTag } from '../models/NfcTag.js';
+import { Product } from '../models/Product.js';
+import { Professional } from '../models/Professional.js';
+import { AppointmentService } from '../models/AppointmentService.js';
 import { Plan } from '../models/Plan.js';
 import { Subscription } from '../models/Subscription.js';
 import { getLegacyDemoSeed } from './legacyDemoSeed.js';
@@ -39,6 +42,9 @@ async function resetSeedGraph(seed) {
     BusinessTheme.deleteMany({ businessId: { $in: businessIds } }),
     BusinessSection.deleteMany({ businessId: { $in: businessIds } }),
     BusinessLink.deleteMany({ businessId: { $in: businessIds } }),
+    Product.deleteMany({ businessId: { $in: businessIds } }),
+    Professional.deleteMany({ businessId: { $in: businessIds } }),
+    AppointmentService.deleteMany({ businessId: { $in: businessIds } }),
     NfcTag.deleteMany({
       $or: [{ businessId: { $in: businessIds } }, { code: seed.nfcTag.code }],
     }),
@@ -89,6 +95,42 @@ export async function seedDemoData(options = {}) {
     await BusinessLink.insertMany(
       seed.links.map((link) => ({
         ...link,
+        businessId: business._id,
+      })),
+    );
+  }
+
+  const [existingProfessionalsCount, existingAppointmentServicesCount, existingProductsCount] = await Promise.all([
+    Professional.countDocuments({ businessId: business._id }),
+    AppointmentService.countDocuments({ businessId: business._id }),
+    Product.countDocuments({ businessId: business._id }),
+  ]);
+
+  if (reset || !existingProfessionalsCount) {
+    await Professional.deleteMany({ businessId: business._id });
+    await Professional.insertMany(
+      (seed.professionals || []).map((professional) => ({
+        ...professional,
+        businessId: business._id,
+      })),
+    );
+  }
+
+  if (reset || !existingAppointmentServicesCount) {
+    await AppointmentService.deleteMany({ businessId: business._id });
+    await AppointmentService.insertMany(
+      (seed.appointmentServices || []).map((service) => ({
+        ...service,
+        businessId: business._id,
+      })),
+    );
+  }
+
+  if (reset || !existingProductsCount) {
+    await Product.deleteMany({ businessId: business._id });
+    await Product.insertMany(
+      (seed.products || []).map((product) => ({
+        ...product,
         businessId: business._id,
       })),
     );

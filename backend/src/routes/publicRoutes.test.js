@@ -9,6 +9,9 @@ let seedDemoData;
 let AnalyticsEvent;
 let Business;
 let BusinessSection;
+let Professional;
+let AppointmentService;
+let Product;
 let mongoServer;
 
 describe('Public routes', () => {
@@ -24,6 +27,9 @@ describe('Public routes', () => {
     ({ AnalyticsEvent } = await import('../models/AnalyticsEvent.js'));
     ({ Business } = await import('../models/Business.js'));
     ({ BusinessSection } = await import('../models/BusinessSection.js'));
+    ({ Professional } = await import('../models/Professional.js'));
+    ({ AppointmentService } = await import('../models/AppointmentService.js'));
+    ({ Product } = await import('../models/Product.js'));
     ({ default: app } = await import('../app.js'));
 
     await connectDatabase();
@@ -142,6 +148,159 @@ describe('Public routes', () => {
         name: 'Barba',
       }),
     ]);
+  });
+
+  it('returns the resolved segment, modules and module data on the public site payload', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    await Business.findByIdAndUpdate(business._id, {
+      segment: 'barbershop',
+      modules: {
+        catalog: true,
+        appointments: true,
+        cart: false,
+        orders: false,
+        loyalty: true,
+        whatsapp: true,
+        analytics: true,
+      },
+    });
+    await Professional.create({
+      businessId: business._id,
+      name: 'Lia',
+      role: 'Barbeira',
+      avatar: 'https://cdn.example.com/professionals/lia.png',
+      active: true,
+    });
+    await AppointmentService.create({
+      businessId: business._id,
+      name: 'Corte feminino',
+      price: 90,
+      durationMinutes: 70,
+      description: 'Corte com finalizacao',
+      active: true,
+    });
+    await Product.create({
+      businessId: business._id,
+      name: 'Pomada',
+      description: 'Fixacao media',
+      price: 35,
+      image: 'https://cdn.example.com/products/pomada.png',
+      category: 'Finalizacao',
+      active: true,
+    });
+
+    const response = await request(app).get('/api/public/site/barbearia-estilo-vivo');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.business.segment).toBe('barbershop');
+    expect(response.body.data.business.modules.appointments).toBe(true);
+    expect(response.body.data.business.segmentConfig.label).toBe('Barbearia');
+    expect(response.body.data.modulesData.professionals.some((item) => item.name === 'Lia')).toBe(true);
+    expect(
+      response.body.data.modulesData.appointmentServices.some((item) => item.name === 'Corte feminino'),
+    ).toBe(true);
+    expect(response.body.data.modulesData.products.some((item) => item.name === 'Pomada')).toBe(true);
+  });
+
+  it('returns active public products for the tenant slug', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+
+    await Product.create([
+      {
+        businessId: business._id,
+        name: 'Pomada premium',
+        description: 'Brilho discreto',
+        price: 44.9,
+        image: 'https://cdn.example.com/products/pomada-premium.png',
+        category: 'Finalizacao',
+        active: true,
+      },
+      {
+        businessId: business._id,
+        name: 'Produto oculto',
+        description: 'Nao deve aparecer',
+        price: 99,
+        category: 'Finalizacao',
+        active: false,
+      },
+    ]);
+
+    const response = await request(app).get('/api/public/site/barbearia-estilo-vivo/products');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.some((item) => item.name === 'Pomada premium')).toBe(true);
+    expect(response.body.data.some((item) => item.name === 'Produto oculto')).toBe(false);
+  });
+
+  it('creates a public appointment request with pending status', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const professional = await Professional.create({
+      businessId: business._id,
+      name: 'Lia',
+      role: 'Barbeira',
+      avatar: '',
+      active: true,
+    });
+    const appointmentService = await AppointmentService.create({
+      businessId: business._id,
+      name: 'Corte classico',
+      price: 45,
+      durationMinutes: 40,
+      description: 'Atendimento classico',
+      active: true,
+    });
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/appointment-requests')
+      .send({
+        professionalId: professional.id,
+        serviceId: appointmentService.id,
+        customerName: 'Marcos',
+        customerPhone: '5511988887777',
+        requestedDate: '2026-06-15',
+        requestedTime: '09:30',
+        notes: 'Chego um pouco antes',
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.status).toBe('pending');
+    expect(response.body.data.customerName).toBe('Marcos');
+  });
+
+  it('creates a public order with received status and calculated total', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Kit barba',
+      description: 'Oleo e pente',
+      price: 59.9,
+      image: '',
+      category: 'Kits',
+      active: true,
+    });
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Marcos',
+        customerPhone: '5511988887777',
+        items: [
+          {
+            productId: product.id,
+            name: 'Kit barba',
+            quantity: 2,
+            unitPrice: 59.9,
+            notes: 'Embalar para presente',
+          },
+        ],
+        deliveryType: 'delivery',
+        address: 'Rua das Flores, 100',
+        notes: 'Tocar interfone',
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.status).toBe('received');
+    expect(response.body.data.total).toBe(119.8);
   });
 
   it('returns 404 when the slug does not exist', async () => {

@@ -12,13 +12,24 @@ import { TenantPreviewPanel } from '@/components/business/TenantPreviewPanel.jsx
 import { useAuth } from '@/context/AuthContext.jsx';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue.js';
 import {
+  createTenantAppointmentService,
   createAdminBusiness,
+  createTenantProduct,
+  createTenantProfessional,
+  deleteTenantAppointmentService,
   deleteAdminBusiness,
+  deleteTenantProduct,
+  deleteTenantProfessional,
   fetchAdminOverview,
   getAdminBusiness,
   listAdminBusinesses,
+  updateTenantAppointmentRequestStatus,
+  updateTenantAppointmentService,
   updateAdminBusiness,
   updateAdminBusinessStatus,
+  updateTenantOrderStatus,
+  updateTenantProduct,
+  updateTenantProfessional,
   uploadAdminImage,
 } from '@/services/adminService.js';
 
@@ -107,6 +118,7 @@ export function DashboardHomePage() {
   const [togglingStatus, setTogglingStatus] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [moduleBusyKey, setModuleBusyKey] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [tenantSearchInput, setTenantSearchInput] = useState('');
@@ -233,6 +245,16 @@ export function DashboardHomePage() {
     });
   }
 
+  async function refreshEditorSnapshot(targetBusinessId = selectedBusinessId) {
+    if (!token || !targetBusinessId) {
+      return null;
+    }
+
+    const nextEditor = await getAdminBusiness(token, targetBusinessId);
+    setEditor(nextEditor);
+    return nextEditor;
+  }
+
   async function handleCreate(payload) {
     setCreating(true);
     setMessage('');
@@ -349,6 +371,57 @@ export function DashboardHomePage() {
       setDuplicating(false);
     }
   }
+
+  async function runModuleAction(busyKey, action, successMessage) {
+    if (!selectedBusinessId) {
+      return;
+    }
+
+    setModuleBusyKey(busyKey);
+    setMessage('');
+    setError('');
+
+    try {
+      await action();
+      await refreshEditorSnapshot(selectedBusinessId);
+      refreshPreview();
+      if (successMessage) {
+        setMessage(successMessage);
+      }
+    } catch (moduleError) {
+      setError(getErrorMessage(moduleError));
+    } finally {
+      setModuleBusyKey('');
+    }
+  }
+
+  const moduleActions = useMemo(
+    () => ({
+      createProfessional: (payload) =>
+        runModuleAction('create-professional', () => createTenantProfessional(token, selectedBusinessId, payload), 'Profissional salvo com sucesso.'),
+      updateProfessional: (professionalId, payload) =>
+        runModuleAction('update-professional', () => updateTenantProfessional(token, selectedBusinessId, professionalId, payload), 'Profissional atualizado com sucesso.'),
+      deleteProfessional: (professionalId) =>
+        runModuleAction('delete-professional', () => deleteTenantProfessional(token, selectedBusinessId, professionalId), 'Profissional removido com sucesso.'),
+      createAppointmentService: (payload) =>
+        runModuleAction('create-appointment-service', () => createTenantAppointmentService(token, selectedBusinessId, payload), 'Servico de agendamento salvo com sucesso.'),
+      updateAppointmentService: (serviceId, payload) =>
+        runModuleAction('update-appointment-service', () => updateTenantAppointmentService(token, selectedBusinessId, serviceId, payload), 'Servico de agendamento atualizado com sucesso.'),
+      deleteAppointmentService: (serviceId) =>
+        runModuleAction('delete-appointment-service', () => deleteTenantAppointmentService(token, selectedBusinessId, serviceId), 'Servico de agendamento removido com sucesso.'),
+      createProduct: (payload) =>
+        runModuleAction('create-product', () => createTenantProduct(token, selectedBusinessId, payload), 'Produto salvo com sucesso.'),
+      updateProduct: (productId, payload) =>
+        runModuleAction('update-product', () => updateTenantProduct(token, selectedBusinessId, productId, payload), 'Produto atualizado com sucesso.'),
+      deleteProduct: (productId) =>
+        runModuleAction('delete-product', () => deleteTenantProduct(token, selectedBusinessId, productId), 'Produto removido com sucesso.'),
+      updateAppointmentRequestStatus: (requestId, status) =>
+        runModuleAction('update-appointment-request-status', () => updateTenantAppointmentRequestStatus(token, selectedBusinessId, requestId, status), 'Status do agendamento atualizado com sucesso.'),
+      updateOrderStatus: (orderId, status) =>
+        runModuleAction('update-order-status', () => updateTenantOrderStatus(token, selectedBusinessId, orderId, status), 'Status do pedido atualizado com sucesso.'),
+    }),
+    [refreshPreview, selectedBusinessId, token],
+  );
 
   async function handleCopyPublicLink() {
     const urlToCopy = editor?.business?.publicUrl || selectedSummary?.publicUrl;
@@ -548,6 +621,8 @@ export function DashboardHomePage() {
                           onUpload={handleUpload}
                           onDuplicate={handleDuplicate}
                           onCopyPublicLink={handleCopyPublicLink}
+                          moduleActions={moduleActions}
+                          moduleBusyKey={moduleBusyKey}
                         />
                       )}
                     </div>

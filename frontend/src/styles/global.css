@@ -2060,6 +2060,20 @@ img {
   color: var(--theme-text-muted);
 }
 
+.admin-inline-image-field {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.admin-inline-image-field__preview .admin-image-preview {
+  min-height: 160px;
+  aspect-ratio: 1 / 0.82;
+}
+
+.admin-inline-image-field__note {
+  color: var(--admin-text-muted);
+}
+
 .admin-visibility-toggle {
   justify-content: space-between;
 }
@@ -3941,5 +3955,253 @@ img {
 
   .dashboard-shell .analytics-breakdown-list__item {
     grid-template-columns: 1fr;
+  }
+}
+
+.admin-module-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.admin-module-tabs__button {
+  min-width: 10rem;
+}
+
+.admin-module-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.85rem;
+}
+
+.admin-module-card {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-module-card input {
+  margin-top: 0.2rem;
+}
+
+.admin-module-card strong,
+.admin-module-card span {
+  display: block;
+}
+
+.admin-module-card span {
+  color: var(--admin-text-muted);
+  font-size: 0.92rem;
+}
+
+.admin-module-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.admin-module-item-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--admin-text-muted);
+}
+
+.admin-module-status-group {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.admin-module-status-group__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.catalog-groups {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.catalog-category-group {
+  display: grid;
+  gap: 1rem;
+}
+
+.catalog-category-group__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.catalog-category-group__header h3 {
+  margin: 0;
+}
+
+.catalog-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem;
+  border-radius: 1.1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--theme-border);
+}
+
+.catalog-card__media {
+  overflow: hidden;
+  border-radius: 0.9rem;
+  aspect-ratio: 1 / 1;
+}
+
+.catalog-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.catalog-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.catalog-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.catalog-card__header h3 {
+  margin: 0;
+}
+
+.catalog-card__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.catalog-checkout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--theme-border);
+}
+
+.catalog-checkout__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.catalog-checkout__list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.catalog-checkout__item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.catalog-checkout__summary {
+  display: grid;
+  gap: 0.65rem;
+  padding: 1rem;
+  border-radius: 0.95rem;
+  border: 1px solid var(--theme-border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.catalog-checkout__summary div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.catalog-checkout__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.appointment-service-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.appointment-service-pill {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--theme-border);
+}
+
+.appointment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.section-card--loyalty {
+  position: relative;
+  overflow: hidden;
+}
+
+.loyalty-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  border-radius: 1rem;
+  border: 1px solid var(--theme-border);
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.08), transparent 45%),
+    rgba(255, 255, 255, 0.03);
+}
+
+.site-inline-feedback {
+  margin: 0;
+  color: var(--theme-text);
+  opacity: 0.82;
+}
+
+@media (max-width: 720px) {
+  .catalog-checkout__footer {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

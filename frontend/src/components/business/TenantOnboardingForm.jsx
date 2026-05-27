@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { BUSINESS_MODULE_KEY_VALUES, BUSINESS_SEGMENT_VALUES } from '@shared/constants/index.js';
+import { buildBusinessSegmentState, getSegmentPreset } from '@shared/utils/segments.js';
 import { slugify } from '@shared/utils/tenantIdentity.js';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
@@ -9,6 +11,17 @@ const initialForm = {
   whatsapp: '',
   addressDisplay: '',
   description: '',
+  segment: 'other',
+};
+
+const MODULE_LABELS = {
+  catalog: 'Catalogo',
+  appointments: 'Agendamentos',
+  cart: 'Carrinho',
+  orders: 'Pedidos',
+  loyalty: 'Fidelidade',
+  whatsapp: 'WhatsApp',
+  analytics: 'Analytics',
 };
 
 export function TenantOnboardingForm({ creating, onCreate }) {
@@ -16,6 +29,8 @@ export function TenantOnboardingForm({ creating, onCreate }) {
   const [slugTouched, setSlugTouched] = useState(false);
 
   const suggestedSlug = useMemo(() => slugify(form.name), [form.name]);
+  const segmentState = useMemo(() => buildBusinessSegmentState({ segment: form.segment }), [form.segment]);
+  const segmentPreset = useMemo(() => getSegmentPreset(form.segment), [form.segment]);
   const previewSlug = form.slug || suggestedSlug || 'seu-negocio';
   const publicPreviewUrl =
     typeof window !== 'undefined' ? `${window.location.origin}/site/${previewSlug}` : `/site/${previewSlug}`;
@@ -33,6 +48,9 @@ export function TenantOnboardingForm({ creating, onCreate }) {
         slug: (form.slug || suggestedSlug).trim(),
         status: 'active',
         description: form.description.trim(),
+        segment: segmentState.segment,
+        modules: segmentState.modules,
+        segmentConfig: segmentState.segmentConfig,
         contact: {
           whatsapp: form.whatsapp.trim(),
           phone: form.whatsapp.trim(),
@@ -88,10 +106,39 @@ export function TenantOnboardingForm({ creating, onCreate }) {
           </label>
         </div>
 
+        <div className="admin-form-grid">
+          <label className="admin-field">
+            <span>Segmento da empresa</span>
+            <select value={form.segment} onChange={(event) => setForm((current) => ({ ...current, segment: event.target.value }))}>
+              {BUSINESS_SEGMENT_VALUES.map((segmentValue) => (
+                <option key={segmentValue} value={segmentValue}>
+                  {getSegmentPreset(segmentValue).label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="admin-inline-note admin-inline-note--preview">
+            <strong>{segmentPreset.label}</strong>
+            <span>{segmentPreset.description}</span>
+          </div>
+        </div>
+
         <div className="admin-inline-note admin-inline-note--preview">
           <strong>URL inicial do tenant</strong>
           <span className="admin-inline-note__value">{publicPreviewUrl}</span>
           <span>O tenant ja nasce ativo e voce cai direto no editor para completar branding, secoes e links.</span>
+        </div>
+
+        <div className="admin-inline-note admin-inline-note--preview">
+          <strong>Modulos sugeridos</strong>
+          <div className="admin-module-badges">
+            {BUSINESS_MODULE_KEY_VALUES.filter((key) => segmentState.modules[key]).map((key) => (
+              <span key={key} className="admin-section-chip admin-section-chip--accent">
+                {MODULE_LABELS[key]}
+              </span>
+            ))}
+          </div>
+          <span>Depois da criacao voce pode ajustar cada modulo manualmente no editor.</span>
         </div>
 
         <div className="admin-form-grid">

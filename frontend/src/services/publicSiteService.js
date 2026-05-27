@@ -112,3 +112,21 @@ export async function resolveNfcTag(tagCode) {
   const response = await apiRequest(`${appConfig.apiBaseUrl}/public/tags/${tagCode}/resolve`);
   return response.data;
 }
+
+export async function createPublicAppointmentRequest(slug, payload) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/public/site/${slug}/appointment-requests`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+  return response.data;
+}
+
+export async function createPublicOrder(slug, payload) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/public/site/${slug}/orders`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+  return response.data;
+}

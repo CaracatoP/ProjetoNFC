@@ -1,5 +1,6 @@
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { act, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { TenantProvider } from '@/context/TenantContext.jsx';
 import { PublicSitePage } from './PublicSitePage.jsx';
 import * as publicSiteService from '@/services/publicSiteService.js';
@@ -9,6 +10,8 @@ import * as tenantRealtimeService from '@/services/tenantRealtimeService.js';
 vi.mock('@/services/publicSiteService.js', () => ({
   getPublicSiteBySlug: vi.fn(),
   resolveNfcTag: vi.fn(),
+  createPublicAppointmentRequest: vi.fn(),
+  createPublicOrder: vi.fn(),
 }));
 vi.mock('@/services/analyticsService.js', () => ({
   trackEvent: vi.fn(),
@@ -47,6 +50,25 @@ const siteFixture = {
       title: 'Barbearia Estilo Vivo',
       description: 'Pagina publica',
       imageUrl: 'https://cdn.example.com/favicon.png',
+    },
+    segment: 'barbershop',
+    modules: {
+      catalog: true,
+      appointments: true,
+      cart: true,
+      orders: true,
+      loyalty: true,
+      whatsapp: true,
+      analytics: true,
+    },
+    segmentConfig: {
+      label: 'Barbearia',
+      catalogTitle: 'Servicos e produtos',
+      catalogDescription: 'Use o catalogo para itens e combos.',
+      appointmentTitle: 'Solicitar agendamento',
+      appointmentDescription: 'Escolha servico e profissional.',
+      loyaltyTitle: 'Programa de fidelidade',
+      loyaltyDescription: 'Cliente recorrente merece vantagem.',
     },
   },
   theme: {
@@ -179,6 +201,38 @@ const siteFixture = {
     },
   ],
   links: [],
+  modulesData: {
+    professionals: [
+      {
+        id: 'professional-1',
+        name: 'Lia',
+        role: 'Barbeira',
+        avatar: '',
+        active: true,
+      },
+    ],
+    appointmentServices: [
+      {
+        id: 'appointment-service-1',
+        name: 'Corte classico',
+        price: 45,
+        durationMinutes: 40,
+        description: 'Atendimento classico',
+        active: true,
+      },
+    ],
+    products: [
+      {
+        id: 'product-1',
+        name: 'Pomada modeladora',
+        description: 'Fixacao media',
+        price: 39.9,
+        image: 'https://cdn.example.com/product.jpg',
+        category: 'Finalizacao',
+        active: true,
+      },
+    ],
+  },
   seo: {
     title: 'Barbearia Estilo Vivo',
     description: 'Pagina publica',
@@ -192,6 +246,8 @@ describe('PublicSitePage', () => {
   beforeEach(() => {
     document.documentElement.removeAttribute('style');
     publicSiteService.getPublicSiteBySlug.mockResolvedValue(siteFixture);
+    publicSiteService.createPublicAppointmentRequest?.mockResolvedValue({ status: 'pending' });
+    publicSiteService.createPublicOrder?.mockResolvedValue({ status: 'received' });
     analyticsService.trackEvent.mockClear();
     tenantRealtimeService.subscribeToTenantUpdates.mockImplementation((_target, callbacks = {}) => {
       realtimeCallbacks = callbacks;
@@ -229,6 +285,9 @@ describe('PublicSitePage', () => {
       'https://instagram.com/tenant-oficial',
     );
     expect(screen.getByRole('button', { name: /Wi-Fi/i })).toBeInTheDocument();
+    expect(screen.getByText('Servicos e produtos')).toBeInTheDocument();
+    expect(screen.getByText('Solicitar agendamento')).toBeInTheDocument();
+    expect(screen.getByText('Programa de fidelidade')).toBeInTheDocument();
     expect(screen.getByText('Instagram').closest('a')).toHaveAttribute(
       'href',
       'https://instagram.com/estilovivo',
@@ -262,6 +321,59 @@ describe('PublicSitePage', () => {
     });
 
     expect(document.querySelector("meta[name='theme-color']")?.getAttribute('content')).toBe('#140d09');
+  });
+
+  it('submits appointment requests and orders from the module sections', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <TenantProvider>
+        <MemoryRouter initialEntries={['/site/barbearia-estilo-vivo']}>
+          <Routes>
+            <Route path="/site/:slug" element={<PublicSitePage />} />
+          </Routes>
+        </MemoryRouter>
+      </TenantProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Barbearia Estilo Vivo' })).toBeInTheDocument();
+
+    await user.click(screen.getAllByRole('button', { name: /Adicionar/i })[0]);
+    await user.type(screen.getAllByLabelText('Nome')[0], 'Carlos');
+    await user.type(screen.getAllByLabelText('Telefone')[0], '5511999999999');
+    await user.click(screen.getByRole('button', { name: /Enviar pedido/i }));
+
+    await waitFor(() => {
+      expect(publicSiteService.createPublicOrder).toHaveBeenCalledWith(
+        'barbearia-estilo-vivo',
+        expect.objectContaining({
+          customerName: 'Carlos',
+          customerPhone: '5511999999999',
+        }),
+      );
+    });
+    expect(screen.getByText('Pedido enviado com sucesso.')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Servico'), 'appointment-service-1');
+    await user.selectOptions(screen.getByLabelText('Profissional'), 'professional-1');
+    await user.type(screen.getAllByLabelText('Nome')[1], 'Marina');
+    await user.type(screen.getAllByLabelText('Telefone')[1], '5511988887777');
+    await user.type(screen.getByLabelText('Data desejada'), '2026-06-20');
+    await user.type(screen.getByLabelText('Horario'), '09:30');
+    await user.click(screen.getByRole('button', { name: /Enviar solicitacao/i }));
+
+    await waitFor(() => {
+      expect(publicSiteService.createPublicAppointmentRequest).toHaveBeenCalledWith(
+        'barbearia-estilo-vivo',
+        expect.objectContaining({
+          customerName: 'Marina',
+          customerPhone: '5511988887777',
+          professionalId: 'professional-1',
+          serviceId: 'appointment-service-1',
+        }),
+      );
+    });
+    expect(screen.getByText(/Aguarde a confirmacao do tenant/)).toBeInTheDocument();
   });
 
   it('shows a neutral message when the tenant is inactive', async () => {

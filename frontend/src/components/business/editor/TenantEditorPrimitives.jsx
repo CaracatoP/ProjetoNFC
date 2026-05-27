@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Button } from '@/components/common/Button.jsx';
 import { resolveMediaUrl } from '@/utils/formatters.js';
 import { getInputState, isHexColor, normalizeHexColor } from './tenantEditorUtils.js';
@@ -139,6 +139,79 @@ export function PreviewImage({ src, alt }) {
   return (
     <div className="admin-image-preview">
       <img src={resolvedSrc} alt={alt} />
+    </div>
+  );
+}
+
+export function InlineImageUploadField({
+  label,
+  value,
+  alt,
+  description,
+  error,
+  uploading = false,
+  uploadLabel = 'Enviar imagem',
+  replaceLabel = 'Trocar imagem',
+  removeLabel = 'Remover imagem',
+  uploadingLabel = 'Enviando imagem...',
+  manualLabel = 'URL da imagem',
+  placeholder = 'https://...',
+  onChange,
+  onUpload,
+  onRemove,
+}) {
+  const inputId = useId();
+  const hasImage = Boolean(resolveMediaUrl(value));
+
+  return (
+    <div className="admin-inline-image-field">
+      <div className="admin-inline-image-field__preview">
+        <PreviewImage src={value} alt={alt} />
+      </div>
+
+      <AdminField label={manualLabel} description={description} error={error}>
+        <input
+          value={value || ''}
+          onChange={(event) => onChange?.(event.target.value)}
+          placeholder={placeholder}
+          {...getInputState(error)}
+        />
+      </AdminField>
+
+      <div className="admin-inline-actions">
+        <label className="button button--secondary button--md admin-file-action" htmlFor={inputId}>
+          {hasImage ? replaceLabel : uploadLabel}
+          <input
+            id={inputId}
+            type="file"
+            accept="image/*"
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+
+              if (file) {
+                await onUpload?.(file);
+              }
+
+              event.target.value = '';
+            }}
+          />
+        </label>
+        {hasImage ? (
+          <Button
+            variant="secondary"
+            className="button--danger-tone"
+            onClick={() => {
+              onChange?.('');
+              onRemove?.();
+            }}
+          >
+            {removeLabel}
+          </Button>
+        ) : null}
+      </div>
+
+      {uploading ? <small>{uploadingLabel}</small> : null}
+      {label ? <small className="admin-inline-image-field__note">{label}</small> : null}
     </div>
   );
 }
