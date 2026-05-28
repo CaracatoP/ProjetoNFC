@@ -13,8 +13,21 @@ import { Order } from '../models/Order.js';
 import { Subscription } from '../models/Subscription.js';
 import { SHORTCUT_TARGET_TYPES } from '../utils/adminAnalytics.js';
 
+const ADMIN_BUSINESS_LIST_PROJECTION = {
+  name: 1,
+  slug: 1,
+  status: 1,
+  segment: 1,
+  modules: 1,
+  logoUrl: 1,
+  domains: 1,
+  description: 1,
+  createdAt: 1,
+  updatedAt: 1,
+};
+
 export async function listBusinessesForAdmin() {
-  return Business.find().sort({ createdAt: -1 }).lean();
+  return Business.find({}, ADMIN_BUSINESS_LIST_PROJECTION).sort({ createdAt: -1 }).lean();
 }
 
 export async function findBusinessGraphForAdmin(businessId) {
@@ -213,7 +226,19 @@ export async function getBusinessAnalyticsSummary(businessId) {
         },
       },
     ]),
-    AnalyticsEvent.find({ businessId }).sort({ occurredAt: -1 }).limit(12).lean(),
+    AnalyticsEvent.find(
+      { businessId },
+      {
+        eventType: 1,
+        sectionType: 1,
+        targetType: 1,
+        targetLabel: 1,
+        occurredAt: 1,
+      },
+    )
+      .sort({ occurredAt: -1 })
+      .limit(12)
+      .lean(),
     AnalyticsEvent.aggregate([
       { $match: { businessId: businessObjectId } },
       {
@@ -389,6 +414,16 @@ export async function getDashboardOverviewSummary() {
         },
       },
       { $unwind: '$business' },
+      {
+        $project: {
+          _id: 1,
+          eventCount: 1,
+          lastEventAt: 1,
+          'business.name': 1,
+          'business.slug': 1,
+          'business.status': 1,
+        },
+      },
     ]),
     AnalyticsEvent.aggregate([
       { $sort: { occurredAt: -1 } },
@@ -405,6 +440,16 @@ export async function getDashboardOverviewSummary() {
         $unwind: {
           path: '$business',
           preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $project: {
+          eventType: 1,
+          targetType: 1,
+          targetLabel: 1,
+          occurredAt: 1,
+          'business.name': 1,
+          'business.slug': 1,
         },
       },
     ]),
@@ -465,6 +510,15 @@ export async function getDashboardOverviewSummary() {
         $unwind: {
           path: '$business',
           preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          count: 1,
+          lastEventAt: 1,
+          'business.name': 1,
+          'business.slug': 1,
         },
       },
     ]),

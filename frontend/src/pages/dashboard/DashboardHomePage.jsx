@@ -1,11 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { slugify } from '@shared/utils/tenantIdentity.js';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 import { EmptyState } from '@/components/common/EmptyState.jsx';
-import { AdminClientsPanel } from '@/components/business/AdminClientsPanel.jsx';
 import { AppShell } from '@/components/layout/AppShell.jsx';
-import { AdminAnalyticsView } from '@/components/business/AdminAnalyticsView.jsx';
 import { TenantEditorPanel } from '@/components/business/TenantEditorPanel.jsx';
 import { TenantListPanel } from '@/components/business/TenantListPanel.jsx';
 import { TenantOnboardingForm } from '@/components/business/TenantOnboardingForm.jsx';
@@ -33,6 +31,18 @@ import {
   updateTenantProfessional,
   uploadAdminImage,
 } from '@/services/adminService.js';
+
+const LazyAdminAnalyticsView = lazy(() =>
+  import('@/components/business/AdminAnalyticsView.jsx').then((module) => ({
+    default: module.AdminAnalyticsView,
+  })),
+);
+
+const LazyAdminClientsPanel = lazy(() =>
+  import('@/components/business/AdminClientsPanel.jsx').then((module) => ({
+    default: module.AdminClientsPanel,
+  })),
+);
 
 function cloneTenantSnapshot(value) {
   return JSON.parse(JSON.stringify(value || null));
@@ -104,6 +114,17 @@ function getErrorMessage(error) {
   }
 
   return error?.message || 'Nao foi possivel concluir esta operacao.';
+}
+
+function DashboardViewFallback({ title, description }) {
+  return (
+    <Card className="admin-panel-card">
+      <p className="admin-muted-copy" role="status" aria-live="polite">
+        <strong>{title}</strong>
+      </p>
+      <p className="admin-muted-copy">{description}</p>
+    </Card>
+  );
 }
 
 export function DashboardHomePage() {
@@ -643,26 +664,44 @@ export function DashboardHomePage() {
                 </div>
               </div>
             ) : activeView === 'analytics' ? (
-              <AdminAnalyticsView
-                overview={overview}
-                editor={editor}
-                selectedSummary={selectedSummary}
-                businesses={businesses}
-                selectedBusinessId={selectedBusinessId}
-                onSelectBusiness={setSelectedBusinessId}
-                onOpenWorkspace={() => setActiveView('workspace')}
-                loadingEditor={loadingEditor}
-              />
+              <Suspense
+                fallback={
+                  <DashboardViewFallback
+                    title="Carregando analises"
+                    description="Preparando os graficos e consolidando os dados do tenant selecionado."
+                  />
+                }
+              >
+                <LazyAdminAnalyticsView
+                  overview={overview}
+                  editor={editor}
+                  selectedSummary={selectedSummary}
+                  businesses={businesses}
+                  selectedBusinessId={selectedBusinessId}
+                  onSelectBusiness={setSelectedBusinessId}
+                  onOpenWorkspace={() => setActiveView('workspace')}
+                  loadingEditor={loadingEditor}
+                />
+              </Suspense>
             ) : (
-              <AdminClientsPanel
-                token={token}
-                businesses={businesses}
-                canManageBilling={Boolean(access?.capabilities?.canManageBilling)}
-                onOpenBusiness={(businessId) => {
-                  setSelectedBusinessId(businessId);
-                  setActiveView('workspace');
-                }}
-              />
+              <Suspense
+                fallback={
+                  <DashboardViewFallback
+                    title="Carregando clientes"
+                    description="Buscando acessos, tenant vinculado e dados comerciais da base atual."
+                  />
+                }
+              >
+                <LazyAdminClientsPanel
+                  token={token}
+                  businesses={businesses}
+                  canManageBilling={Boolean(access?.capabilities?.canManageBilling)}
+                  onOpenBusiness={(businessId) => {
+                    setSelectedBusinessId(businessId);
+                    setActiveView('workspace');
+                  }}
+                />
+              </Suspense>
             )}
           </div>
         )}

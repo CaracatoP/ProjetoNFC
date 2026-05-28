@@ -50,6 +50,7 @@ describe('Public routes', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers['cache-control']).toBe('public, max-age=30, stale-while-revalidate=120');
+    expect(response.headers['x-powered-by']).toBeUndefined();
     expect(response.body.success).toBe(true);
     expect(response.body.data.business.slug).toBe('barbearia-estilo-vivo');
     expect(response.body.data.sections[0].type).toBe('hero');
@@ -186,6 +187,7 @@ describe('Public routes', () => {
       price: 35,
       image: 'https://cdn.example.com/products/pomada.png',
       category: 'Finalizacao',
+      measurementUnit: 'unit',
       active: true,
     });
 
@@ -213,6 +215,7 @@ describe('Public routes', () => {
         price: 44.9,
         image: 'https://cdn.example.com/products/pomada-premium.png',
         category: 'Finalizacao',
+        measurementUnit: 'unit',
         active: true,
       },
       {
@@ -230,6 +233,7 @@ describe('Public routes', () => {
     expect(response.status).toBe(200);
     expect(response.body.data.some((item) => item.name === 'Pomada premium')).toBe(true);
     expect(response.body.data.some((item) => item.name === 'Produto oculto')).toBe(false);
+    expect(response.body.data.find((item) => item.name === 'Pomada premium')?.measurementUnit).toBe('unit');
   });
 
   it('creates a public appointment request with pending status', async () => {
@@ -276,6 +280,7 @@ describe('Public routes', () => {
       price: 59.9,
       image: '',
       category: 'Kits',
+      measurementUnit: 'unit',
       active: true,
     });
 
@@ -301,6 +306,114 @@ describe('Public routes', () => {
     expect(response.status).toBe(201);
     expect(response.body.data.status).toBe('received');
     expect(response.body.data.total).toBe(119.8);
+    expect(response.body.data.items[0]).toMatchObject({
+      measurementUnit: 'unit',
+      displayQuantity: '2 unidades',
+      itemTotal: 119.8,
+    });
+  });
+
+  it('calculates proportional totals for kg products and ignores manipulated item totals from the frontend', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Picanha',
+      description: 'Corte nobre',
+      price: 59.9,
+      image: '',
+      category: 'Carnes',
+      measurementUnit: 'kg',
+      active: true,
+    });
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Carlos',
+        customerPhone: '5511988887777',
+        items: [
+          {
+            productId: product.id,
+            name: 'Picanha',
+            quantity: 0.4,
+            unitPrice: 1,
+            measurementUnit: 'kg',
+            displayQuantity: '400g',
+            itemTotal: 1,
+          },
+        ],
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.total).toBe(23.96);
+    expect(response.body.data.items[0]).toMatchObject({
+      quantity: 0.4,
+      unitPrice: 59.9,
+      measurementUnit: 'kg',
+      displayQuantity: '400g',
+      itemTotal: 23.96,
+    });
+
+    const secondResponse = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Carlos',
+        customerPhone: '5511988887777',
+        items: [
+          {
+            productId: product.id,
+            name: 'Picanha',
+            quantity: 0.5,
+            unitPrice: 10,
+            measurementUnit: 'kg',
+            displayQuantity: '500g',
+            itemTotal: 5,
+          },
+        ],
+      });
+
+    expect(secondResponse.status).toBe(201);
+    expect(secondResponse.body.data.total).toBe(29.95);
+    expect(secondResponse.body.data.items[0]).toMatchObject({
+      quantity: 0.5,
+      unitPrice: 59.9,
+      measurementUnit: 'kg',
+      displayQuantity: '500g',
+      itemTotal: 29.95,
+    });
+  });
+
+  it('rejects decimal quantities for integer-based product units', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Carvao',
+      description: 'Saco de carvao',
+      price: 32.5,
+      image: '',
+      category: 'Apoio',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Carlos',
+        customerPhone: '5511988887777',
+        items: [
+          {
+            productId: product.id,
+            name: 'Carvao',
+            quantity: 1.5,
+            unitPrice: 32.5,
+            measurementUnit: 'unit',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('validation_error');
   });
 
   it('returns 404 when the slug does not exist', async () => {

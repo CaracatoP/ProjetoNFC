@@ -1,6 +1,6 @@
 import { z } from 'zod';
+import { objectIdSchema, optionalObjectIdSchema } from './objectId.js';
 
-const objectIdSchema = z.string().trim().min(1);
 const emailSchema = z.string().trim().email();
 const nameSchema = z.string().trim().min(2).max(120);
 const passwordSchema = z.string().min(8).max(128);
@@ -11,11 +11,11 @@ export const adminClientParamsSchema = z.object({
 });
 
 export const adminClientsQuerySchema = z.object({
-  q: z.string().trim().optional(),
+  q: z.string().trim().max(120).optional(),
   planCode: z.string().trim().optional(),
   billingStatus: z.string().trim().optional(),
   roleLevel: z.string().trim().optional(),
-  businessId: z.string().trim().optional(),
+  businessId: optionalObjectIdSchema,
 });
 
 export const createAdminClientBodySchema = z.object({
@@ -32,7 +32,7 @@ export const updateAdminClientBodySchema = z
     name: nameSchema.optional(),
     email: emailSchema.optional(),
     roleLevel: roleLevelSchema.optional(),
-    businessId: objectIdSchema.optional(),
+    businessId: optionalObjectIdSchema,
     active: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {

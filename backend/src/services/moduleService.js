@@ -24,6 +24,7 @@ import {
   createProductRecord,
   deleteProductRecordByBusinessId,
   findProductById,
+  listProductsByBusinessIdAndIds,
   listProductsByBusinessId,
   updateProductRecordByBusinessId,
 } from '../repositories/productRepository.js';
@@ -35,6 +36,13 @@ import {
   updateProfessionalRecordByBusinessId,
 } from '../repositories/professionalRepository.js';
 import { BUSINESS_STATUS } from '../../../shared/constants/index.js';
+import {
+  buildLegacyDisplayQuantity,
+  calculateMeasuredItemTotal,
+  isValidMeasurementQuantity,
+  normalizeMeasurementUnit,
+  normalizeProductMeasurement,
+} from '../../../shared/utils/productMeasurement.js';
 
 function toPlainRecord(value) {
   if (!value) {
@@ -83,6 +91,62 @@ function assertTenantScope(entity, businessId, resourceLabel) {
   if (String(entity.businessId) !== String(businessId)) {
     throw new AppError('Este recurso pertence a outro tenant', 404, 'module_resource_not_found');
   }
+}
+
+function serializeProductRecord(item) {
+  const record = normalizeProductMeasurement(toPlainRecord(item));
+
+  return {
+    ...record,
+    price: Number(record.price || 0),
+    image: record.image || '',
+    imagePublicId: record.imagePublicId || '',
+    category: record.category || '',
+    active: record.active !== false,
+    options: Array.isArray(record.options) ? record.options : [],
+  };
+}
+
+function serializeOrderItem(item = {}) {
+  const measurementUnit = normalizeMeasurementUnit(item.measurementUnit);
+  const quantity = Number(item.quantity || 0);
+  const unitPrice = Number(item.unitPrice || 0);
+
+  return {
+    productId: item.productId ? String(item.productId) : '',
+    name: item.name || '',
+    quantity,
+    unitPrice,
+    measurementUnit,
+    displayQuantity:
+      String(item.displayQuantity || '').trim() || buildLegacyDisplayQuantity(quantity, measurementUnit),
+    itemTotal: Number.isFinite(Number(item.itemTotal))
+      ? Number(Number(item.itemTotal).toFixed(2))
+      : calculateMeasuredItemTotal(unitPrice, quantity),
+    notes: item.notes || '',
+  };
+}
+
+function serializeOrderRecord(item) {
+  const record = toPlainRecord(item);
+  const items = Array.isArray(record.items) ? record.items.map(serializeOrderItem) : [];
+
+  return {
+    ...record,
+    customerName: record.customerName || '',
+    customerPhone: record.customerPhone || '',
+    items,
+    total: Number(
+      (
+        Number(record.total || 0) ||
+        items.reduce((sum, orderItem) => sum + Number(orderItem.itemTotal || 0), 0)
+      ).toFixed(2),
+    ),
+    deliveryType: record.deliveryType || 'pickup',
+    address: record.address || '',
+    status: record.status || 'received',
+    notes: record.notes || '',
+  };
 }
 
 export async function listTenantProfessionals(businessId) {
@@ -141,13 +205,13 @@ export async function deleteTenantAppointmentService(businessId, id) {
 
 export async function listTenantProducts(businessId) {
   await assertBusinessExists(businessId);
-  return (await listProductsByBusinessId(businessId)).map(toPlainRecord);
+  return (await listProductsByBusinessId(businessId)).map(serializeProductRecord);
 }
 
 export async function createTenantProduct(businessId, payload) {
   await assertBusinessExists(businessId);
   const created = await createProductRecord({ ...payload, businessId });
-  return toPlainRecord(created);
+  return serializeProductRecord(created);
 }
 
 export async function updateTenantProduct(businessId, id, payload) {
@@ -155,7 +219,7 @@ export async function updateTenantProduct(businessId, id, payload) {
   const existing = await findProductById(id);
   assertTenantScope(existing, businessId, 'Produto');
   const updated = await updateProductRecordByBusinessId(businessId, id, payload);
-  return toPlainRecord(updated);
+  return serializeProductRecord(updated);
 }
 
 export async function deleteTenantProduct(businessId, id) {
@@ -168,7 +232,7 @@ export async function deleteTenantProduct(businessId, id) {
 
 export async function listPublicProductsBySlug(slug) {
   const business = await assertPublicBusinessBySlug(slug);
-  return (await listProductsByBusinessId(business._id, { activeOnly: true })).map(toPlainRecord);
+  return (await listProductsByBusinessId(business._id, { activeOnly: true })).map(serializeProductRecord);
 }
 
 export async function createPublicAppointmentRequest(slug, payload) {
@@ -213,30 +277,77 @@ export async function updateTenantAppointmentRequestStatus(businessId, id, statu
 }
 
 function calculateOrderTotal(items = []) {
-  return Number(
-    items
-      .reduce((sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 0), 0)
-      .toFixed(2),
+  return Number(items.reduce((sum, item) => sum + Number(item.itemTotal || 0), 0).toFixed(2));
+}
+
+async function buildOrderItemsSnapshot(businessId, items = []) {
+  const requestedItems = Array.isArray(items) ? items : [];
+  const productIds = requestedItems
+    .map((item) => String(item.productId || '').trim())
+    .filter(Boolean);
+  const productsById = new Map(
+    (
+      productIds.length
+        ? await listProductsByBusinessIdAndIds(businessId, productIds, { activeOnly: true })
+        : []
+    ).map((product) => [String(product._id), serializeProductRecord(product)]),
   );
+
+  return requestedItems.map((item) => {
+    const requestedProductId = String(item.productId || '').trim();
+    const product = requestedProductId ? productsById.get(requestedProductId) : null;
+    const measurementUnit = normalizeMeasurementUnit(product?.measurementUnit || item.measurementUnit);
+    const quantity = Number(item.quantity || 0);
+
+    if (!isValidMeasurementQuantity(quantity, measurementUnit)) {
+      throw new AppError(
+        'Quantidade invalida para a unidade de medida do produto.',
+        400,
+        'order_item_quantity_invalid',
+      );
+    }
+
+    if (requestedProductId && !product) {
+      throw new AppError('Produto nao encontrado para este tenant.', 404, 'order_product_not_found');
+    }
+
+    const unitPrice = Number(product?.price ?? item.unitPrice ?? 0);
+    const itemTotal = calculateMeasuredItemTotal(unitPrice, quantity);
+
+    return {
+      productId: requestedProductId || undefined,
+      name: String(product?.name || item.name || '').trim(),
+      quantity,
+      unitPrice,
+      measurementUnit,
+      displayQuantity:
+        String(item.displayQuantity || '').trim() ||
+        buildLegacyDisplayQuantity(quantity, measurementUnit),
+      itemTotal,
+      notes: String(item.notes || '').trim(),
+    };
+  });
 }
 
 export async function createPublicOrder(slug, payload) {
   const business = await assertPublicBusinessBySlug(slug);
-  const total = calculateOrderTotal(payload.items || []);
+  const orderItems = await buildOrderItemsSnapshot(business._id, payload.items || []);
+  const total = calculateOrderTotal(orderItems);
 
   const created = await createOrderRecord({
     ...payload,
     businessId: business._id,
+    items: orderItems,
     total,
     status: 'received',
   });
 
-  return toPlainRecord(created);
+  return serializeOrderRecord(created);
 }
 
 export async function listTenantOrders(businessId) {
   await assertBusinessExists(businessId);
-  return (await listOrdersByBusinessId(businessId)).map(toPlainRecord);
+  return (await listOrdersByBusinessId(businessId)).map(serializeOrderRecord);
 }
 
 export async function updateTenantOrderStatus(businessId, id, status) {

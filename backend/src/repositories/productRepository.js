@@ -14,6 +14,19 @@ export function createProductRecord(payload) {
   return Product.create(payload);
 }
 
+export function listProductsByBusinessIdAndIds(businessId, ids = [], options = {}) {
+  const filter = {
+    businessId,
+    _id: { $in: ids },
+  };
+
+  if (options.activeOnly) {
+    filter.active = true;
+  }
+
+  return Product.find(filter).lean();
+}
+
 export function findProductById(id) {
   return Product.findById(id);
 }

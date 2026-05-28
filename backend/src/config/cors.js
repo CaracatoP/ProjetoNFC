@@ -10,4 +10,7 @@ export const corsOptions = {
     callback(new Error(`Origin ${origin} nao permitida pelo CORS`));
   },
   credentials: true,
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 60 * 60 * 24,
 };

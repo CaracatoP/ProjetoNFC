@@ -81,6 +81,10 @@ export const env = {
   authLoginRateLimitMax: Number(process.env.AUTH_LOGIN_RATE_LIMIT_MAX || 10),
   uploadRateLimitWindowMs: Number(process.env.UPLOAD_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
   uploadRateLimitMax: Number(process.env.UPLOAD_RATE_LIMIT_MAX || 30),
+  publicFormRateLimitWindowMs: Number(process.env.PUBLIC_FORM_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+  publicFormRateLimitMax: Number(process.env.PUBLIC_FORM_RATE_LIMIT_MAX || 20),
+  publicAnalyticsRateLimitWindowMs: Number(process.env.PUBLIC_ANALYTICS_RATE_LIMIT_WINDOW_MS || 60 * 1000),
+  publicAnalyticsRateLimitMax: Number(process.env.PUBLIC_ANALYTICS_RATE_LIMIT_MAX || 120),
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   bootstrapDefaultPlans: String(process.env.BOOTSTRAP_DEFAULT_PLANS || 'true') === 'true',
 };

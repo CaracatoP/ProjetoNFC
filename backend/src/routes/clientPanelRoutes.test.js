@@ -288,11 +288,13 @@ describe('Client panel routes', () => {
         price: 39.9,
         image: '',
         category: 'Finalizacao',
+        measurementUnit: 'unit',
         active: true,
       });
 
     expect(createProductResponse.status).toBe(201);
     expect(createProductResponse.body.data.name).toBe('Pomada matte');
+    expect(createProductResponse.body.data.measurementUnit).toBe('unit');
 
     const basicsResponse = await request(app)
       .put('/api/panel/business/basics')
@@ -335,6 +337,7 @@ describe('Client panel routes', () => {
         price: 10,
         image: '',
         category: 'Teste',
+        measurementUnit: 'unit',
         active: true,
       });
 
@@ -400,6 +403,7 @@ describe('Client panel routes', () => {
       price: 55,
       image: '',
       category: 'Teste',
+      measurementUnit: 'unit',
       active: true,
     });
 
@@ -412,11 +416,31 @@ describe('Client panel routes', () => {
         price: 60,
         image: '',
         category: 'Teste',
+        measurementUnit: 'unit',
         active: true,
       });
 
     expect(response.status).toBe(404);
     expect(response.body.error.code).toBe('module_resource_not_found');
+  });
+
+  it('rejects malformed resource identifiers before panel mutations reach the service layer', async () => {
+    const managerToken = await login('manager@cliente.local', 'manager123456');
+
+    const response = await request(app)
+      .put('/api/panel/products/not-a-valid-object-id')
+      .set('Authorization', `Bearer ${managerToken}`)
+      .send({
+        name: 'Tentativa',
+        description: 'Nao deve validar',
+        price: 60,
+        image: '',
+        category: 'Teste',
+        active: true,
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('validation_error');
   });
 
   it('keeps overdue clients logged in but blocks critical mutations and uploads', async () => {
@@ -438,6 +462,7 @@ describe('Client panel routes', () => {
         price: 22,
         image: '',
         category: 'Teste',
+        measurementUnit: 'unit',
         active: true,
       });
 
@@ -504,6 +529,22 @@ describe('Client panel routes', () => {
     expect(response.body.error.code).toBe('panel_upload_asset_type_invalid');
   });
 
+  it('rejects svg uploads on the client panel', async () => {
+    const ownerToken = await login('owner@cliente.local', 'owner123456');
+
+    const response = await request(app)
+      .post('/api/panel/uploads/image')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .field('assetType', 'product')
+      .attach('file', Buffer.from('<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>'), {
+        filename: 'product.svg',
+        contentType: 'image/svg+xml',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('upload_invalid_type');
+  });
+
   it('resolves analytics scope by level and plan on the client panel', async () => {
     const managerToken = await login('manager@cliente.local', 'manager123456');
     const viewerToken = await login('viewer@cliente.local', 'viewer123456');
@@ -521,5 +562,25 @@ describe('Client panel routes', () => {
 
     expect(viewerResponse.status).toBe(403);
     expect(viewerResponse.body.error.code).toBe('panel_analytics_forbidden');
+  });
+
+  it('rejects invalid measurement units on client panel product mutations', async () => {
+    const managerToken = await login('manager@cliente.local', 'manager123456');
+
+    const response = await request(app)
+      .post('/api/panel/products')
+      .set('Authorization', `Bearer ${managerToken}`)
+      .send({
+        name: 'Produto invalido',
+        description: '',
+        price: 19.9,
+        image: '',
+        category: 'Teste',
+        measurementUnit: 'invalid-unit',
+        active: true,
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('validation_error');
   });
 });

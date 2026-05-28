@@ -1,8 +1,18 @@
 import { z } from 'zod';
+import {
+  DEFAULT_PRODUCT_MEASUREMENT_UNIT,
+  PRODUCT_MEASUREMENT_UNIT_VALUES,
+} from '../constants/index.js';
 import { businessSchema, seoSchema } from './business.js';
 import { businessLinkArraySchema } from './link.js';
 import { businessSectionArraySchema } from './section.js';
 import { themeSchema } from './theme.js';
+import { normalizeMeasurementUnit } from '../utils/productMeasurement.js';
+
+const measurementUnitSchema = z.preprocess(
+  (value) => normalizeMeasurementUnit(value),
+  z.enum(PRODUCT_MEASUREMENT_UNIT_VALUES).default(DEFAULT_PRODUCT_MEASUREMENT_UNIT),
+);
 
 export const publicSitePayloadSchema = z.object({
   business: businessSchema,
@@ -43,6 +53,7 @@ export const publicSitePayloadSchema = z.object({
             price: z.number().default(0),
             image: z.string().optional().or(z.literal('')),
             category: z.string().optional().or(z.literal('')),
+            measurementUnit: measurementUnitSchema,
             active: z.boolean().optional(),
             options: z.array(z.any()).optional(),
           }),

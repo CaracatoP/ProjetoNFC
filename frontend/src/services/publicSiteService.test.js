@@ -230,4 +230,52 @@ describe('publicSiteService', () => {
       description: '',
     });
   });
+
+  it('normalizes legacy public products without measurementUnit to unit', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            business: {
+              id: 'business-4',
+              slug: 'acougue-central',
+              name: 'Acougue Central',
+              status: 'active',
+              hours: [],
+              contact: {},
+              seo: {
+                title: 'Acougue Central',
+                description: 'Pagina publica',
+              },
+            },
+            theme: baseTheme,
+            sections: [],
+            links: [],
+            modulesData: {
+              products: [
+                {
+                  id: 'product-1',
+                  name: 'Picanha',
+                  price: 59.9,
+                  category: 'Carnes',
+                },
+              ],
+            },
+            seo: {
+              title: 'Acougue Central',
+              description: 'Pagina publica',
+            },
+          },
+        }),
+      }),
+    );
+
+    const site = await getPublicSiteBySlug('acougue-central');
+
+    expect(site.modulesData.products[0].measurementUnit).toBe('unit');
+  });
 });

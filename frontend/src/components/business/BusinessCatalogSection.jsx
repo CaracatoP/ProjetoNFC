@@ -1,4 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  buildMeasurementDisplayQuantity,
+  calculateMeasuredItemTotal,
+  getMeasurementUnitLabel,
+  isFractionalMeasurementUnit,
+  normalizeProductMeasurement,
+  requiresIntegerMeasurementQuantity,
+} from '@shared/utils/productMeasurement.js';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 import { SectionHeader } from '@/components/common/SectionHeader.jsx';
@@ -88,6 +96,99 @@ function normalizePhoneDigits(value) {
   return String(value || '').replace(/\D+/g, '');
 }
 
+function defaultFractionInputValue(measurementUnit) {
+  switch (measurementUnit) {
+    case 'kg':
+      return '250';
+    case 'g':
+      return '100';
+    case 'ml':
+      return '500';
+    case 'l':
+      return '1';
+    default:
+      return '1';
+  }
+}
+
+function getFractionInputConfig(measurementUnit) {
+  switch (measurementUnit) {
+    case 'kg':
+      return {
+        label: 'Quantidade em gramas',
+        min: 50,
+        step: 50,
+        suffix: 'g',
+        quickOptions: [250, 500, 1000, 2000],
+      };
+    case 'g':
+      return {
+        label: 'Quantidade em gramas',
+        min: 1,
+        step: 50,
+        suffix: 'g',
+        quickOptions: [],
+      };
+    case 'ml':
+      return {
+        label: 'Quantidade em ml',
+        min: 50,
+        step: 50,
+        suffix: 'ml',
+        quickOptions: [],
+      };
+    case 'l':
+      return {
+        label: 'Quantidade em litros',
+        min: 0.1,
+        step: 0.1,
+        suffix: 'L',
+        quickOptions: [],
+      };
+    default:
+      return {
+        label: 'Quantidade',
+        min: 1,
+        step: 1,
+        suffix: '',
+        quickOptions: [],
+      };
+  }
+}
+
+function parseFractionInputValue(rawValue) {
+  return Number(String(rawValue || '').trim().replace(',', '.'));
+}
+
+function convertInputValueToCartQuantity(product, rawValue) {
+  const numericValue = parseFractionInputValue(rawValue);
+
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return 0;
+  }
+
+  switch (product.measurementUnit) {
+    case 'kg':
+      return Number((numericValue / 1000).toFixed(3));
+    default:
+      return numericValue;
+  }
+}
+
+function normalizeCartQuantityForProduct(product, quantity) {
+  const numericQuantity = Number(quantity || 0);
+
+  if (!Number.isFinite(numericQuantity) || numericQuantity <= 0) {
+    return 0;
+  }
+
+  if (requiresIntegerMeasurementQuantity(product.measurementUnit)) {
+    return Math.max(0, Math.trunc(numericQuantity));
+  }
+
+  return Number(numericQuantity.toFixed(3));
+}
+
 export function BusinessCatalogSection({
   tenantSlug = '',
   modules,
@@ -97,10 +198,15 @@ export function BusinessCatalogSection({
   onTrackAction,
 }) {
   const [cart, setCart] = useState({});
+  const [fractionInputs, setFractionInputs] = useState({});
   const [checkout, setCheckout] = useState(defaultCheckoutState);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState('');
   const hydratedSlugRef = useRef('');
+  const normalizedProducts = useMemo(
+    () => (products || []).map((product) => normalizeProductMeasurement(product)),
+    [products],
+  );
 
   useEffect(() => {
     setCart(readStoredCart(tenantSlug));
@@ -118,7 +224,7 @@ export function BusinessCatalogSection({
   const groupedProducts = useMemo(() => {
     const groups = new Map();
 
-    products.forEach((product) => {
+    normalizedProducts.forEach((product) => {
       const category = normalizeCategoryLabel(product.category);
 
       if (!groups.has(category)) {
@@ -132,46 +238,83 @@ export function BusinessCatalogSection({
       category,
       items,
     }));
-  }, [products]);
+  }, [normalizedProducts]);
 
   const cartItems = useMemo(
     () =>
-      products
-        .filter((product) => Number(cart[product.id] || 0) > 0)
+      normalizedProducts
         .map((product) => ({
+          product,
+          quantity: normalizeCartQuantityForProduct(product, cart[product.id]),
+        }))
+        .filter(({ quantity }) => quantity > 0)
+        .map(({ product, quantity }) => ({
           productId: product.id,
           name: product.name,
-          quantity: Number(cart[product.id] || 0),
+          quantity,
           unitPrice: Number(product.price || 0),
+          measurementUnit: product.measurementUnit,
+          displayQuantity: buildMeasurementDisplayQuantity(quantity, product.measurementUnit),
+          itemTotal: calculateMeasuredItemTotal(product.price, quantity),
           notes: '',
         })),
-    [cart, products],
+    [cart, normalizedProducts],
   );
 
   const cartSubtotal = useMemo(
-    () => cartItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
+    () => cartItems.reduce((sum, item) => sum + item.itemTotal, 0),
     [cartItems],
   );
 
   const cartTotal = cartSubtotal;
 
-  if (!products.length) {
+  if (!normalizedProducts.length) {
     return null;
   }
 
-  function updateCartQuantity(productId, quantity) {
+  function updateCartQuantity(product, quantity) {
     setCart((current) => {
-      const nextQuantity = Math.max(0, Number(quantity || 0));
+      const nextQuantity = normalizeCartQuantityForProduct(product, quantity);
 
       if (!nextQuantity) {
-        const { [productId]: _removed, ...rest } = current;
+        const { [product.id]: _removed, ...rest } = current;
         return rest;
       }
 
       return {
         ...current,
-        [productId]: nextQuantity,
+        [product.id]: nextQuantity,
       };
+    });
+  }
+
+  function setFractionInput(productId, value) {
+    setFractionInputs((current) => ({
+      ...current,
+      [productId]: value,
+    }));
+  }
+
+  function getFractionInputValue(product) {
+    return fractionInputs[product.id] ?? defaultFractionInputValue(product.measurementUnit);
+  }
+
+  function addFractionalProductToCart(product) {
+    const inputValue = getFractionInputValue(product);
+    const quantityToAdd = convertInputValueToCartQuantity(product, inputValue);
+
+    if (!quantityToAdd) {
+      setFeedback('Informe uma quantidade valida para adicionar este produto.');
+      return;
+    }
+
+    setFeedback('');
+    updateCartQuantity(product, Number(cart[product.id] || 0) + quantityToAdd);
+    onTrackAction?.({
+      eventType: 'link_click',
+      targetType: 'cart_add',
+      targetLabel: product.name,
+      sectionType: 'catalog',
     });
   }
 
@@ -212,7 +355,7 @@ export function BusinessCatalogSection({
       setCart({});
       setCheckout(defaultCheckoutState());
       persistStoredCart(tenantSlug, {});
-      setFeedback('Pedido enviado com sucesso.');
+      setFeedback('Pedido enviado com sucesso. Aguarde a confirmacao do tenant.');
     } catch (error) {
       setFeedback(error?.message || 'Nao foi possivel enviar o pedido agora.');
     } finally {
@@ -254,33 +397,78 @@ export function BusinessCatalogSection({
                     <div className="catalog-card__content">
                       <div className="catalog-card__header">
                         <h3>{product.name}</h3>
-                        <strong>{formatCurrency(product.price)}</strong>
+                        <strong>
+                          {formatCurrency(product.price)} / {getMeasurementUnitLabel(product.measurementUnit)}
+                        </strong>
                       </div>
                       <span className="admin-section-chip admin-section-chip--muted">{group.category}</span>
                       {product.description ? <p>{product.description}</p> : null}
                       {modules.cart || modules.orders ? (
                         <div className="catalog-card__actions">
-                          <Button
-                            variant="secondary"
-                            aria-label={`Diminuir quantidade de ${product.name}`}
-                            onClick={() => updateCartQuantity(product.id, Number(cart[product.id] || 0) - 1)}
-                          >
-                            -
-                          </Button>
-                          <span>{cart[product.id] || 0}</span>
-                          <Button
-                            onClick={() => {
-                              updateCartQuantity(product.id, Number(cart[product.id] || 0) + 1);
-                              onTrackAction?.({
-                                eventType: 'link_click',
-                                targetType: 'cart_add',
-                                targetLabel: product.name,
-                                sectionType: 'catalog',
-                              });
-                            }}
-                          >
-                            Adicionar
-                          </Button>
+                          {isFractionalMeasurementUnit(product.measurementUnit) ? (
+                            <div className="catalog-card__fractional">
+                              <label className="admin-field">
+                                <span>{getFractionInputConfig(product.measurementUnit).label}</span>
+                                <input
+                                  type="number"
+                                  min={getFractionInputConfig(product.measurementUnit).min}
+                                  step={getFractionInputConfig(product.measurementUnit).step}
+                                  value={getFractionInputValue(product)}
+                                  onChange={(event) => setFractionInput(product.id, event.target.value)}
+                                />
+                              </label>
+                              {getFractionInputConfig(product.measurementUnit).quickOptions.length ? (
+                                <div className="catalog-card__quick-actions">
+                                  {getFractionInputConfig(product.measurementUnit).quickOptions.map((quickValue) => (
+                                    <Button
+                                      key={`${product.id}-${quickValue}`}
+                                      type="button"
+                                      variant="secondary"
+                                      onClick={() => setFractionInput(product.id, String(quickValue))}
+                                    >
+                                      {product.measurementUnit === 'kg' && quickValue >= 1000
+                                        ? `${quickValue / 1000}kg`
+                                        : `${quickValue}${getFractionInputConfig(product.measurementUnit).suffix}`}
+                                    </Button>
+                                  ))}
+                                </div>
+                              ) : null}
+                              <div className="catalog-card__fractional-footer">
+                                <span>
+                                  No carrinho: {buildMeasurementDisplayQuantity(cart[product.id] || 0, product.measurementUnit) || '0'}
+                                </span>
+                                <Button type="button" onClick={() => addFractionalProductToCart(product)}>
+                                  Adicionar
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                aria-label={`Diminuir quantidade de ${product.name}`}
+                                onClick={() => updateCartQuantity(product, Number(cart[product.id] || 0) - 1)}
+                              >
+                                -
+                              </Button>
+                              <span>{cart[product.id] || 0}</span>
+                              <Button
+                                type="button"
+                                onClick={() => {
+                                  updateCartQuantity(product, Number(cart[product.id] || 0) + 1);
+                                  onTrackAction?.({
+                                    eventType: 'link_click',
+                                    targetType: 'cart_add',
+                                    targetLabel: product.name,
+                                    sectionType: 'catalog',
+                                  });
+                                }}
+                              >
+                                Adicionar
+                              </Button>
+                            </>
+                          )}
                         </div>
                       ) : null}
                     </div>
@@ -300,16 +488,26 @@ export function BusinessCatalogSection({
               cartItems.map((item) => (
                 <li key={item.productId}>
                   <div>
-                    <span>{item.quantity}x {item.name}</span>
-                    <small>{formatCurrency(item.unitPrice)} por unidade</small>
+                    <span>{item.name}</span>
+                    <small>
+                      {item.displayQuantity} x {formatCurrency(item.unitPrice)}/{getMeasurementUnitLabel(item.measurementUnit)}
+                    </small>
                   </div>
                   <div className="catalog-checkout__item-actions">
-                    <strong>{formatCurrency(item.quantity * item.unitPrice)}</strong>
+                    <strong>{formatCurrency(item.itemTotal)}</strong>
                     <Button
                       type="button"
                       variant="secondary"
                       aria-label={`Remover item ${item.name}`}
-                      onClick={() => updateCartQuantity(item.productId, 0)}
+                      onClick={() =>
+                        updateCartQuantity(
+                          normalizedProducts.find((product) => product.id === item.productId) || {
+                            id: item.productId,
+                            measurementUnit: item.measurementUnit,
+                          },
+                          0,
+                        )
+                      }
                     >
                       Remover
                     </Button>

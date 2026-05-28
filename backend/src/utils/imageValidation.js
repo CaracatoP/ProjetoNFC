@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 const IMAGE_SIGNATURES = {
   'image/jpeg': (buffer) => buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff,
   'image/png': (buffer) =>
@@ -18,10 +20,13 @@ const IMAGE_SIGNATURES = {
     const signature = buffer.toString('ascii', 0, 6);
     return signature === 'GIF87a' || signature === 'GIF89a';
   },
-  'image/svg+xml': (buffer) => {
-    const preview = buffer.toString('utf8', 0, Math.min(buffer.length, 1024)).trim().toLowerCase();
-    return preview.includes('<svg') || preview.startsWith('<?xml');
-  },
+};
+
+const IMAGE_EXTENSIONS_BY_MIME = {
+  'image/jpeg': ['.jpg', '.jpeg'],
+  'image/png': ['.png'],
+  'image/webp': ['.webp'],
+  'image/gif': ['.gif'],
 };
 
 export function hasValidImageSignature(file) {
@@ -36,4 +41,23 @@ export function hasValidImageSignature(file) {
 
 export function getAcceptedImageMimeTypes() {
   return Object.keys(IMAGE_SIGNATURES);
+}
+
+export function getAcceptedImageExtensions() {
+  return [...new Set(Object.values(IMAGE_EXTENSIONS_BY_MIME).flat())];
+}
+
+export function hasAcceptedImageExtension(file) {
+  const extension = path.extname(String(file?.originalname || '')).toLowerCase();
+  const allowedExtensions = IMAGE_EXTENSIONS_BY_MIME[file?.mimetype] || [];
+
+  if (!extension || !allowedExtensions.length) {
+    return false;
+  }
+
+  return allowedExtensions.includes(extension);
+}
+
+export function isAcceptedImageFile(file) {
+  return getAcceptedImageMimeTypes().includes(file?.mimetype) && hasAcceptedImageExtension(file);
 }

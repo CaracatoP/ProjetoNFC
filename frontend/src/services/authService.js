@@ -62,39 +62,3 @@ export async function logoutSession(token) {
     headers: buildSessionAuthHeaders(token),
   });
 }
-
-export async function loginAdmin(credentials) {
-  return loginSession(credentials);
-}
-
-export async function fetchAdminSession(token) {
-  return fetchSession(token);
-}
-
-export async function logoutAdmin(token) {
-  return logoutSession(token);
-}
-
-export async function loginLegacyAdmin(credentials) {
-  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/auth/login`, {
-    method: 'POST',
-    body: JSON.stringify(credentials),
-  });
-
-  return response.data;
-}
-
-export async function fetchLegacyAdminSession(token) {
-  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/auth/session`, {
-    headers: buildAdminAuthHeaders(token),
-  });
-
-  return response.data;
-}
-
-export async function logoutLegacyAdmin(token) {
-  await apiRequest(`${appConfig.apiBaseUrl}/admin/auth/logout`, {
-    method: 'POST',
-    headers: buildAdminAuthHeaders(token),
-  });
-}

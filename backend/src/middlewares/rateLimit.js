@@ -28,3 +28,24 @@ export const adminUploadRateLimiter = buildLimiter(
   'Limite temporario de uploads atingido. Tente novamente em instantes.',
   'admin_upload_rate_limited',
 );
+
+export const publicAppointmentRequestRateLimiter = buildLimiter(
+  env.publicFormRateLimitWindowMs,
+  env.publicFormRateLimitMax,
+  'Limite temporario de envios atingido. Aguarde antes de tentar novamente.',
+  'public_form_rate_limited',
+);
+
+export const publicOrderRateLimiter = buildLimiter(
+  env.publicFormRateLimitWindowMs,
+  env.publicFormRateLimitMax,
+  'Limite temporario de envios atingido. Aguarde antes de tentar novamente.',
+  'public_form_rate_limited',
+);
+
+export const publicAnalyticsRateLimiter = buildLimiter(
+  env.publicAnalyticsRateLimitWindowMs,
+  env.publicAnalyticsRateLimitMax,
+  'Limite temporario de eventos atingido. Aguarde antes de tentar novamente.',
+  'public_analytics_rate_limited',
+);

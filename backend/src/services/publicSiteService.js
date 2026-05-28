@@ -27,6 +27,7 @@ import {
 import { buildBusinessSegmentState } from '../../../shared/utils/segments.js';
 import { normalizeBusinessContact } from '../../../shared/utils/businessContact.js';
 import { buildTenantTheme } from '../../../shared/utils/theme.js';
+import { normalizeProductMeasurement } from '../../../shared/utils/productMeasurement.js';
 
 function isManagedLinkMatch(link, action) {
   const url = String(link?.url || '').toLowerCase();
@@ -468,14 +469,17 @@ async function getPublicSiteByBusiness(business) {
         active: item.active !== false,
       })),
       products: products.map((item) => ({
-        id: item._id.toString(),
-        name: item.name,
-        description: item.description || '',
-        price: Number(item.price || 0),
-        image: item.image || '',
-        category: item.category || '',
-        active: item.active !== false,
-        options: Array.isArray(item.options) ? item.options : [],
+        ...normalizeProductMeasurement({
+          id: item._id.toString(),
+          name: item.name,
+          description: item.description || '',
+          price: Number(item.price || 0),
+          image: item.image || '',
+          category: item.category || '',
+          measurementUnit: item.measurementUnit,
+          active: item.active !== false,
+          options: Array.isArray(item.options) ? item.options : [],
+        }),
       })),
     },
     seo: {

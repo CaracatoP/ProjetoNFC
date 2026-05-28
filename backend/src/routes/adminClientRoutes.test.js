@@ -89,6 +89,24 @@ describe('Admin client routes', () => {
     return loginResponse.body.data.token;
   }
 
+  async function createInternalAdminWithoutLegacyRoles() {
+    await User.create({
+      name: 'Equipe Operacional Moderna',
+      email: 'operacional-sem-role@taplink.local',
+      passwordHash: await hashPassword('operacional123'),
+      roles: [],
+      roleLevel: 1,
+      status: 'active',
+    });
+
+    const loginResponse = await request(app).post('/api/admin/auth/login').send({
+      email: 'operacional-sem-role@taplink.local',
+      password: 'operacional123',
+    });
+
+    return loginResponse.body.data.token;
+  }
+
   it('creates and lists client users with resolved tenant, plan and billing data', async () => {
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' }).lean();
 
@@ -116,6 +134,29 @@ describe('Admin client routes', () => {
     expect(listResponse.status).toBe(200);
     expect(listResponse.body.data).toHaveLength(1);
     expect(listResponse.body.data[0].user.email).toBe('cliente@barbearia.local');
+  });
+
+  it('treats client search text as a literal value instead of a raw regex pattern', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' }).lean();
+
+    await request(app)
+      .post('/api/admin/clients')
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .send({
+        name: 'Cliente Barbearia',
+        email: 'cliente-regex@barbearia.local',
+        password: 'cliente123456',
+        roleLevel: 2,
+        businessId: String(business._id),
+      });
+
+    const response = await request(app)
+      .get('/api/admin/clients')
+      .query({ q: '.*' })
+      .set('Authorization', `Bearer ${superAdminToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toHaveLength(0);
   });
 
   it('lets level 1 create and manage only client levels 2 to 5', async () => {
@@ -213,6 +254,34 @@ describe('Admin client routes', () => {
 
     expect(planResponse.status).toBe(403);
     expect(planResponse.body.error.code).toBe('client_plan_forbidden');
+  });
+
+  it('lets a level 1 user without legacy roles still manage client users by canonical roleLevel rules', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' }).lean();
+    const levelOneToken = await createInternalAdminWithoutLegacyRoles();
+
+    const createResponse = await request(app)
+      .post('/api/admin/clients')
+      .set('Authorization', `Bearer ${levelOneToken}`)
+      .send({
+        name: 'Cliente Canonico',
+        email: 'canonico@cliente.local',
+        password: 'cliente123456',
+        roleLevel: 2,
+        businessId: String(business._id),
+      });
+
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.data.user.roleLevel).toBe(2);
+  });
+
+  it('rejects malformed client identifiers before reaching the service layer', async () => {
+    const response = await request(app)
+      .get('/api/admin/clients/not-a-valid-object-id')
+      .set('Authorization', `Bearer ${superAdminToken}`);
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('validation_error');
   });
 
   it('lets level 0 change billing and plan on the linked tenant subscription', async () => {

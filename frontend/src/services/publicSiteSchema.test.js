@@ -44,6 +44,16 @@ describe('publicSitePayloadSchema', () => {
         },
       ],
       links: [],
+      modulesData: {
+        products: [
+          {
+            id: 'product-1',
+            name: 'Picanha',
+            price: 59.9,
+            category: 'Carnes',
+          },
+        ],
+      },
       seo: {
         title: 'Barbearia Estilo Vivo',
         description: 'Pagina publica',
@@ -54,6 +64,7 @@ describe('publicSitePayloadSchema', () => {
       subdomain: 'estilo-vivo',
       customDomain: 'cliente.example.com',
     });
+    expect(parsed.modulesData.products[0].measurementUnit).toBe('unit');
     expect(parsed.sections[0].items[0].imageUrl).toBe('https://cdn.example.com/corte.jpg');
     expect(parsed.sections[0].items[1].imageUrl).toBeUndefined();
   });

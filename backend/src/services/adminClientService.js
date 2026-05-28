@@ -19,6 +19,10 @@ function normalizeText(value) {
   return String(value || '').trim();
 }
 
+function escapeRegexLiteral(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function buildClientFilter(filters = {}) {
   const filter = {};
 
@@ -31,7 +35,7 @@ function buildClientFilter(filters = {}) {
   }
 
   if (normalizeText(filters.q)) {
-    const pattern = new RegExp(normalizeText(filters.q), 'i');
+    const pattern = new RegExp(escapeRegexLiteral(normalizeText(filters.q)), 'i');
     filter.$or = [{ name: pattern }, { email: pattern }];
   }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAcceptedImageMimeTypes, hasValidImageSignature } from './imageValidation.js';
+import { getAcceptedImageMimeTypes, hasValidImageSignature, isAcceptedImageFile } from './imageValidation.js';
 
 const pngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -28,7 +28,15 @@ describe('imageValidation', () => {
       'image/png',
       'image/webp',
       'image/gif',
-      'image/svg+xml',
     ]);
+  });
+
+  it('rejects unsupported extensions even when the mime type looks valid', () => {
+    expect(
+      isAcceptedImageFile({
+        mimetype: 'image/png',
+        originalname: 'arquivo.txt',
+      }),
+    ).toBe(false);
   });
 });

@@ -1,17 +1,31 @@
 import { z } from 'zod';
+import {
+  DEFAULT_PRODUCT_MEASUREMENT_UNIT,
+  PRODUCT_MEASUREMENT_UNIT_VALUES,
+} from '../../../shared/constants/index.js';
+import { requiresIntegerMeasurementQuantity } from '../../../shared/utils/productMeasurement.js';
+import { objectIdSchema, optionalObjectIdSchema } from './objectId.js';
 
 const optionalString = z.string().optional().or(z.literal(''));
+const measurementUnitSchema = z.enum(PRODUCT_MEASUREMENT_UNIT_VALUES).default(DEFAULT_PRODUCT_MEASUREMENT_UNIT);
+const optionalMeasurementUnitSchema = z.preprocess(
+  (value) => {
+    const normalizedValue = String(value || '').trim().toLowerCase();
+    return normalizedValue || undefined;
+  },
+  z.enum(PRODUCT_MEASUREMENT_UNIT_VALUES).optional(),
+);
 
 export const businessIdParamsSchema = z.object({
-  businessId: z.string().min(12),
+  businessId: objectIdSchema,
 });
 
 export const resourceIdParamsSchema = z.object({
-  id: z.string().min(12),
+  id: objectIdSchema,
 });
 
 export const scopedResourceParamsSchema = businessIdParamsSchema.extend({
-  id: z.string().min(12),
+  id: objectIdSchema,
 });
 
 export const slugOnlyParamsSchema = z.object({
@@ -40,13 +54,14 @@ export const productBodySchema = z.object({
   image: optionalString,
   imagePublicId: optionalString,
   category: optionalString,
+  measurementUnit: measurementUnitSchema,
   active: z.boolean().default(true),
   options: z.array(z.any()).optional().default([]),
 });
 
 export const appointmentRequestBodySchema = z.object({
-  professionalId: optionalString,
-  serviceId: optionalString,
+  professionalId: optionalObjectIdSchema.or(z.literal('')),
+  serviceId: optionalObjectIdSchema.or(z.literal('')),
   professionalName: optionalString,
   serviceName: optionalString,
   customerName: z.string().min(2),
@@ -60,13 +75,30 @@ export const appointmentRequestStatusBodySchema = z.object({
   status: z.enum(['pending', 'confirmed', 'cancelled']),
 });
 
-export const orderItemBodySchema = z.object({
-  productId: optionalString,
-  name: z.string().min(2),
-  quantity: z.number().int().min(1),
-  unitPrice: z.number().min(0),
-  notes: optionalString,
-});
+export const orderItemBodySchema = z
+  .object({
+    productId: optionalObjectIdSchema.or(z.literal('')),
+    name: z.string().min(2),
+    quantity: z.number().positive(),
+    unitPrice: z.number().min(0),
+    measurementUnit: optionalMeasurementUnitSchema,
+    displayQuantity: optionalString,
+    itemTotal: z.number().min(0).optional(),
+    notes: optionalString,
+  })
+  .superRefine((value, context) => {
+    if (
+      value.measurementUnit &&
+      requiresIntegerMeasurementQuantity(value.measurementUnit) &&
+      !Number.isInteger(value.quantity)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['quantity'],
+        message: 'Quantidade inteira obrigatoria para esta unidade de medida.',
+      });
+    }
+  });
 
 export const orderBodySchema = z.object({
   customerName: z.string().min(2),

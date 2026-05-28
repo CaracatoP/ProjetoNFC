@@ -71,6 +71,25 @@ describe('Admin routes', () => {
     adminToken = loginResponse.body.data.token;
   });
 
+  async function createInternalAdminWithoutLegacyRoles() {
+    await User.create({
+      name: 'Equipe Operacional Moderna',
+      email: 'ops-modern@taplink.local',
+      passwordHash: await hashPassword('opsmodern123'),
+      roles: [],
+      roleLevel: 1,
+      status: 'active',
+    });
+
+    const loginResponse = await request(app).post('/api/admin/auth/login').send({
+      email: 'ops-modern@taplink.local',
+      password: 'opsmodern123',
+    });
+
+    expect(loginResponse.status).toBe(200);
+    return loginResponse.body.data.token;
+  }
+
   afterAll(async () => {
     await disconnectDatabase();
     await mongoServer.stop();
@@ -340,6 +359,32 @@ describe('Admin routes', () => {
     expect(updateResponse.status).toBe(200);
     expect(updateResponse.body.data.business.name).toBe('Barbearia Estilo Vivo Premium');
     expect(updateResponse.body.data.history.some((entry) => entry.field === 'business.name')).toBe(true);
+  });
+
+  it('allows canonical level 1 admins without legacy roles to run non-sensitive business mutations', async () => {
+    const levelOneToken = await createInternalAdminWithoutLegacyRoles();
+    const listResponse = await request(app)
+      .get('/api/admin/businesses')
+      .set('Authorization', `Bearer ${levelOneToken}`);
+
+    const targetBusiness = listResponse.body.data.find((item) => item.slug === 'barbearia-estilo-vivo');
+
+    const response = await request(app)
+      .patch(`/api/admin/businesses/${targetBusiness.id}/status`)
+      .set('Authorization', `Bearer ${levelOneToken}`)
+      .send({ status: 'inactive' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.business.status).toBe('inactive');
+  });
+
+  it('rejects malformed business identifiers before loading the admin editor', async () => {
+    const response = await request(app)
+      .get('/api/admin/businesses/not-a-valid-object-id')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('validation_error');
   });
 
   it('rejects saving a duplicated tenant through the original route and keeps the original slug untouched', async () => {
@@ -1299,6 +1344,7 @@ describe('Admin routes', () => {
     expect(uploadResponse.status).toBe(201);
     expect(uploadResponse.body.data.url).toContain('res.cloudinary.com');
     expect(uploadResponse.body.data.publicId).toBe('taplink/barbearia-estilo-vivo/banner-demo');
+    expect(uploadResponse.headers['x-powered-by']).toBeUndefined();
   });
 
   it('rejects non-image files on the admin upload route', async () => {
@@ -1314,5 +1360,50 @@ describe('Admin routes', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('upload_invalid_type');
+  });
+
+  it('rejects svg uploads on the admin upload route', async () => {
+    const response = await request(app)
+      .post('/api/admin/uploads/image')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .field('tenantSlug', 'barbearia-estilo-vivo')
+      .field('assetType', 'banner')
+      .attach('file', Buffer.from('<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>'), {
+        filename: 'arquivo.svg',
+        contentType: 'image/svg+xml',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('upload_invalid_type');
+  });
+
+  it('rejects uploads with unsafe extensions even when the mime type looks like an image', async () => {
+    const response = await request(app)
+      .post('/api/admin/uploads/image')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .field('tenantSlug', 'barbearia-estilo-vivo')
+      .field('assetType', 'banner')
+      .attach('file', Buffer.from('fake-image-content'), {
+        filename: 'arquivo.txt',
+        contentType: 'image/png',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('upload_invalid_type');
+  });
+
+  it('rejects unsupported admin upload asset types before reaching Cloudinary', async () => {
+    const response = await request(app)
+      .post('/api/admin/uploads/image')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .field('tenantSlug', 'barbearia-estilo-vivo')
+      .field('assetType', 'script')
+      .attach('file', Buffer.from('fake-image-content'), {
+        filename: 'logo.png',
+        contentType: 'image/png',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('validation_error');
   });
 });

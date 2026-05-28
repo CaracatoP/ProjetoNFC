@@ -1,5 +1,11 @@
 import { resolveMediaUrl } from '@/utils/formatters.js';
 import { normalizeBusinessContact } from '@shared/utils/businessContact.js';
+import {
+  buildLegacyDisplayQuantity,
+  calculateMeasuredItemTotal,
+  normalizeMeasurementUnit,
+  normalizeProductMeasurement,
+} from '@shared/utils/productMeasurement.js';
 
 export function normalizeBusinessMedia(business = {}) {
   return {
@@ -64,8 +70,27 @@ export function normalizeModulesDataMedia(modulesData = {}) {
       avatar: resolveMediaUrl(professional.avatar),
     })),
     products: (modulesData.products || []).map((product) => ({
-      ...product,
+      ...normalizeProductMeasurement(product),
       image: resolveMediaUrl(product.image),
+    })),
+    orders: (modulesData.orders || []).map((order) => ({
+      ...order,
+      items: (order.items || []).map((item) => {
+        const measurementUnit = normalizeMeasurementUnit(item.measurementUnit);
+        const quantity = Number(item.quantity || 0);
+        const unitPrice = Number(item.unitPrice || 0);
+
+        return {
+          ...item,
+          measurementUnit,
+          displayQuantity:
+            String(item.displayQuantity || '').trim() ||
+            buildLegacyDisplayQuantity(quantity, measurementUnit),
+          itemTotal: Number.isFinite(Number(item.itemTotal))
+            ? Number(Number(item.itemTotal).toFixed(2))
+            : calculateMeasuredItemTotal(unitPrice, quantity),
+        };
+      }),
     })),
   };
 }

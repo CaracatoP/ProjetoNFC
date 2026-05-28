@@ -27,7 +27,7 @@ import { adminUploadRateLimiter } from '../middlewares/rateLimit.js';
 import { requireSessionAuth } from '../middlewares/requireSessionAuth.js';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import { AppError } from '../utils/appError.js';
-import { getAcceptedImageMimeTypes } from '../utils/imageValidation.js';
+import { isAcceptedImageFile } from '../utils/imageValidation.js';
 import { clientPanelBusinessBasicsBodySchema } from '../validators/clientPanelValidators.js';
 import {
   appointmentRequestStatusBodySchema,
@@ -46,8 +46,8 @@ const upload = multer({
     fileSize: env.maxUploadMb * 1024 * 1024,
   },
   fileFilter(_req, file, callback) {
-    if (!getAcceptedImageMimeTypes().includes(file.mimetype)) {
-      callback(new AppError('Apenas imagens JPG, PNG, WEBP, GIF ou SVG sao permitidas', 400, 'upload_invalid_type'));
+    if (!isAcceptedImageFile(file)) {
+      callback(new AppError('Apenas imagens JPG, PNG, WEBP ou GIF sao permitidas', 400, 'upload_invalid_type'));
       return;
     }
 

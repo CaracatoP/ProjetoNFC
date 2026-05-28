@@ -41,6 +41,7 @@ import {
 import { buildSessionSnapshot } from './sessionAuthService.js';
 import { assertBillingAllowsCriticalMutation, assertBillingAllowsPanelAccess } from '../utils/sessionAccess.js';
 import { AppError } from '../utils/appError.js';
+import { isAllowedClientPanelUploadAssetType, normalizeUploadAssetType } from '../utils/uploadPolicy.js';
 
 function isPlainObject(value) {
   return Object.prototype.toString.call(value) === '[object Object]';
@@ -136,8 +137,6 @@ function buildAnalyticsPayload(analyticsSummary, scope) {
   };
 }
 
-const CLIENT_PANEL_UPLOAD_ASSET_TYPES = new Set(['logo', 'banner', 'product', 'professional']);
-
 function sanitizeClientContactForPanel(contact = {}) {
   const normalizedContact = normalizeBusinessContact(contact);
 
@@ -216,9 +215,9 @@ function buildClientPanelEditor(editor, sessionUser, accessContext) {
 
 function resolveClientPanelUploadOptions(context, options = {}) {
   const editorBusiness = context.session?.business || {};
-  const assetType = String(options.assetType || '').trim().toLowerCase();
+  const assetType = normalizeUploadAssetType(options.assetType);
 
-  if (!CLIENT_PANEL_UPLOAD_ASSET_TYPES.has(assetType)) {
+  if (!isAllowedClientPanelUploadAssetType(assetType)) {
     throw new AppError('Tipo de upload nao permitido neste painel.', 400, 'panel_upload_asset_type_invalid');
   }
 

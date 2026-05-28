@@ -47,6 +47,12 @@ import {
 } from '../../../shared/utils/tenantIdentity.js';
 import { buildBusinessSegmentState } from '../../../shared/utils/segments.js';
 import { buildTenantTheme } from '../../../shared/utils/theme.js';
+import {
+  buildLegacyDisplayQuantity,
+  calculateMeasuredItemTotal,
+  normalizeMeasurementUnit,
+  normalizeProductMeasurement,
+} from '../../../shared/utils/productMeasurement.js';
 
 function normalizeCoordinate(value) {
   if (value === '' || value === null || value === undefined) {
@@ -693,21 +699,41 @@ async function hydrateEditorResponse(businessId) {
         createdAt: item.createdAt,
       })),
       products: products.map((item) => ({
-        id: String(item._id || item.id),
-        name: item.name,
-        description: item.description || '',
-        price: Number(item.price || 0),
-        image: item.image || '',
-        imagePublicId: item.imagePublicId || '',
-        category: item.category || '',
-        active: item.active !== false,
-        options: Array.isArray(item.options) ? item.options : [],
+        ...normalizeProductMeasurement({
+          id: String(item._id || item.id),
+          name: item.name,
+          description: item.description || '',
+          price: Number(item.price || 0),
+          image: item.image || '',
+          imagePublicId: item.imagePublicId || '',
+          category: item.category || '',
+          measurementUnit: item.measurementUnit,
+          active: item.active !== false,
+          options: Array.isArray(item.options) ? item.options : [],
+        }),
       })),
       orders: orders.map((item) => ({
         id: String(item._id || item.id),
         customerName: item.customerName,
         customerPhone: item.customerPhone,
-        items: Array.isArray(item.items) ? item.items : [],
+        items: Array.isArray(item.items)
+          ? item.items.map((orderItem) => {
+              const measurementUnit = normalizeMeasurementUnit(orderItem.measurementUnit);
+              const quantity = Number(orderItem.quantity || 0);
+              const unitPrice = Number(orderItem.unitPrice || 0);
+
+              return {
+                ...orderItem,
+                measurementUnit,
+                displayQuantity:
+                  String(orderItem.displayQuantity || '').trim() ||
+                  buildLegacyDisplayQuantity(quantity, measurementUnit),
+                itemTotal: Number.isFinite(Number(orderItem.itemTotal))
+                  ? Number(Number(orderItem.itemTotal).toFixed(2))
+                  : calculateMeasuredItemTotal(unitPrice, quantity),
+              };
+            })
+          : [],
         total: Number(item.total || 0),
         deliveryType: item.deliveryType || 'pickup',
         address: item.address || '',

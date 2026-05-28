@@ -16,5 +16,7 @@ const subscriptionSchema = new mongoose.Schema(
   baseSchemaOptions,
 );
 
+subscriptionSchema.index({ status: 1 });
+
 export const Subscription =
   mongoose.models.Subscription || mongoose.model('Subscription', subscriptionSchema);

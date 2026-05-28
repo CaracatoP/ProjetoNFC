@@ -1,5 +1,13 @@
 import mongoose from 'mongoose';
+import {
+  DEFAULT_PRODUCT_MEASUREMENT_UNIT,
+  PRODUCT_MEASUREMENT_UNIT_VALUES,
+} from '../../../shared/constants/index.js';
+import { normalizeMeasurementUnit } from '../../../shared/utils/productMeasurement.js';
 import { baseSchemaOptions } from '../utils/mongoose.js';
+
+const baseToJSONTransform = baseSchemaOptions.toJSON?.transform;
+const baseToObjectTransform = baseSchemaOptions.toObject?.transform;
 
 const productOptionSchema = new mongoose.Schema(
   {
@@ -22,10 +30,34 @@ const productSchema = new mongoose.Schema(
     image: { type: String, trim: true },
     imagePublicId: { type: String, trim: true },
     category: { type: String, trim: true },
+    measurementUnit: {
+      type: String,
+      enum: PRODUCT_MEASUREMENT_UNIT_VALUES,
+      default: DEFAULT_PRODUCT_MEASUREMENT_UNIT,
+      trim: true,
+    },
     active: { type: Boolean, default: true, index: true },
     options: { type: [productOptionSchema], default: [] },
   },
-  baseSchemaOptions,
+  {
+    ...baseSchemaOptions,
+    toJSON: {
+      ...baseSchemaOptions.toJSON,
+      transform: (doc, ret) => {
+        const transformed = baseToJSONTransform ? baseToJSONTransform(doc, ret) : ret;
+        transformed.measurementUnit = normalizeMeasurementUnit(transformed.measurementUnit);
+        return transformed;
+      },
+    },
+    toObject: {
+      ...baseSchemaOptions.toObject,
+      transform: (doc, ret) => {
+        const transformed = baseToObjectTransform ? baseToObjectTransform(doc, ret) : ret;
+        transformed.measurementUnit = normalizeMeasurementUnit(transformed.measurementUnit);
+        return transformed;
+      },
+    },
+  },
 );
 
 productSchema.index({ businessId: 1, active: 1, createdAt: -1 });

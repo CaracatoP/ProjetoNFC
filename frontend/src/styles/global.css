@@ -4165,6 +4165,24 @@ img {
   gap: 0.75rem;
 }
 
+.catalog-card__fractional {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.catalog-card__quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.catalog-card__fractional-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
 .catalog-checkout {
   display: flex;
   flex-direction: column;
@@ -4185,7 +4203,7 @@ img {
 .catalog-checkout__list li {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 1rem;
   padding: 0.75rem 0.9rem;
   border-radius: 0.85rem;
@@ -4267,6 +4285,11 @@ img {
 
 @media (max-width: 720px) {
   .catalog-checkout__footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .catalog-card__fractional-footer {
     flex-direction: column;
     align-items: stretch;
   }

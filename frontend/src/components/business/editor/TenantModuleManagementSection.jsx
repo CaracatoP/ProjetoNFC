@@ -1,6 +1,16 @@
 import { useEffect, useId, useMemo, useState } from 'react';
-import { BUSINESS_MODULE_KEY_VALUES, BUSINESS_SEGMENT_VALUES } from '@shared/constants/index.js';
+import {
+  BUSINESS_MODULE_KEY_VALUES,
+  BUSINESS_SEGMENT_VALUES,
+  DEFAULT_PRODUCT_MEASUREMENT_UNIT,
+  PRODUCT_MEASUREMENT_UNIT_VALUES,
+} from '@shared/constants/index.js';
 import { buildBusinessSegmentState, getSegmentPreset } from '@shared/utils/segments.js';
+import {
+  buildLegacyDisplayQuantity,
+  getMeasurementUnitLabel,
+  normalizeProductMeasurement,
+} from '@shared/utils/productMeasurement.js';
 import { Button } from '@/components/common/Button.jsx';
 import { AdminField, InlineImageUploadField, SectionEyebrow } from './TenantEditorPrimitives.jsx';
 
@@ -57,6 +67,7 @@ function initialProduct() {
     image: '',
     imagePublicId: '',
     category: '',
+    measurementUnit: DEFAULT_PRODUCT_MEASUREMENT_UNIT,
     active: true,
   };
 }
@@ -211,7 +222,7 @@ export function TenantModuleManagementSection({
   useEffect(() => {
     setEditingProfessionals(modulesData.professionals || []);
     setEditingAppointmentServices(modulesData.appointmentServices || []);
-    setEditingProducts(modulesData.products || []);
+    setEditingProducts((modulesData.products || []).map((product) => normalizeProductMeasurement(product)));
   }, [modulesData.appointmentServices, modulesData.products, modulesData.professionals]);
 
   const categorySuggestions = useMemo(
@@ -588,7 +599,23 @@ export function TenantModuleManagementSection({
             <AdminField label="Preco">
               <input disabled={catalogReadOnly} type="number" min="0" step="0.01" value={newProduct.price} onChange={(event) => setNewProduct((current) => ({ ...current, price: Number(event.target.value) }))} />
             </AdminField>
+            <AdminField label="Unidade de venda">
+              <select
+                disabled={catalogReadOnly}
+                value={newProduct.measurementUnit}
+                onChange={(event) => setNewProduct((current) => ({ ...current, measurementUnit: event.target.value }))}
+              >
+                {PRODUCT_MEASUREMENT_UNIT_VALUES.map((measurementUnit) => (
+                  <option key={measurementUnit} value={measurementUnit}>
+                    {getMeasurementUnitLabel(measurementUnit)}
+                  </option>
+                ))}
+              </select>
+            </AdminField>
           </div>
+          <p className="admin-muted-copy">
+            O preco sera calculado conforme a unidade escolhida. Ex.: R$ 59,90/Kg permite pedido de 400g com calculo proporcional.
+          </p>
           <InlineImageUploadField
             label="Imagem do produto"
             value={newProduct.image}
@@ -635,6 +662,26 @@ export function TenantModuleManagementSection({
                     </AdminField>
                     <AdminField label="Preco">
                       <input disabled={catalogReadOnly} type="number" min="0" step="0.01" value={product.price ?? 0} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, price: Number(event.target.value) })))} />
+                    </AdminField>
+                    <AdminField label="Unidade de venda">
+                      <select
+                        disabled={catalogReadOnly}
+                        value={product.measurementUnit || DEFAULT_PRODUCT_MEASUREMENT_UNIT}
+                        onChange={(event) =>
+                          setEditingProducts((current) =>
+                            updateListItem(current, index, (item) => ({
+                              ...item,
+                              measurementUnit: event.target.value,
+                            })),
+                          )
+                        }
+                      >
+                        {PRODUCT_MEASUREMENT_UNIT_VALUES.map((measurementUnit) => (
+                          <option key={measurementUnit} value={measurementUnit}>
+                            {getMeasurementUnitLabel(measurementUnit)}
+                          </option>
+                        ))}
+                      </select>
                     </AdminField>
                   </div>
                   <InlineImageUploadField
@@ -783,7 +830,7 @@ export function TenantModuleManagementSection({
                       <ul className="admin-module-item-list">
                         {(order.items || []).map((item, index) => (
                           <li key={`${order.id}-item-${index}`}>
-                            {item.quantity}x {item.name} ({formatCurrencyValue(item.unitPrice)})
+                            {item.name} - {item.displayQuantity || buildLegacyDisplayQuantity(item.quantity, item.measurementUnit)} x {formatCurrencyValue(item.unitPrice)}/{getMeasurementUnitLabel(item.measurementUnit)} = {formatCurrencyValue(item.itemTotal)}
                           </li>
                         ))}
                       </ul>

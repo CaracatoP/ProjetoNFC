@@ -5,8 +5,12 @@ import {
   createPublicOrderController,
   listPublicProductsController,
 } from '../controllers/moduleController.js';
+import {
+  publicAnalyticsRateLimiter,
+  publicAppointmentRequestRateLimiter,
+  publicOrderRateLimiter,
+} from '../middlewares/rateLimit.js';
 import { getSiteByHost, getSiteBySlug, resolveTag, streamTenantUpdates } from '../controllers/publicSiteController.js';
-import { resolveTenant } from '../middlewares/resolveTenant.js';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import { analyticsValidators } from '../validators/analyticsValidators.js';
 import {
@@ -31,7 +35,6 @@ router.get(
 );
 router.get(
   '/site/:slug',
-  resolveTenant,
   validateRequest(publicSiteValidators.siteBySlug),
   asyncHandler(getSiteBySlug),
 );
@@ -42,11 +45,13 @@ router.get(
 );
 router.post(
   '/site/:slug/appointment-requests',
+  publicAppointmentRequestRateLimiter,
   validateRequest({ params: slugOnlyParamsSchema, body: appointmentRequestBodySchema }),
   asyncHandler(createPublicAppointmentRequestController),
 );
 router.post(
   '/site/:slug/orders',
+  publicOrderRateLimiter,
   validateRequest({ params: slugOnlyParamsSchema, body: orderBodySchema }),
   asyncHandler(createPublicOrderController),
 );
@@ -57,6 +62,7 @@ router.get(
 );
 router.post(
   '/analytics/events',
+  publicAnalyticsRateLimiter,
   validateRequest(analyticsValidators.createEvent),
   asyncHandler(createEvent),
 );

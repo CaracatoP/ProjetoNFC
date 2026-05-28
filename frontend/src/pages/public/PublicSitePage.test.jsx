@@ -229,6 +229,7 @@ const siteFixture = {
         price: 39.9,
         image: 'https://cdn.example.com/product.jpg',
         category: 'Finalizacao',
+        measurementUnit: 'unit',
         active: true,
       },
     ],
@@ -352,7 +353,7 @@ describe('PublicSitePage', () => {
         }),
       );
     });
-    expect(screen.getByText('Pedido enviado com sucesso.')).toBeInTheDocument();
+    expect(screen.getByText('Pedido enviado com sucesso. Aguarde a confirmacao do tenant.')).toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText('Servico'), 'appointment-service-1');
     await user.selectOptions(screen.getByLabelText('Profissional'), 'professional-1');
@@ -373,7 +374,7 @@ describe('PublicSitePage', () => {
         }),
       );
     });
-    expect(screen.getByText(/Aguarde a confirmacao do tenant/)).toBeInTheDocument();
+    expect(screen.getByText(/Solicitacao enviada com sucesso\./)).toBeInTheDocument();
   });
 
   it('shows a neutral message when the tenant is inactive', async () => {

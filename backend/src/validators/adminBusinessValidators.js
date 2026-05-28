@@ -9,6 +9,7 @@ import {
   SECTION_TYPE_VALUES,
 } from '../../../shared/constants/index.js';
 import { normalizeHost, slugify } from '../../../shared/utils/tenantIdentity.js';
+import { objectIdSchema } from './objectId.js';
 
 const optionalString = z.string().optional().or(z.literal(''));
 const slugPattern = /^[a-z0-9-]+$/;
@@ -251,7 +252,7 @@ const sectionsBodySchema = z.array(
 );
 
 export const adminBusinessParamsSchema = z.object({
-  businessId: z.string().min(12),
+  businessId: objectIdSchema,
 });
 
 export const adminBusinessEditorBodySchema = z.object({

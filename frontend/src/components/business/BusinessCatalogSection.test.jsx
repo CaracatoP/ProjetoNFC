@@ -17,6 +17,7 @@ const productsFixture = [
     price: 39.9,
     image: '',
     category: 'Finalizacao',
+    measurementUnit: 'unit',
     active: true,
   },
   {
@@ -26,6 +27,17 @@ const productsFixture = [
     price: 24.9,
     image: '',
     category: '',
+    measurementUnit: 'unit',
+    active: true,
+  },
+  {
+    id: 'product-3',
+    name: 'Picanha',
+    description: 'Corte bovino nobre',
+    price: 59.9,
+    image: '',
+    category: 'Carnes',
+    measurementUnit: 'kg',
     active: true,
   },
 ];
@@ -56,7 +68,8 @@ describe('BusinessCatalogSection', () => {
 
     expect(screen.getByRole('heading', { name: 'Finalizacao' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Outros' })).toBeInTheDocument();
-    expect(screen.getByText('2x Pomada modeladora')).toBeInTheDocument();
+    expect(screen.getAllByText('Pomada modeladora').length).toBeGreaterThan(0);
+    expect(screen.getByText('2 unidades x R$ 39,90/Unidade')).toBeInTheDocument();
     expect(window.localStorage.getItem('taplink:cart:barbearia-estilo-vivo')).toBe(JSON.stringify({ 'product-1': 2 }));
 
     await user.type(screen.getByLabelText('Nome'), 'Carlos');
@@ -72,6 +85,9 @@ describe('BusinessCatalogSection', () => {
             expect.objectContaining({
               productId: 'product-1',
               quantity: 2,
+              measurementUnit: 'unit',
+              displayQuantity: '2 unidades',
+              itemTotal: 79.8,
             }),
           ],
         }),
@@ -106,5 +122,50 @@ describe('BusinessCatalogSection', () => {
 
     await user.click(screen.getByRole('button', { name: /Remover item Pomada modeladora/i }));
     expect(screen.getByText('Nenhum item no carrinho ainda.')).toBeInTheDocument();
+  });
+
+  it('supports fractional kg products and submits proportional totals in the cart', async () => {
+    const onSubmitOrder = vi.fn().mockResolvedValue({ status: 'received' });
+    const user = userEvent.setup();
+
+    render(
+      <BusinessCatalogSection
+        tenantSlug="acougue-central"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={onSubmitOrder}
+      />,
+    );
+
+    const meatsSection = screen.getByRole('heading', { name: 'Carnes' }).closest('section');
+    const picanhaCard = within(meatsSection).getByText('Picanha').closest('.catalog-card');
+
+    await user.clear(within(picanhaCard).getByLabelText('Quantidade em gramas'));
+    await user.type(within(picanhaCard).getByLabelText('Quantidade em gramas'), '400');
+    await user.click(within(picanhaCard).getByRole('button', { name: 'Adicionar' }));
+
+    expect(screen.getByText('400g x R$ 59,90/Kg')).toBeInTheDocument();
+    expect(screen.getAllByText('R$ 23,96').length).toBeGreaterThan(0);
+
+    await user.type(screen.getByLabelText('Nome'), 'Patricia');
+    await user.type(screen.getByLabelText('Telefone'), '5511988887777');
+    await user.click(screen.getByRole('button', { name: /Enviar pedido/i }));
+
+    await waitFor(() => {
+      expect(onSubmitOrder).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items: [
+            expect.objectContaining({
+              productId: 'product-3',
+              quantity: 0.4,
+              measurementUnit: 'kg',
+              displayQuantity: '400g',
+              itemTotal: 23.96,
+            }),
+          ],
+        }),
+      );
+    });
   });
 });
