@@ -459,7 +459,7 @@ export function BusinessCatalogSection({
   }
 
   return (
-    <Card className="section-card catalog-section">
+    <>
       {modules.cart || modules.orders ? (
         <>
           <div className="catalog-cart-trigger">
@@ -659,6 +659,7 @@ export function BusinessCatalogSection({
           ) : null}
         </>
       ) : null}
+      <Card className="section-card catalog-section">
       <SectionHeader
         eyebrow="Modulo ativo"
         title={segmentConfig?.catalogTitle || 'Catalogo'}
@@ -773,6 +774,7 @@ export function BusinessCatalogSection({
           </section>
         ))}
       </div>
-    </Card>
+      </Card>
+    </>
   );
 }
