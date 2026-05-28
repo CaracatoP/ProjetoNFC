@@ -388,7 +388,7 @@ describe('PublicSitePage', () => {
     await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
     await user.type(screen.getByLabelText('Nome'), 'Carlos');
     await user.type(screen.getByLabelText('Telefone'), '5511999999999');
-    await user.click(screen.getByRole('button', { name: /Enviar pedido/i }));
+    await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
     await waitFor(() => {
       expect(publicSiteService.createPublicOrder).toHaveBeenCalledWith(

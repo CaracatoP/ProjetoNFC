@@ -189,6 +189,56 @@ function normalizeCartQuantityForProduct(product, quantity) {
   return Number(numericQuantity.toFixed(3));
 }
 
+function getCartAdjustmentStep(product) {
+  const editorConfig = getCartEditorConfigForUnit(product.measurementUnit);
+
+  if (requiresIntegerMeasurementQuantity(product.measurementUnit)) {
+    return Number(editorConfig.step || 1);
+  }
+
+  return convertInputValueToCartQuantity(product, String(editorConfig.step || 1));
+}
+
+function getCartEditorConfigForUnit(measurementUnit) {
+  if (measurementUnit === 'kg') {
+    return {
+      label: 'Quantidade em gramas',
+      min: 50,
+      step: 50,
+    };
+  }
+
+  if (measurementUnit === 'g') {
+    return {
+      label: 'Quantidade em gramas',
+      min: 1,
+      step: 1,
+    };
+  }
+
+  if (measurementUnit === 'ml') {
+    return {
+      label: 'Quantidade em ml',
+      min: 1,
+      step: 50,
+    };
+  }
+
+  if (measurementUnit === 'l') {
+    return {
+      label: 'Quantidade em litros',
+      min: 0.1,
+      step: 0.1,
+    };
+  }
+
+  return {
+    label: 'Quantidade',
+    min: 1,
+    step: 1,
+  };
+}
+
 export function BusinessCatalogSection({
   tenantSlug = '',
   modules,
@@ -268,6 +318,7 @@ export function BusinessCatalogSection({
   );
 
   const cartTotal = cartSubtotal;
+  const cartItemCount = cartItems.length;
   const cartBadgeCount = useMemo(
     () =>
       cartItems.reduce(
@@ -309,47 +360,25 @@ export function BusinessCatalogSection({
   }
 
   function getCartEditorConfig(product) {
+    const baseConfig = getCartEditorConfigForUnit(product.measurementUnit);
+
     if (product.measurementUnit === 'kg') {
       return {
-        label: 'Quantidade em gramas',
-        min: 50,
-        step: 50,
+        ...baseConfig,
         value: String(Math.round(Number(cart[product.id] || 0) * 1000)),
       };
     }
 
-    if (product.measurementUnit === 'g') {
+    if (requiresIntegerMeasurementQuantity(product.measurementUnit)) {
       return {
-        label: 'Quantidade em gramas',
-        min: 1,
-        step: 1,
-        value: String(Number(cart[product.id] || 0)),
-      };
-    }
-
-    if (product.measurementUnit === 'ml') {
-      return {
-        label: 'Quantidade em ml',
-        min: 1,
-        step: 50,
-        value: String(Number(cart[product.id] || 0)),
-      };
-    }
-
-    if (product.measurementUnit === 'l') {
-      return {
-        label: 'Quantidade em litros',
-        min: 0.1,
-        step: 0.1,
-        value: String(Number(cart[product.id] || 0)),
+        ...baseConfig,
+        value: String(Math.max(1, Math.trunc(Number(cart[product.id] || 0)))),
       };
     }
 
     return {
-      label: 'Quantidade',
-      min: 1,
-      step: 1,
-      value: String(Math.max(1, Math.trunc(Number(cart[product.id] || 0)))),
+      ...baseConfig,
+      value: String(Number(cart[product.id] || 0)),
     };
   }
 
@@ -374,6 +403,12 @@ export function BusinessCatalogSection({
 
   function handleCartEditorChange(product, rawValue) {
     const nextQuantity = convertInputValueToCartQuantity(product, rawValue);
+    updateCartQuantity(product, nextQuantity);
+  }
+
+  function adjustCartQuantity(product, direction) {
+    const currentQuantity = normalizeCartQuantityForProduct(product, cart[product.id]);
+    const nextQuantity = currentQuantity + getCartAdjustmentStep(product) * direction;
     updateCartQuantity(product, nextQuantity);
   }
 
@@ -444,109 +479,181 @@ export function BusinessCatalogSection({
                 onClick={() => setIsCartOpen(false)}
               />
               <div className="catalog-cart-panel" role="dialog" aria-modal="true" aria-label="Seu pedido">
-                <div className="catalog-cart-panel__header">
-                  <div>
-                    <strong>Seu pedido</strong>
-                    <span>Revise os itens e finalize com nome e telefone.</span>
-                  </div>
-                  <Button type="button" variant="secondary" onClick={() => setIsCartOpen(false)} aria-label="Fechar carrinho">
-                    Fechar
-                  </Button>
-                </div>
-
-                <form className="catalog-checkout catalog-checkout--drawer" onSubmit={handleSubmitOrder}>
-                  <ul className="catalog-checkout__list">
-                    {cartItems.length ? (
-                      cartItems.map((item) => {
-                        const product = normalizedProducts.find((entry) => entry.id === item.productId) || {
-                          id: item.productId,
-                          measurementUnit: item.measurementUnit,
-                          price: item.unitPrice,
-                          name: item.name,
-                        };
-                        const editorConfig = getCartEditorConfig(product);
-
-                        return (
-                          <li key={item.productId}>
-                            <div>
-                              <span>{item.name}</span>
-                              <small>
-                                {item.displayQuantity} x {formatCurrency(item.unitPrice)}/{getMeasurementUnitLabel(item.measurementUnit)}
-                              </small>
-                              <label className="catalog-checkout__item-editor">
-                                <span>{editorConfig.label}</span>
-                                <input
-                                  type="number"
-                                  min={editorConfig.min}
-                                  step={editorConfig.step}
-                                  value={editorConfig.value}
-                                  onChange={(event) => handleCartEditorChange(product, event.target.value)}
-                                />
-                              </label>
-                            </div>
-                            <div className="catalog-checkout__item-actions">
-                              <strong>{formatCurrency(item.itemTotal)}</strong>
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                aria-label={`Remover item ${item.name}`}
-                                onClick={() => updateCartQuantity(product, 0)}
-                              >
-                                Remover
-                              </Button>
-                            </div>
-                          </li>
-                        );
-                      })
-                    ) : (
-                      <li>Nenhum item no carrinho ainda.</li>
-                    )}
-                  </ul>
-                  <div className="catalog-checkout__summary">
-                    <div>
-                      <span>Subtotal</span>
-                      <strong>{formatCurrency(cartSubtotal)}</strong>
+                <div className="catalog-cart-shell" data-testid="catalog-cart-shell">
+                  <div className="catalog-cart-panel__header" data-testid="catalog-cart-header">
+                    <div className="catalog-cart-panel__header-copy">
+                      <span className="catalog-cart-panel__eyebrow" aria-hidden="true">
+                        Carrinho
+                      </span>
+                      <strong>Seu pedido</strong>
+                      <span>
+                        {cartItemCount
+                          ? `${cartItemCount} item(ns) selecionado(s). Revise antes de finalizar.`
+                          : 'Escolha os produtos e finalize com nome e telefone.'}
+                      </span>
                     </div>
-                    <div>
-                      <span>Total</span>
-                      <strong>{formatCurrency(cartTotal)}</strong>
-                    </div>
-                  </div>
-                  <div className="admin-form-grid">
-                    <label className="admin-field">
-                      <span>Nome</span>
-                      <input value={checkout.customerName} onChange={(event) => setCheckout((current) => ({ ...current, customerName: event.target.value }))} />
-                    </label>
-                    <label className="admin-field">
-                      <span>Telefone</span>
-                      <input value={checkout.customerPhone} onChange={(event) => setCheckout((current) => ({ ...current, customerPhone: event.target.value }))} />
-                    </label>
-                    <label className="admin-field">
-                      <span>Entrega</span>
-                      <select value={checkout.deliveryType} onChange={(event) => setCheckout((current) => ({ ...current, deliveryType: event.target.value }))}>
-                        <option value="pickup">Retirada</option>
-                        <option value="delivery">Entrega</option>
-                      </select>
-                    </label>
-                    {checkout.deliveryType === 'delivery' ? (
-                      <label className="admin-field">
-                        <span>Endereco</span>
-                        <input value={checkout.address} onChange={(event) => setCheckout((current) => ({ ...current, address: event.target.value }))} />
-                      </label>
-                    ) : null}
-                  </div>
-                  <label className="admin-field">
-                    <span>Observacoes</span>
-                    <textarea rows="3" value={checkout.notes} onChange={(event) => setCheckout((current) => ({ ...current, notes: event.target.value }))} />
-                  </label>
-                  <div className="catalog-checkout__footer">
-                    <strong>Total: {formatCurrency(cartTotal)}</strong>
-                    <Button type="submit" disabled={!cartItems.length || submitting}>
-                      {submitting ? 'Enviando...' : 'Enviar pedido'}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="catalog-cart-panel__close"
+                      onClick={() => setIsCartOpen(false)}
+                      aria-label="Fechar carrinho"
+                    >
+                      Fechar
                     </Button>
                   </div>
-                  {feedback ? <p className="site-inline-feedback">{feedback}</p> : null}
-                </form>
+
+                  <form className="catalog-checkout catalog-checkout--drawer" onSubmit={handleSubmitOrder}>
+                    <div className="catalog-cart-panel__body" data-testid="catalog-cart-body">
+                      {feedback ? <p className="site-inline-feedback catalog-checkout__feedback">{feedback}</p> : null}
+
+                      {cartItems.length ? (
+                        <>
+                          <ul className="catalog-checkout__list">
+                            {cartItems.map((item) => {
+                              const product = normalizedProducts.find((entry) => entry.id === item.productId) || {
+                                id: item.productId,
+                                measurementUnit: item.measurementUnit,
+                                price: item.unitPrice,
+                                name: item.name,
+                                image: '',
+                              };
+                              const editorConfig = getCartEditorConfig(product);
+                              const itemImageUrl = resolveMediaUrl(product.image, {
+                                width: 160,
+                                height: 160,
+                                fit: 'fill',
+                              });
+
+                              return (
+                                <li key={item.productId} className="catalog-checkout__item">
+                                  <div className={`catalog-checkout__item-media${itemImageUrl ? '' : ' catalog-checkout__item-media--placeholder'}`}>
+                                    {itemImageUrl ? <img src={itemImageUrl} alt={item.name} /> : <span aria-hidden="true">{item.name.slice(0, 1)}</span>}
+                                  </div>
+                                  <div className="catalog-checkout__item-main">
+                                    <div className="catalog-checkout__item-copy">
+                                      <span className="catalog-checkout__item-name">{item.name}</span>
+                                      <small className="catalog-checkout__item-meta">
+                                        {item.displayQuantity} x {formatCurrency(item.unitPrice)}/{getMeasurementUnitLabel(item.measurementUnit)}
+                                      </small>
+                                    </div>
+
+                                    <label className="catalog-checkout__item-editor">
+                                      <span>{editorConfig.label}</span>
+                                      <input
+                                        type="number"
+                                        min={editorConfig.min}
+                                        step={editorConfig.step}
+                                        value={editorConfig.value}
+                                        onChange={(event) => handleCartEditorChange(product, event.target.value)}
+                                      />
+                                    </label>
+
+                                    <div className="catalog-checkout__item-footer">
+                                      <div className="catalog-checkout__stepper" aria-label={`Controles de quantidade para ${item.name}`}>
+                                        <Button
+                                          type="button"
+                                          variant="secondary"
+                                          className="catalog-checkout__stepper-button"
+                                          aria-label={`Diminuir quantidade de ${item.name}`}
+                                          onClick={() => adjustCartQuantity(product, -1)}
+                                        >
+                                          -
+                                        </Button>
+                                        <span className="catalog-checkout__stepper-value">{item.displayQuantity}</span>
+                                        <Button
+                                          type="button"
+                                          variant="secondary"
+                                          className="catalog-checkout__stepper-button"
+                                          aria-label={`Aumentar quantidade de ${item.name}`}
+                                          onClick={() => adjustCartQuantity(product, 1)}
+                                        >
+                                          +
+                                        </Button>
+                                      </div>
+                                      <div className="catalog-checkout__item-actions">
+                                        <strong>{formatCurrency(item.itemTotal)}</strong>
+                                        <Button
+                                          type="button"
+                                          variant="secondary"
+                                          aria-label={`Remover item ${item.name}`}
+                                          onClick={() => updateCartQuantity(product, 0)}
+                                        >
+                                          Remover
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+
+                          <div className="catalog-checkout__summary">
+                            <div>
+                              <span>Subtotal</span>
+                              <strong>{formatCurrency(cartSubtotal)}</strong>
+                            </div>
+                            <div>
+                              <span>Total parcial</span>
+                              <strong>{formatCurrency(cartTotal)}</strong>
+                            </div>
+                          </div>
+
+                          <div className="admin-form-grid catalog-checkout__fields">
+                            <label className="admin-field">
+                              <span>Nome</span>
+                              <input value={checkout.customerName} onChange={(event) => setCheckout((current) => ({ ...current, customerName: event.target.value }))} />
+                            </label>
+                            <label className="admin-field">
+                              <span>Telefone</span>
+                              <input value={checkout.customerPhone} onChange={(event) => setCheckout((current) => ({ ...current, customerPhone: event.target.value }))} />
+                            </label>
+                            <label className="admin-field">
+                              <span>Entrega</span>
+                              <select value={checkout.deliveryType} onChange={(event) => setCheckout((current) => ({ ...current, deliveryType: event.target.value }))}>
+                                <option value="pickup">Retirada</option>
+                                <option value="delivery">Entrega</option>
+                              </select>
+                            </label>
+                            {checkout.deliveryType === 'delivery' ? (
+                              <label className="admin-field">
+                                <span>Endereco</span>
+                                <input value={checkout.address} onChange={(event) => setCheckout((current) => ({ ...current, address: event.target.value }))} />
+                              </label>
+                            ) : null}
+                          </div>
+
+                          <label className="admin-field catalog-checkout__notes">
+                            <span>Observacoes</span>
+                            <textarea rows="3" value={checkout.notes} onChange={(event) => setCheckout((current) => ({ ...current, notes: event.target.value }))} />
+                          </label>
+                        </>
+                      ) : (
+                        <div className="catalog-cart-empty">
+                          <div className="catalog-cart-empty__icon" aria-hidden="true">
+                            Carrinho
+                          </div>
+                          <strong>Seu carrinho esta vazio</strong>
+                          <p>Adicione produtos do catalogo para montar o pedido antes de finalizar.</p>
+                          <Button type="button" variant="secondary" onClick={() => setIsCartOpen(false)}>
+                            Adicionar produtos
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="catalog-cart-panel__footer" data-testid="catalog-cart-footer">
+                      <div className="catalog-cart-panel__total">
+                        <span>Total do pedido</span>
+                        <strong>{formatCurrency(cartTotal)}</strong>
+                      </div>
+                      <Button type="submit" disabled={!cartItems.length || submitting} className="catalog-cart-panel__submit">
+                        {submitting ? 'Enviando...' : 'Finalizar pedido'}
+                      </Button>
+                    </div>
+                  </form>
+                </div>
               </div>
             </div>
           ) : null}

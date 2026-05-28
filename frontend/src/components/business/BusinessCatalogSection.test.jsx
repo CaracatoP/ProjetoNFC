@@ -79,7 +79,7 @@ describe('BusinessCatalogSection', () => {
     expect(screen.getByText('2 unidades x R$ 39,90/Unidade')).toBeInTheDocument();
     await user.type(screen.getByLabelText('Nome'), 'Carlos');
     await user.type(screen.getByLabelText('Telefone'), '5511999999999');
-    await user.click(screen.getByRole('button', { name: /Enviar pedido/i }));
+    await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
     await waitFor(() => {
       expect(onSubmitOrder).toHaveBeenCalledWith(
@@ -121,13 +121,14 @@ describe('BusinessCatalogSection', () => {
     const finalizacaoCard = finalizacaoGroup?.parentElement?.querySelector('.catalog-card') || screen.getByText('Pomada modeladora').closest('.catalog-card');
     await user.click(within(finalizacaoCard).getByRole('button', { name: 'Adicionar' }));
     await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
-    await user.click(screen.getByRole('button', { name: /Enviar pedido/i }));
+    await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
     expect(onSubmitOrder).not.toHaveBeenCalled();
     expect(screen.getByText('Informe nome e telefone para finalizar o pedido.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Remover item Pomada modeladora/i }));
-    expect(screen.getByText('Nenhum item no carrinho ainda.')).toBeInTheDocument();
+    expect(screen.getByText('Seu carrinho esta vazio')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Adicionar produtos/i })).toBeInTheDocument();
   });
 
   it('opens and closes the dedicated cart panel from the fixed trigger', async () => {
@@ -145,7 +146,12 @@ describe('BusinessCatalogSection', () => {
 
     expect(screen.queryByRole('dialog', { name: /Seu pedido/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
-    expect(screen.getByRole('dialog', { name: /Seu pedido/i })).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog', { name: /Seu pedido/i });
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByTestId('catalog-cart-shell')).toBeInTheDocument();
+    expect(within(dialog).getByTestId('catalog-cart-header')).toBeInTheDocument();
+    expect(within(dialog).getByTestId('catalog-cart-body')).toBeInTheDocument();
+    expect(within(dialog).getByTestId('catalog-cart-footer')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Fechar carrinho/i }));
     expect(screen.queryByRole('dialog', { name: /Seu pedido/i })).not.toBeInTheDocument();
   });
@@ -178,7 +184,7 @@ describe('BusinessCatalogSection', () => {
 
     await user.type(screen.getByLabelText('Nome'), 'Patricia');
     await user.type(screen.getByLabelText('Telefone'), '5511988887777');
-    await user.click(screen.getByRole('button', { name: /Enviar pedido/i }));
+    await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
     await waitFor(() => {
       expect(onSubmitOrder).toHaveBeenCalledWith(
