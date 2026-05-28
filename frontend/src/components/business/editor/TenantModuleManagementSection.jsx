@@ -164,6 +164,7 @@ export function TenantModuleManagementSection({
   mode = 'admin',
   permissions = {},
 }) {
+  const isClientMode = mode === 'client';
   const segmentState = useMemo(() => buildBusinessSegmentState(draft.business), [draft.business]);
   const modulesData = draft.modulesData || {};
   const categorySuggestionsId = useId();
@@ -171,6 +172,7 @@ export function TenantModuleManagementSection({
   const [newProfessional, setNewProfessional] = useState(initialProfessional);
   const [newAppointmentService, setNewAppointmentService] = useState(initialAppointmentService);
   const [newProduct, setNewProduct] = useState(initialProduct);
+  const [isClientCreateProductOpen, setIsClientCreateProductOpen] = useState(mode !== 'client');
   const [editingProfessionals, setEditingProfessionals] = useState([]);
   const [editingAppointmentServices, setEditingAppointmentServices] = useState([]);
   const [editingProducts, setEditingProducts] = useState([]);
@@ -218,6 +220,10 @@ export function TenantModuleManagementSection({
       setActiveTab(visibleTabs[0]?.id || 'segment');
     }
   }, [activeTab, visibleTabs]);
+
+  useEffect(() => {
+    setIsClientCreateProductOpen(mode !== 'client');
+  }, [mode]);
 
   useEffect(() => {
     setEditingProfessionals(modulesData.professionals || []);
@@ -307,6 +313,27 @@ export function TenantModuleManagementSection({
   const catalogReadOnly = !capabilityState.canEditCatalog;
   const professionalsReadOnly = !capabilityState.canEditProfessionals;
   const servicesReadOnly = !capabilityState.canEditServices;
+  const compactCatalogLayout = isClientMode;
+  const productFormGridClassName = `admin-form-grid admin-product-form__grid${compactCatalogLayout ? ' admin-form-grid--compact admin-product-form__grid--compact' : ''}`;
+  const productDescriptionRows = compactCatalogLayout ? 2 : 3;
+
+  function resetNewProductDraft() {
+    setNewProduct(initialProduct());
+  }
+
+  function closeClientCreateProduct() {
+    resetNewProductDraft();
+    setIsClientCreateProductOpen(false);
+  }
+
+  async function handleCreateProduct() {
+    await moduleActions?.createProduct?.(newProduct);
+    resetNewProductDraft();
+
+    if (isClientMode) {
+      setIsClientCreateProductOpen(false);
+    }
+  }
 
   return (
     <div className="admin-card-stack admin-card-stack--airy">
@@ -581,7 +608,7 @@ export function TenantModuleManagementSection({
       ) : null}
 
       {activeTab === 'catalog' ? (
-        <div className="admin-card-stack">
+        <div className={`admin-card-stack admin-product-management${compactCatalogLayout ? ' admin-product-management--client' : ''}`}>
           {catalogReadOnly ? <p className="admin-muted-copy">Seu nivel atual pode visualizar o catalogo, mas nao editar produtos.</p> : null}
           <datalist id={categorySuggestionsId}>
             {categorySuggestions.map((category) => (
@@ -589,79 +616,189 @@ export function TenantModuleManagementSection({
             ))}
           </datalist>
 
-          <div className="admin-form-grid">
-            <AdminField label="Produto">
-              <input disabled={catalogReadOnly} value={newProduct.name} onChange={(event) => setNewProduct((current) => ({ ...current, name: event.target.value }))} />
-            </AdminField>
-            <AdminField label="Categoria">
-              <input disabled={catalogReadOnly} list={categorySuggestionsId} value={newProduct.category} onChange={(event) => setNewProduct((current) => ({ ...current, category: event.target.value }))} />
-            </AdminField>
-            <AdminField label="Preco">
-              <input disabled={catalogReadOnly} type="number" min="0" step="0.01" value={newProduct.price} onChange={(event) => setNewProduct((current) => ({ ...current, price: Number(event.target.value) }))} />
-            </AdminField>
-            <AdminField label="Unidade de venda">
-              <select
-                disabled={catalogReadOnly}
-                value={newProduct.measurementUnit}
-                onChange={(event) => setNewProduct((current) => ({ ...current, measurementUnit: event.target.value }))}
+          {isClientMode ? (
+            !catalogReadOnly ? (
+              <section
+                className={`admin-repeater-card admin-repeater-card--product admin-product-create-card${isClientCreateProductOpen ? ' admin-product-create-card--expanded' : ''}`}
               >
-                {PRODUCT_MEASUREMENT_UNIT_VALUES.map((measurementUnit) => (
-                  <option key={measurementUnit} value={measurementUnit}>
-                    {getMeasurementUnitLabel(measurementUnit)}
-                  </option>
-                ))}
-              </select>
-            </AdminField>
-          </div>
-          <p className="admin-muted-copy">
-            O preco sera calculado conforme a unidade escolhida. Ex.: R$ 59,90/Kg permite pedido de 400g com calculo proporcional.
-          </p>
-          <InlineImageUploadField
-            label="Imagem do produto"
-            value={newProduct.image}
-            alt={newProduct.name || 'Imagem do produto'}
-            uploading={capabilityState.canUploadMedia && uploadingAssetKey === 'new-product-image'}
-            uploadingLabel="Enviando imagem..."
-            disabled={catalogReadOnly || !capabilityState.canUploadMedia}
-            onChange={(value) => setNewProduct((current) => ({ ...current, image: value, imagePublicId: '' }))}
-            onUpload={(file) =>
-              handleInlineUpload({
-                file,
-                assetType: 'product',
-                uploadKey: 'new-product-image',
-                onComplete: (uploaded) =>
-                  setNewProduct((current) => ({
-                    ...current,
-                    image: uploaded?.url || '',
-                    imagePublicId: uploaded?.publicId || '',
-                  })),
-              })
-            }
-            onRemove={() => setNewProduct((current) => ({ ...current, image: '', imagePublicId: '' }))}
-          />
-          <AdminField label="Descricao">
-            <textarea disabled={catalogReadOnly} rows="3" value={newProduct.description} onChange={(event) => setNewProduct((current) => ({ ...current, description: event.target.value }))} />
-          </AdminField>
-          <Button disabled={catalogReadOnly || !newProduct.name.trim() || busyKey === 'create-product'} onClick={async () => {
-            await moduleActions?.createProduct?.(newProduct);
-            setNewProduct(initialProduct());
-          }}>
-            {busyKey === 'create-product' ? 'Salvando...' : 'Adicionar produto'}
-          </Button>
+                <div className="admin-product-create-card__header">
+                  <div className="admin-product-create-card__copy">
+                    <strong>Adicionar produto</strong>
+                    <span>Abra o formulario somente quando precisar cadastrar um novo item no catalogo.</span>
+                  </div>
+                  {!isClientCreateProductOpen ? (
+                    <Button variant="secondary" onClick={() => setIsClientCreateProductOpen(true)}>
+                      Adicionar produto
+                    </Button>
+                  ) : null}
+                </div>
+
+                {isClientCreateProductOpen ? (
+                  <div className="admin-card-stack admin-product-create-card__body" data-testid="client-product-create-form">
+                    <div className={productFormGridClassName}>
+                      <AdminField label="Produto">
+                        <input disabled={catalogReadOnly} value={newProduct.name} onChange={(event) => setNewProduct((current) => ({ ...current, name: event.target.value }))} />
+                      </AdminField>
+                      <AdminField label="Preco">
+                        <input disabled={catalogReadOnly} type="number" min="0" step="0.01" value={newProduct.price} onChange={(event) => setNewProduct((current) => ({ ...current, price: Number(event.target.value) }))} />
+                      </AdminField>
+                      <AdminField label="Categoria">
+                        <input disabled={catalogReadOnly} list={categorySuggestionsId} value={newProduct.category} onChange={(event) => setNewProduct((current) => ({ ...current, category: event.target.value }))} />
+                      </AdminField>
+                      <AdminField label="Unidade de venda">
+                        <select
+                          disabled={catalogReadOnly}
+                          value={newProduct.measurementUnit}
+                          onChange={(event) => setNewProduct((current) => ({ ...current, measurementUnit: event.target.value }))}
+                        >
+                          {PRODUCT_MEASUREMENT_UNIT_VALUES.map((measurementUnit) => (
+                            <option key={measurementUnit} value={measurementUnit}>
+                              {getMeasurementUnitLabel(measurementUnit)}
+                            </option>
+                          ))}
+                        </select>
+                      </AdminField>
+                    </div>
+                    <p className="admin-muted-copy admin-product-form__hint">
+                      O preco sera calculado conforme a unidade escolhida. Ex.: R$ 59,90/Kg permite pedido de 400g com calculo proporcional.
+                    </p>
+                    <div className="admin-product-form__support admin-product-form__support--compact">
+                      <div className="admin-product-form__media">
+                        <InlineImageUploadField
+                          label="Imagem do produto"
+                          value={newProduct.image}
+                          alt={newProduct.name || 'Imagem do produto'}
+                          uploading={capabilityState.canUploadMedia && uploadingAssetKey === 'new-product-image'}
+                          uploadingLabel="Enviando imagem..."
+                          disabled={catalogReadOnly || !capabilityState.canUploadMedia}
+                          onChange={(value) => setNewProduct((current) => ({ ...current, image: value, imagePublicId: '' }))}
+                          onUpload={(file) =>
+                            handleInlineUpload({
+                              file,
+                              assetType: 'product',
+                              uploadKey: 'new-product-image',
+                              onComplete: (uploaded) =>
+                                setNewProduct((current) => ({
+                                  ...current,
+                                  image: uploaded?.url || '',
+                                  imagePublicId: uploaded?.publicId || '',
+                                })),
+                            })
+                          }
+                          onRemove={() => setNewProduct((current) => ({ ...current, image: '', imagePublicId: '' }))}
+                        />
+                      </div>
+                      <div className="admin-product-form__description">
+                        <AdminField label="Descricao">
+                          <textarea disabled={catalogReadOnly} rows={productDescriptionRows} value={newProduct.description} onChange={(event) => setNewProduct((current) => ({ ...current, description: event.target.value }))} />
+                        </AdminField>
+                      </div>
+                    </div>
+                    <div className="admin-inline-actions admin-product-form__actions">
+                      <Button variant="secondary" disabled={busyKey === 'create-product'} onClick={closeClientCreateProduct}>
+                        Cancelar
+                      </Button>
+                      <Button disabled={!newProduct.name.trim() || busyKey === 'create-product'} onClick={handleCreateProduct}>
+                        {busyKey === 'create-product' ? 'Salvando...' : 'Salvar produto'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+            ) : null
+          ) : (
+            <>
+              <div className={productFormGridClassName}>
+                <AdminField label="Produto">
+                  <input disabled={catalogReadOnly} value={newProduct.name} onChange={(event) => setNewProduct((current) => ({ ...current, name: event.target.value }))} />
+                </AdminField>
+                <AdminField label="Categoria">
+                  <input disabled={catalogReadOnly} list={categorySuggestionsId} value={newProduct.category} onChange={(event) => setNewProduct((current) => ({ ...current, category: event.target.value }))} />
+                </AdminField>
+                <AdminField label="Preco">
+                  <input disabled={catalogReadOnly} type="number" min="0" step="0.01" value={newProduct.price} onChange={(event) => setNewProduct((current) => ({ ...current, price: Number(event.target.value) }))} />
+                </AdminField>
+                <AdminField label="Unidade de venda">
+                  <select
+                    disabled={catalogReadOnly}
+                    value={newProduct.measurementUnit}
+                    onChange={(event) => setNewProduct((current) => ({ ...current, measurementUnit: event.target.value }))}
+                  >
+                    {PRODUCT_MEASUREMENT_UNIT_VALUES.map((measurementUnit) => (
+                      <option key={measurementUnit} value={measurementUnit}>
+                        {getMeasurementUnitLabel(measurementUnit)}
+                      </option>
+                    ))}
+                  </select>
+                </AdminField>
+              </div>
+              <p className="admin-muted-copy admin-product-form__hint">
+                O preco sera calculado conforme a unidade escolhida. Ex.: R$ 59,90/Kg permite pedido de 400g com calculo proporcional.
+              </p>
+              <div className="admin-product-form__support">
+                <div className="admin-product-form__media">
+                  <InlineImageUploadField
+                    label="Imagem do produto"
+                    value={newProduct.image}
+                    alt={newProduct.name || 'Imagem do produto'}
+                    uploading={capabilityState.canUploadMedia && uploadingAssetKey === 'new-product-image'}
+                    uploadingLabel="Enviando imagem..."
+                    disabled={catalogReadOnly || !capabilityState.canUploadMedia}
+                    onChange={(value) => setNewProduct((current) => ({ ...current, image: value, imagePublicId: '' }))}
+                    onUpload={(file) =>
+                      handleInlineUpload({
+                        file,
+                        assetType: 'product',
+                        uploadKey: 'new-product-image',
+                        onComplete: (uploaded) =>
+                          setNewProduct((current) => ({
+                            ...current,
+                            image: uploaded?.url || '',
+                            imagePublicId: uploaded?.publicId || '',
+                          })),
+                      })
+                    }
+                    onRemove={() => setNewProduct((current) => ({ ...current, image: '', imagePublicId: '' }))}
+                  />
+                </div>
+                <div className="admin-product-form__description">
+                  <AdminField label="Descricao">
+                    <textarea disabled={catalogReadOnly} rows={productDescriptionRows} value={newProduct.description} onChange={(event) => setNewProduct((current) => ({ ...current, description: event.target.value }))} />
+                  </AdminField>
+                </div>
+              </div>
+              <Button disabled={catalogReadOnly || !newProduct.name.trim() || busyKey === 'create-product'} onClick={handleCreateProduct}>
+                {busyKey === 'create-product' ? 'Salvando...' : 'Adicionar produto'}
+              </Button>
+            </>
+          )}
 
           {editingProducts.length ? (
             <div className="admin-repeater-list">
               {editingProducts.map((product, index) => (
-                <div key={product.id || index} className="admin-repeater-card">
-                  <div className="admin-form-grid">
+                <div
+                  key={product.id || index}
+                  className={`admin-repeater-card admin-repeater-card--product${compactCatalogLayout ? ' admin-repeater-card--product-compact' : ''}`}
+                >
+                  {compactCatalogLayout ? (
+                    <div className="admin-product-card__header">
+                      <div className="admin-product-card__copy">
+                        <strong>{product.name || `Produto ${index + 1}`}</strong>
+                        <span>
+                          {normalizeCategoryLabel(product.category)} / {getMeasurementUnitLabel(product.measurementUnit || DEFAULT_PRODUCT_MEASUREMENT_UNIT)}
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className={productFormGridClassName}>
                     <AdminField label="Produto">
                       <input disabled={catalogReadOnly} value={product.name || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, name: event.target.value })))} />
                     </AdminField>
-                    <AdminField label="Categoria">
-                      <input disabled={catalogReadOnly} list={categorySuggestionsId} value={product.category || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, category: event.target.value })))} />
-                    </AdminField>
                     <AdminField label="Preco">
                       <input disabled={catalogReadOnly} type="number" min="0" step="0.01" value={product.price ?? 0} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, price: Number(event.target.value) })))} />
+                    </AdminField>
+                    <AdminField label="Categoria">
+                      <input disabled={catalogReadOnly} list={categorySuggestionsId} value={product.category || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, category: event.target.value })))} />
                     </AdminField>
                     <AdminField label="Unidade de venda">
                       <select
@@ -684,51 +821,57 @@ export function TenantModuleManagementSection({
                       </select>
                     </AdminField>
                   </div>
-                  <InlineImageUploadField
-                    label="Imagem do produto"
-                    value={product.image || ''}
-                    alt={product.name || 'Imagem do produto'}
-                    uploading={capabilityState.canUploadMedia && uploadingAssetKey === `product-${index}`}
-                    uploadingLabel="Enviando imagem..."
-                    disabled={catalogReadOnly || !capabilityState.canUploadMedia}
-                    onChange={(value) =>
-                      setEditingProducts((current) =>
-                        updateListItem(current, index, (item) => ({
-                          ...item,
-                          image: value,
-                          imagePublicId: value ? item.imagePublicId || '' : '',
-                        })),
-                      )
-                    }
-                    onUpload={(file) =>
-                      handleInlineUpload({
-                        file,
-                        assetType: 'product',
-                        uploadKey: `product-${index}`,
-                        onComplete: (uploaded) =>
+                  <div className={`admin-product-form__support${compactCatalogLayout ? ' admin-product-form__support--compact' : ''}`}>
+                    <div className="admin-product-form__media">
+                      <InlineImageUploadField
+                        label="Imagem do produto"
+                        value={product.image || ''}
+                        alt={product.name || 'Imagem do produto'}
+                        uploading={capabilityState.canUploadMedia && uploadingAssetKey === `product-${index}`}
+                        uploadingLabel="Enviando imagem..."
+                        disabled={catalogReadOnly || !capabilityState.canUploadMedia}
+                        onChange={(value) =>
                           setEditingProducts((current) =>
                             updateListItem(current, index, (item) => ({
                               ...item,
-                              image: uploaded?.url || '',
-                              imagePublicId: uploaded?.publicId || '',
+                              image: value,
+                              imagePublicId: value ? item.imagePublicId || '' : '',
                             })),
-                          ),
-                      })
-                    }
-                    onRemove={() =>
-                      setEditingProducts((current) =>
-                        updateListItem(current, index, (item) => ({
-                          ...item,
-                          image: '',
-                          imagePublicId: '',
-                        })),
-                      )
-                    }
-                  />
-                  <AdminField label="Descricao">
-                    <textarea disabled={catalogReadOnly} rows="3" value={product.description || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, description: event.target.value })))} />
-                  </AdminField>
-                  <div className="admin-inline-actions">
+                          )
+                        }
+                        onUpload={(file) =>
+                          handleInlineUpload({
+                            file,
+                            assetType: 'product',
+                            uploadKey: `product-${index}`,
+                            onComplete: (uploaded) =>
+                              setEditingProducts((current) =>
+                                updateListItem(current, index, (item) => ({
+                                  ...item,
+                                  image: uploaded?.url || '',
+                                  imagePublicId: uploaded?.publicId || '',
+                                })),
+                              ),
+                          })
+                        }
+                        onRemove={() =>
+                          setEditingProducts((current) =>
+                            updateListItem(current, index, (item) => ({
+                              ...item,
+                              image: '',
+                              imagePublicId: '',
+                            })),
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="admin-product-form__description">
+                      <AdminField label="Descricao">
+                        <textarea disabled={catalogReadOnly} rows={productDescriptionRows} value={product.description || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, description: event.target.value })))} />
+                      </AdminField>
+                    </div>
+                  </div>
+                  <div className="admin-inline-actions admin-product-form__actions">
                     <Button variant="secondary" disabled={catalogReadOnly || !product.name?.trim() || busyKey === 'update-product'} onClick={() => moduleActions?.updateProduct?.(product.id, product)}>
                       {busyKey === 'update-product' ? 'Salvando...' : 'Salvar produto'}
                     </Button>

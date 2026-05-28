@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TenantModuleManagementSection } from './TenantModuleManagementSection.jsx';
 
@@ -187,5 +187,87 @@ describe('TenantModuleManagementSection', () => {
     });
 
     expect(screen.getByDisplayValue('https://res.cloudinary.com/demo/image/upload/v1/taplink/professional.png')).toBeInTheDocument();
+  });
+
+  it('keeps product creation collapsed by default in client mode and still allows create, cancel, and update flows', async () => {
+    const user = userEvent.setup();
+    const createProduct = vi.fn().mockResolvedValue({ id: 'product-new' });
+    const updateProduct = vi.fn().mockResolvedValue({ id: 'product-1' });
+
+    render(
+      <TenantModuleManagementSection
+        draft={buildDraft({
+          modulesData: {
+            professionals: [],
+            appointmentServices: [],
+            appointmentRequests: [],
+            orders: [],
+            products: [
+              {
+                id: 'product-1',
+                name: 'Pomada modeladora',
+                category: 'Finalizacao',
+                price: 39.9,
+                image: '',
+                measurementUnit: 'unit',
+                description: 'Fixacao media',
+                active: true,
+              },
+            ],
+          },
+        })}
+        onDraftChange={vi.fn()}
+        moduleActions={{ createProduct, updateProduct }}
+        mode="client"
+        permissions={{
+          canViewCatalog: true,
+          canEditCatalog: true,
+          canUploadMedia: true,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Catalogo' }));
+
+    expect(screen.queryByTestId('client-product-create-form')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Adicionar produto' }));
+    const createForm = screen.getByTestId('client-product-create-form');
+    expect(createForm).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByTestId('client-product-create-form')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Adicionar produto' }));
+    const reopenedCreateForm = screen.getByTestId('client-product-create-form');
+    await user.type(within(reopenedCreateForm).getByLabelText('Produto'), 'Carvao Premium');
+    await user.clear(within(reopenedCreateForm).getByLabelText('Preco'));
+    await user.type(within(reopenedCreateForm).getByLabelText('Preco'), '29.9');
+    await user.click(within(reopenedCreateForm).getByRole('button', { name: 'Salvar produto' }));
+
+    await waitFor(() => {
+      expect(createProduct).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Carvao Premium',
+          price: 29.9,
+        }),
+      );
+    });
+
+    expect(screen.queryByTestId('client-product-create-form')).not.toBeInTheDocument();
+
+    const existingProductNameInput = screen.getByDisplayValue('Pomada modeladora');
+    await user.clear(existingProductNameInput);
+    await user.type(existingProductNameInput, 'Pomada fosca');
+    await user.click(screen.getAllByRole('button', { name: 'Salvar produto' })[0]);
+
+    await waitFor(() => {
+      expect(updateProduct).toHaveBeenCalledWith(
+        'product-1',
+        expect.objectContaining({
+          name: 'Pomada fosca',
+        }),
+      );
+    });
   });
 });

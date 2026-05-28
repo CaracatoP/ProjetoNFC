@@ -3535,6 +3535,131 @@ img {
   padding-top: 0.15rem;
 }
 
+.dashboard-shell .admin-product-management--client {
+  gap: 1rem;
+}
+
+.dashboard-shell .admin-product-management--client .admin-repeater-list {
+  gap: 0.95rem;
+}
+
+.dashboard-shell .admin-product-create-card,
+.dashboard-shell .admin-repeater-card--product-compact {
+  gap: 0.9rem;
+  padding: 1rem 1.05rem;
+}
+
+.dashboard-shell .admin-product-create-card__header,
+.dashboard-shell .admin-product-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem 1rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-shell .admin-product-create-card__copy,
+.dashboard-shell .admin-product-card__copy {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.dashboard-shell .admin-product-create-card__copy span,
+.dashboard-shell .admin-product-card__copy span {
+  color: var(--theme-text-muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.dashboard-shell .admin-product-create-card__body {
+  gap: 0.95rem;
+}
+
+.dashboard-shell .admin-product-form__grid--compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem 0.95rem;
+}
+
+.dashboard-shell .admin-product-form__hint {
+  margin: -0.1rem 0 0;
+}
+
+.dashboard-shell .admin-product-form__support {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.92fr) minmax(0, 1.08fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.dashboard-shell .admin-product-form__support--compact {
+  gap: 0.85rem 0.95rem;
+}
+
+.dashboard-shell .admin-product-form__media .admin-inline-image-field {
+  gap: 0.7rem;
+}
+
+.dashboard-shell .admin-product-form__media .admin-image-preview {
+  min-height: 150px;
+  aspect-ratio: 1 / 0.72;
+}
+
+.dashboard-shell .admin-product-form__description textarea {
+  min-height: 88px;
+}
+
+.dashboard-shell .admin-product-form__actions {
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.dashboard-shell .admin-product-form__actions .button,
+.dashboard-shell .admin-product-create-card__header .button {
+  min-width: 152px;
+}
+
+@media (max-width: 1100px) {
+  .dashboard-shell .admin-product-form__support {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .dashboard-shell .admin-product-form__grid--compact {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-shell .admin-product-create-card,
+  .dashboard-shell .admin-repeater-card--product-compact {
+    gap: 0.8rem;
+    padding: 0.95rem;
+  }
+
+  .dashboard-shell .admin-product-create-card__header,
+  .dashboard-shell .admin-product-form__actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .dashboard-shell .admin-product-form__actions .button,
+  .dashboard-shell .admin-product-create-card__header .button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .dashboard-shell .admin-product-form__media .admin-image-preview {
+    min-height: 132px;
+  }
+
+  .dashboard-shell .admin-product-form__description textarea {
+    min-height: 82px;
+  }
+}
+
 .dashboard-shell .admin-repeater-list--links,
 .dashboard-shell .admin-repeater-list--hours,
 .dashboard-shell .admin-repeater-list--services,
