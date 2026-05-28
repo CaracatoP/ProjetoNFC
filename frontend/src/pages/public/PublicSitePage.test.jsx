@@ -3,6 +3,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TenantProvider } from '@/context/TenantContext.jsx';
 import { PublicSitePage } from './PublicSitePage.jsx';
+import { PublicCatalogPage } from './PublicCatalogPage.jsx';
 import * as publicSiteService from '@/services/publicSiteService.js';
 import * as analyticsService from '@/services/analyticsService.js';
 import * as tenantRealtimeService from '@/services/tenantRealtimeService.js';
@@ -291,7 +292,12 @@ describe('PublicSitePage', () => {
       'https://instagram.com/tenant-oficial',
     );
     expect(screen.getByRole('button', { name: /Wi-Fi/i })).toBeInTheDocument();
-    expect(screen.getByText('Servicos e produtos')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Ver catalogo|Fazer pedido/i })).toHaveAttribute(
+      'href',
+      '/site/barbearia-estilo-vivo/catalog',
+    );
+    expect(screen.queryByText('Servicos e produtos')).not.toBeInTheDocument();
+    expect(screen.queryByText('Carrinho e pedido')).not.toBeInTheDocument();
     expect(screen.getByText('Solicitar agendamento')).toBeInTheDocument();
     expect(screen.getByText('Programa de fidelidade')).toBeInTheDocument();
     expect(screen.getByText('Instagram').closest('a')).toHaveAttribute(
@@ -328,10 +334,10 @@ describe('PublicSitePage', () => {
     expect(document.querySelector("meta[name='theme-color']")?.getAttribute('content')).toBe('#140d09');
   });
 
-  it('submits appointment requests and orders from the module sections', async () => {
+  it('submits appointment requests from the landing page and orders from the dedicated catalog page', async () => {
     const user = userEvent.setup();
 
-    render(
+    const landingView = render(
       <TenantProvider>
         <MemoryRouter initialEntries={['/site/barbearia-estilo-vivo']}>
           <Routes>
@@ -343,26 +349,10 @@ describe('PublicSitePage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Barbearia Estilo Vivo' })).toBeInTheDocument();
 
-    await user.click(screen.getAllByRole('button', { name: /Adicionar/i })[0]);
-    await user.type(screen.getAllByLabelText('Nome')[0], 'Carlos');
-    await user.type(screen.getAllByLabelText('Telefone')[0], '5511999999999');
-    await user.click(screen.getByRole('button', { name: /Enviar pedido/i }));
-
-    await waitFor(() => {
-      expect(publicSiteService.createPublicOrder).toHaveBeenCalledWith(
-        'barbearia-estilo-vivo',
-        expect.objectContaining({
-          customerName: 'Carlos',
-          customerPhone: '5511999999999',
-        }),
-      );
-    });
-    expect(screen.getByText('Pedido enviado com sucesso. Aguarde a confirmacao do tenant.')).toBeInTheDocument();
-
     await user.selectOptions(screen.getByLabelText('Servico'), 'appointment-service-1');
     await user.selectOptions(screen.getByLabelText('Profissional'), 'professional-1');
-    await user.type(screen.getAllByLabelText('Nome')[1], 'Marina');
-    await user.type(screen.getAllByLabelText('Telefone')[1], '5511988887777');
+    await user.type(screen.getByLabelText('Nome'), 'Marina');
+    await user.type(screen.getByLabelText('Telefone'), '5511988887777');
     await user.type(screen.getByLabelText('Data desejada'), '2026-06-20');
     await user.type(screen.getByLabelText('Horario'), '09:30');
     await user.click(screen.getByRole('button', { name: /Enviar solicitacao/i }));
@@ -379,6 +369,37 @@ describe('PublicSitePage', () => {
       );
     });
     expect(screen.getByText(/Solicitacao enviada com sucesso\./)).toBeInTheDocument();
+
+    landingView.unmount();
+
+    render(
+      <TenantProvider>
+        <MemoryRouter initialEntries={['/site/barbearia-estilo-vivo/catalog']}>
+          <Routes>
+            <Route path="/site/:slug/catalog" element={<PublicCatalogPage />} />
+          </Routes>
+        </MemoryRouter>
+      </TenantProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Barbearia Estilo Vivo' })).toBeInTheDocument();
+
+    await user.click(screen.getAllByRole('button', { name: /Adicionar/i })[0]);
+    await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
+    await user.type(screen.getByLabelText('Nome'), 'Carlos');
+    await user.type(screen.getByLabelText('Telefone'), '5511999999999');
+    await user.click(screen.getByRole('button', { name: /Enviar pedido/i }));
+
+    await waitFor(() => {
+      expect(publicSiteService.createPublicOrder).toHaveBeenCalledWith(
+        'barbearia-estilo-vivo',
+        expect.objectContaining({
+          customerName: 'Carlos',
+          customerPhone: '5511999999999',
+        }),
+      );
+    });
+    expect(screen.getByText('Pedido enviado com sucesso. Aguarde a confirmacao do tenant.')).toBeInTheDocument();
   });
 
   it('shows a neutral message when the tenant is inactive', async () => {
@@ -499,6 +520,25 @@ describe('PublicSitePage', () => {
         cacheBust: '1700000000000',
       }),
     );
+    expect(screen.getByRole('link', { name: /Ver catalogo|Fazer pedido/i })).toHaveAttribute(
+      'href',
+      '/site/barbearia-estilo-vivo/catalog?preview=1&t=1700000000000',
+    );
+  });
+
+  it('requires a dedicated catalog experience on /site/:slug/catalog', async () => {
+    render(
+      <TenantProvider>
+        <MemoryRouter initialEntries={['/site/barbearia-estilo-vivo/catalog']}>
+          <Routes>
+            <Route path="/site/:slug/catalog" element={<PublicCatalogPage />} />
+          </Routes>
+        </MemoryRouter>
+      </TenantProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Barbearia Estilo Vivo' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Voltar para a pagina principal/i })).toBeInTheDocument();
   });
 
   it('cleans inline tenant theme variables when the public page unmounts', async () => {

@@ -117,6 +117,61 @@ function getErrorMessage(error) {
   return error?.message || 'Nao foi possivel concluir esta operacao.';
 }
 
+function buildBusinessSummaryFromEditor(editor, fallbackSummary = null) {
+  const business = editor?.business;
+
+  if (!business?.id) {
+    return fallbackSummary;
+  }
+
+  return {
+    ...(fallbackSummary || {}),
+    id: business.id,
+    name: business.name || fallbackSummary?.name || '',
+    slug: business.slug || fallbackSummary?.slug || '',
+    status: business.status || fallbackSummary?.status || 'draft',
+    publicUrl: business.publicUrl || fallbackSummary?.publicUrl || '',
+    segment: business.segment || fallbackSummary?.segment || 'other',
+    modules: business.modules || fallbackSummary?.modules || {},
+    logoUrl: business.logoUrl || fallbackSummary?.logoUrl || '',
+    domains: business.domains || fallbackSummary?.domains || {},
+    description: business.description || fallbackSummary?.description || '',
+    createdAt: business.createdAt || fallbackSummary?.createdAt || null,
+    updatedAt: business.updatedAt || fallbackSummary?.updatedAt || null,
+    analytics: {
+      ...(fallbackSummary?.analytics || {}),
+      totalEvents: editor?.analytics?.totalEvents ?? fallbackSummary?.analytics?.totalEvents ?? 0,
+      pageViews: editor?.analytics?.pageViews ?? fallbackSummary?.analytics?.pageViews ?? 0,
+      linkClicks: editor?.analytics?.linkClicks ?? fallbackSummary?.analytics?.linkClicks ?? 0,
+      lastEventAt:
+        editor?.analytics?.recentEvents?.[0]?.occurredAt ??
+        fallbackSummary?.analytics?.lastEventAt ??
+        null,
+    },
+  };
+}
+
+function mergeEditorIntoBusinessSummaries(currentBusinesses = [], editor) {
+  const editorBusinessId = String(editor?.business?.id || '').trim();
+
+  if (!editorBusinessId) {
+    return currentBusinesses;
+  }
+
+  const existingSummary = currentBusinesses.find((business) => business.id === editorBusinessId) || null;
+  const nextSummary = buildBusinessSummaryFromEditor(editor, existingSummary);
+
+  if (!nextSummary) {
+    return currentBusinesses;
+  }
+
+  if (!existingSummary) {
+    return [nextSummary, ...currentBusinesses];
+  }
+
+  return currentBusinesses.map((business) => (business.id === editorBusinessId ? nextSummary : business));
+}
+
 function DashboardViewFallback({ title, description }) {
   return (
     <Card className="admin-panel-card">
@@ -153,6 +208,18 @@ export function DashboardHomePage() {
 
   const refreshPreview = useCallback(() => {
     setPreviewRefreshKey((current) => Math.max(Date.now(), current + 1));
+  }, []);
+
+  const applyEditorSnapshot = useCallback((nextEditor) => {
+    if (!nextEditor?.business?.id) {
+      setEditor(nextEditor);
+      return nextEditor;
+    }
+
+    setSelectedBusinessId(nextEditor.business.id);
+    setEditor(nextEditor);
+    setBusinesses((current) => mergeEditorIntoBusinessSummaries(current, nextEditor));
+    return nextEditor;
   }, []);
 
   useEffect(() => {
@@ -224,7 +291,7 @@ export function DashboardHomePage() {
           return;
         }
 
-        setEditor(nextEditor);
+        applyEditorSnapshot(nextEditor);
       } catch (loadError) {
         if (!active) {
           return;
@@ -243,16 +310,19 @@ export function DashboardHomePage() {
     return () => {
       active = false;
     };
-  }, [selectedBusinessId, token]);
+  }, [applyEditorSnapshot, selectedBusinessId, token]);
 
-  const refreshCollections = useCallback(async (preferredBusinessId = '') => {
+  const refreshCollections = useCallback(async (preferredBusinessId = '', preferredEditor = null) => {
     const [nextOverview, nextBusinesses] = await Promise.all([
       fetchAdminOverview(token),
       listAdminBusinesses(token),
     ]);
+    const synchronizedBusinesses = preferredEditor
+      ? mergeEditorIntoBusinessSummaries(nextBusinesses, preferredEditor)
+      : nextBusinesses;
 
     setOverview(nextOverview);
-    setBusinesses(nextBusinesses);
+    setBusinesses(synchronizedBusinesses);
     setSelectedBusinessId((current) => {
       if (preferredBusinessId) {
         return preferredBusinessId;
@@ -260,11 +330,11 @@ export function DashboardHomePage() {
 
       const candidate = current;
 
-      if (candidate && nextBusinesses.some((business) => business.id === candidate)) {
+      if (candidate && synchronizedBusinesses.some((business) => business.id === candidate)) {
         return candidate;
       }
 
-      return nextBusinesses[0]?.id || '';
+      return synchronizedBusinesses[0]?.id || '';
     });
   }, [token]);
 
@@ -274,9 +344,9 @@ export function DashboardHomePage() {
     }
 
     const nextEditor = await getAdminBusiness(token, targetBusinessId);
-    setEditor(nextEditor);
+    applyEditorSnapshot(nextEditor);
     return nextEditor;
-  }, [selectedBusinessId, token]);
+  }, [applyEditorSnapshot, selectedBusinessId, token]);
 
   useEffect(() => {
     if (!token || !selectedBusinessId) {
@@ -328,8 +398,8 @@ export function DashboardHomePage() {
 
     try {
       const createdEditor = await createAdminBusiness(token, payload);
-      setEditor(createdEditor);
-      await refreshCollections(createdEditor.business.id);
+      applyEditorSnapshot(createdEditor);
+      await refreshCollections(createdEditor.business.id, createdEditor);
       refreshPreview();
       setMessage('Tenant criado com sucesso. Agora voce pode completar o conteudo no editor.');
     } catch (createError) {
@@ -346,8 +416,8 @@ export function DashboardHomePage() {
 
     try {
       const updatedEditor = await updateAdminBusiness(token, draft.business.id, draft);
-      setEditor(updatedEditor);
-      await refreshCollections(draft.business.id);
+      applyEditorSnapshot(updatedEditor);
+      await refreshCollections(updatedEditor.business.id, updatedEditor);
       refreshPreview();
       setMessage('Alteracoes salvas e analytics atualizados.');
     } catch (saveError) {
@@ -386,8 +456,8 @@ export function DashboardHomePage() {
 
     try {
       const updatedEditor = await updateAdminBusinessStatus(token, businessId, nextStatus);
-      setEditor(updatedEditor);
-      await refreshCollections(businessId);
+      applyEditorSnapshot(updatedEditor);
+      await refreshCollections(updatedEditor.business.id, updatedEditor);
       refreshPreview();
       setMessage(
         nextStatus === 'active'
@@ -426,9 +496,8 @@ export function DashboardHomePage() {
 
     try {
       const duplicatedEditor = await createAdminBusiness(token, buildDuplicatePayload(editor, businesses));
-      setSelectedBusinessId(duplicatedEditor.business.id);
-      setEditor(duplicatedEditor);
-      await refreshCollections(duplicatedEditor.business.id);
+      applyEditorSnapshot(duplicatedEditor);
+      await refreshCollections(duplicatedEditor.business.id, duplicatedEditor);
       refreshPreview();
       setMessage('Tenant duplicado com sucesso. O codigo NFC foi limpo para evitar conflito no clone.');
     } catch (duplicateError) {
@@ -542,7 +611,15 @@ export function DashboardHomePage() {
     });
   }, [businesses, debouncedTenantSearch, tenantSort, tenantStatusFilter]);
 
-  const selectedSummary = businesses.find((business) => business.id === selectedBusinessId) || null;
+  const selectedSummary = useMemo(() => {
+    const currentSummary = businesses.find((business) => business.id === selectedBusinessId) || null;
+
+    if (!editor?.business?.id || editor.business.id !== selectedBusinessId) {
+      return currentSummary;
+    }
+
+    return buildBusinessSummaryFromEditor(editor, currentSummary);
+  }, [businesses, editor, selectedBusinessId]);
   const previewUrl =
     selectedSummary?.slug && typeof window !== 'undefined'
       ? `${window.location.origin}/site/${selectedSummary.slug}?preview=1&t=${previewRefreshKey}`

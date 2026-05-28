@@ -202,6 +202,7 @@ export function BusinessCatalogSection({
   const [checkout, setCheckout] = useState(defaultCheckoutState);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const hydratedSlugRef = useRef('');
   const normalizedProducts = useMemo(
     () => (products || []).map((product) => normalizeProductMeasurement(product)),
@@ -267,6 +268,14 @@ export function BusinessCatalogSection({
   );
 
   const cartTotal = cartSubtotal;
+  const cartBadgeCount = useMemo(
+    () =>
+      cartItems.reduce(
+        (sum, item) => sum + (requiresIntegerMeasurementQuantity(item.measurementUnit) ? Math.max(1, Number(item.quantity || 0)) : 1),
+        0,
+      ),
+    [cartItems],
+  );
 
   if (!normalizedProducts.length) {
     return null;
@@ -299,6 +308,51 @@ export function BusinessCatalogSection({
     return fractionInputs[product.id] ?? defaultFractionInputValue(product.measurementUnit);
   }
 
+  function getCartEditorConfig(product) {
+    if (product.measurementUnit === 'kg') {
+      return {
+        label: 'Quantidade em gramas',
+        min: 50,
+        step: 50,
+        value: String(Math.round(Number(cart[product.id] || 0) * 1000)),
+      };
+    }
+
+    if (product.measurementUnit === 'g') {
+      return {
+        label: 'Quantidade em gramas',
+        min: 1,
+        step: 1,
+        value: String(Number(cart[product.id] || 0)),
+      };
+    }
+
+    if (product.measurementUnit === 'ml') {
+      return {
+        label: 'Quantidade em ml',
+        min: 1,
+        step: 50,
+        value: String(Number(cart[product.id] || 0)),
+      };
+    }
+
+    if (product.measurementUnit === 'l') {
+      return {
+        label: 'Quantidade em litros',
+        min: 0.1,
+        step: 0.1,
+        value: String(Number(cart[product.id] || 0)),
+      };
+    }
+
+    return {
+      label: 'Quantidade',
+      min: 1,
+      step: 1,
+      value: String(Math.max(1, Math.trunc(Number(cart[product.id] || 0)))),
+    };
+  }
+
   function addFractionalProductToCart(product) {
     const inputValue = getFractionInputValue(product);
     const quantityToAdd = convertInputValueToCartQuantity(product, inputValue);
@@ -316,6 +370,11 @@ export function BusinessCatalogSection({
       targetLabel: product.name,
       sectionType: 'catalog',
     });
+  }
+
+  function handleCartEditorChange(product, rawValue) {
+    const nextQuantity = convertInputValueToCartQuantity(product, rawValue);
+    updateCartQuantity(product, nextQuantity);
   }
 
   async function handleSubmitOrder(event) {
@@ -356,6 +415,7 @@ export function BusinessCatalogSection({
       setCheckout(defaultCheckoutState());
       persistStoredCart(tenantSlug, {});
       setFeedback('Pedido enviado com sucesso. Aguarde a confirmacao do tenant.');
+      setIsCartOpen(true);
     } catch (error) {
       setFeedback(error?.message || 'Nao foi possivel enviar o pedido agora.');
     } finally {
@@ -364,7 +424,134 @@ export function BusinessCatalogSection({
   }
 
   return (
-    <Card className="section-card">
+    <Card className="section-card catalog-section">
+      {modules.cart || modules.orders ? (
+        <>
+          <div className="catalog-cart-trigger">
+            <Button type="button" variant="secondary" onClick={() => setIsCartOpen(true)} aria-label="Abrir carrinho">
+              Carrinho
+              <span className="catalog-cart-trigger__badge" aria-hidden="true">
+                {cartBadgeCount}
+              </span>
+            </Button>
+          </div>
+          {isCartOpen ? (
+            <div className="catalog-cart-layer">
+              <button
+                type="button"
+                className="catalog-cart-layer__backdrop"
+                aria-label="Fechar painel do carrinho"
+                onClick={() => setIsCartOpen(false)}
+              />
+              <div className="catalog-cart-panel" role="dialog" aria-modal="true" aria-label="Seu pedido">
+                <div className="catalog-cart-panel__header">
+                  <div>
+                    <strong>Seu pedido</strong>
+                    <span>Revise os itens e finalize com nome e telefone.</span>
+                  </div>
+                  <Button type="button" variant="secondary" onClick={() => setIsCartOpen(false)} aria-label="Fechar carrinho">
+                    Fechar
+                  </Button>
+                </div>
+
+                <form className="catalog-checkout catalog-checkout--drawer" onSubmit={handleSubmitOrder}>
+                  <ul className="catalog-checkout__list">
+                    {cartItems.length ? (
+                      cartItems.map((item) => {
+                        const product = normalizedProducts.find((entry) => entry.id === item.productId) || {
+                          id: item.productId,
+                          measurementUnit: item.measurementUnit,
+                          price: item.unitPrice,
+                          name: item.name,
+                        };
+                        const editorConfig = getCartEditorConfig(product);
+
+                        return (
+                          <li key={item.productId}>
+                            <div>
+                              <span>{item.name}</span>
+                              <small>
+                                {item.displayQuantity} x {formatCurrency(item.unitPrice)}/{getMeasurementUnitLabel(item.measurementUnit)}
+                              </small>
+                              <label className="catalog-checkout__item-editor">
+                                <span>{editorConfig.label}</span>
+                                <input
+                                  type="number"
+                                  min={editorConfig.min}
+                                  step={editorConfig.step}
+                                  value={editorConfig.value}
+                                  onChange={(event) => handleCartEditorChange(product, event.target.value)}
+                                />
+                              </label>
+                            </div>
+                            <div className="catalog-checkout__item-actions">
+                              <strong>{formatCurrency(item.itemTotal)}</strong>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                aria-label={`Remover item ${item.name}`}
+                                onClick={() => updateCartQuantity(product, 0)}
+                              >
+                                Remover
+                              </Button>
+                            </div>
+                          </li>
+                        );
+                      })
+                    ) : (
+                      <li>Nenhum item no carrinho ainda.</li>
+                    )}
+                  </ul>
+                  <div className="catalog-checkout__summary">
+                    <div>
+                      <span>Subtotal</span>
+                      <strong>{formatCurrency(cartSubtotal)}</strong>
+                    </div>
+                    <div>
+                      <span>Total</span>
+                      <strong>{formatCurrency(cartTotal)}</strong>
+                    </div>
+                  </div>
+                  <div className="admin-form-grid">
+                    <label className="admin-field">
+                      <span>Nome</span>
+                      <input value={checkout.customerName} onChange={(event) => setCheckout((current) => ({ ...current, customerName: event.target.value }))} />
+                    </label>
+                    <label className="admin-field">
+                      <span>Telefone</span>
+                      <input value={checkout.customerPhone} onChange={(event) => setCheckout((current) => ({ ...current, customerPhone: event.target.value }))} />
+                    </label>
+                    <label className="admin-field">
+                      <span>Entrega</span>
+                      <select value={checkout.deliveryType} onChange={(event) => setCheckout((current) => ({ ...current, deliveryType: event.target.value }))}>
+                        <option value="pickup">Retirada</option>
+                        <option value="delivery">Entrega</option>
+                      </select>
+                    </label>
+                    {checkout.deliveryType === 'delivery' ? (
+                      <label className="admin-field">
+                        <span>Endereco</span>
+                        <input value={checkout.address} onChange={(event) => setCheckout((current) => ({ ...current, address: event.target.value }))} />
+                      </label>
+                    ) : null}
+                  </div>
+                  <label className="admin-field">
+                    <span>Observacoes</span>
+                    <textarea rows="3" value={checkout.notes} onChange={(event) => setCheckout((current) => ({ ...current, notes: event.target.value }))} />
+                  </label>
+                  <div className="catalog-checkout__footer">
+                    <strong>Total: {formatCurrency(cartTotal)}</strong>
+                    <Button type="submit" disabled={!cartItems.length || submitting}>
+                      {submitting ? 'Enviando...' : 'Enviar pedido'}
+                    </Button>
+                  </div>
+                  {feedback ? <p className="site-inline-feedback">{feedback}</p> : null}
+                </form>
+              </div>
+            </div>
+          ) : null}
+        </>
+      ) : null}
       <SectionHeader
         eyebrow="Modulo ativo"
         title={segmentConfig?.catalogTitle || 'Catalogo'}
@@ -479,91 +666,6 @@ export function BusinessCatalogSection({
           </section>
         ))}
       </div>
-
-      {modules.cart || modules.orders ? (
-        <form className="catalog-checkout" onSubmit={handleSubmitOrder}>
-          <SectionHeader title="Carrinho e pedido" description="Finalize com nome e telefone para enviar ao time do tenant." />
-          <ul className="catalog-checkout__list">
-            {cartItems.length ? (
-              cartItems.map((item) => (
-                <li key={item.productId}>
-                  <div>
-                    <span>{item.name}</span>
-                    <small>
-                      {item.displayQuantity} x {formatCurrency(item.unitPrice)}/{getMeasurementUnitLabel(item.measurementUnit)}
-                    </small>
-                  </div>
-                  <div className="catalog-checkout__item-actions">
-                    <strong>{formatCurrency(item.itemTotal)}</strong>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      aria-label={`Remover item ${item.name}`}
-                      onClick={() =>
-                        updateCartQuantity(
-                          normalizedProducts.find((product) => product.id === item.productId) || {
-                            id: item.productId,
-                            measurementUnit: item.measurementUnit,
-                          },
-                          0,
-                        )
-                      }
-                    >
-                      Remover
-                    </Button>
-                  </div>
-                </li>
-              ))
-            ) : (
-              <li>Nenhum item no carrinho ainda.</li>
-            )}
-          </ul>
-          <div className="catalog-checkout__summary">
-            <div>
-              <span>Subtotal</span>
-              <strong>{formatCurrency(cartSubtotal)}</strong>
-            </div>
-            <div>
-              <span>Total</span>
-              <strong>{formatCurrency(cartTotal)}</strong>
-            </div>
-          </div>
-          <div className="admin-form-grid">
-            <label className="admin-field">
-              <span>Nome</span>
-              <input value={checkout.customerName} onChange={(event) => setCheckout((current) => ({ ...current, customerName: event.target.value }))} />
-            </label>
-            <label className="admin-field">
-              <span>Telefone</span>
-              <input value={checkout.customerPhone} onChange={(event) => setCheckout((current) => ({ ...current, customerPhone: event.target.value }))} />
-            </label>
-            <label className="admin-field">
-              <span>Entrega</span>
-              <select value={checkout.deliveryType} onChange={(event) => setCheckout((current) => ({ ...current, deliveryType: event.target.value }))}>
-                <option value="pickup">Retirada</option>
-                <option value="delivery">Entrega</option>
-              </select>
-            </label>
-            {checkout.deliveryType === 'delivery' ? (
-              <label className="admin-field">
-                <span>Endereco</span>
-                <input value={checkout.address} onChange={(event) => setCheckout((current) => ({ ...current, address: event.target.value }))} />
-              </label>
-            ) : null}
-          </div>
-          <label className="admin-field">
-            <span>Observacoes</span>
-            <textarea rows="3" value={checkout.notes} onChange={(event) => setCheckout((current) => ({ ...current, notes: event.target.value }))} />
-          </label>
-          <div className="catalog-checkout__footer">
-            <strong>Total: {formatCurrency(cartTotal)}</strong>
-            <Button type="submit" disabled={!cartItems.length || submitting}>
-              {submitting ? 'Enviando...' : 'Enviar pedido'}
-            </Button>
-          </div>
-          {feedback ? <p className="site-inline-feedback">{feedback}</p> : null}
-        </form>
-      ) : null}
     </Card>
   );
 }

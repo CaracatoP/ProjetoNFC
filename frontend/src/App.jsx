@@ -20,6 +20,11 @@ const PublicSitePage = lazy(() =>
     default: module.PublicSitePage,
   })),
 );
+const PublicCatalogPage = lazy(() =>
+  import('@/pages/public/PublicCatalogPage.jsx').then((module) => ({
+    default: module.PublicCatalogPage,
+  })),
+);
 const ClientPanelPage = lazy(() =>
   import('@/pages/panel/ClientPanelPage.jsx').then((module) => ({
     default: module.ClientPanelPage,
@@ -45,6 +50,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<RootRedirect />} />
               <Route path="/site/:slug" element={<PublicSitePage />} />
+              <Route path="/site/:slug/catalog" element={<PublicCatalogPage />} />
               <Route path="/auth/*" element={<AuthLandingPage />} />
               <Route
                 path="/dashboard/*"

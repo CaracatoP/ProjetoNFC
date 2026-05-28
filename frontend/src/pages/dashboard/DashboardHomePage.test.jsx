@@ -563,6 +563,64 @@ describe('DashboardHomePage', () => {
     });
   });
 
+  it('syncs the selected tenant snapshot immediately after saving tenant fields without needing a manual refresh', async () => {
+    const user = userEvent.setup();
+    const updatedEditorFixture = {
+      ...editorFixture,
+      business: {
+        ...editorFixture.business,
+        name: 'Acougue Prime Teste',
+        slug: 'acougue-prime-teste',
+        status: 'inactive',
+        publicUrl: 'https://taplinkapp.vercel.app/site/acougue-prime-teste',
+      },
+    };
+
+    adminService.updateAdminBusiness.mockResolvedValueOnce(updatedEditorFixture);
+    adminService.listAdminBusinesses.mockResolvedValue([
+      {
+        ...businessFixture,
+        name: 'Barbearia Estilo Vivo',
+        slug: 'barbearia-estilo-vivo',
+        status: 'active',
+        publicUrl: 'https://taplinkapp.vercel.app/site/barbearia-estilo-vivo',
+      },
+    ]);
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+    expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
+
+    const editorCard = screen.getByText('Identidade do tenant').closest('section');
+    const slugInput = within(editorCard).getByLabelText('Slug publico');
+
+    await user.clear(slugInput);
+    await user.type(slugInput, 'Acougue Prime Teste');
+    await user.click(screen.getByRole('button', { name: /Salvar alteracoes/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTitle('Preview Acougue Prime Teste')).toHaveAttribute(
+        'src',
+        expect.stringContaining('/site/acougue-prime-teste?preview=1&t='),
+      );
+    });
+
+    expect(screen.getByRole('link', { name: /Abrir pagina publica/i })).toHaveAttribute(
+      'href',
+      'https://taplinkapp.vercel.app/site/acougue-prime-teste',
+    );
+    const previewPanel = screen.getByText('Preview publico').closest('section');
+    const previewScope = within(previewPanel);
+
+    expect(previewScope.getByText('Tenant atual').closest('div')).toHaveTextContent('Acougue Prime Teste');
+    expect(previewScope.getByText('Status').closest('div')).toHaveTextContent('inactive');
+  });
+
   it('allows editing multiple business hours before saving', async () => {
     const user = userEvent.setup();
 

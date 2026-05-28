@@ -3,7 +3,6 @@ import { TENANT_REALTIME_KINDS } from '@shared/constants/index.js';
 import { buildBusinessSegmentState } from '@shared/utils/segments.js';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { BusinessAppointmentsSection } from '@/components/business/BusinessAppointmentsSection.jsx';
-import { BusinessCatalogSection } from '@/components/business/BusinessCatalogSection.jsx';
 import { BusinessPixModal } from '@/components/business/BusinessPixModal.jsx';
 import { BusinessLoyaltySection } from '@/components/business/BusinessLoyaltySection.jsx';
 import { BusinessWifiModal } from '@/components/business/BusinessWifiModal.jsx';
@@ -14,7 +13,6 @@ import { useAnalytics } from '@/hooks/useAnalytics.js';
 import { useBusinessSite } from '@/hooks/useBusinessSite.js';
 import {
   createPublicAppointmentRequest,
-  createPublicOrder,
   invalidatePublicSiteCache,
 } from '@/services/publicSiteService.js';
 import { subscribeToTenantUpdates } from '@/services/tenantRealtimeService.js';
@@ -85,6 +83,22 @@ function TenantLoadingScreen() {
   );
 }
 
+function buildCatalogHref(slug, previewQuery) {
+  const params = new URLSearchParams();
+
+  if (previewQuery?.preview) {
+    params.set('preview', '1');
+  }
+
+  if (previewQuery?.cacheBust) {
+    params.set('t', String(previewQuery.cacheBust));
+  }
+
+  const queryString = params.toString();
+
+  return `/site/${slug}/catalog${queryString ? `?${queryString}` : ''}`;
+}
+
 export function PublicSitePage() {
   const { slug = '' } = useParams();
   const location = useLocation();
@@ -103,6 +117,65 @@ export function PublicSitePage() {
   const segmentState = useMemo(() => buildBusinessSegmentState(site?.business || {}), [site?.business]);
   const trackedSlugRef = useRef('');
   const [activeModal, setActiveModal] = useState(null);
+  const displaySections = useMemo(() => {
+    const sections = site?.sections || [];
+    const hasCatalogExperience =
+      segmentState.modules.catalog || segmentState.modules.cart || segmentState.modules.orders;
+
+    if (!site || !hasCatalogExperience) {
+      return sections;
+    }
+
+    const catalogHref = buildCatalogHref(site.business.slug, previewQuery);
+    const quickAccessSectionIndex = sections.findIndex(
+      (section) => section.type === 'links' || section.key === 'quick-actions',
+    );
+    const catalogShortcut = {
+      id: 'catalog-shortcut',
+      type: 'catalog',
+      icon: 'default',
+      label: 'Ver catalogo',
+      subtitle: 'Confira produtos e faca seu pedido',
+      url: catalogHref,
+      target: '_self',
+    };
+
+    if (quickAccessSectionIndex >= 0) {
+      return sections.map((section, index) => {
+        if (index !== quickAccessSectionIndex) {
+          return section;
+        }
+
+        const alreadyHasCatalogShortcut = (section.items || []).some(
+          (item) => item.id === catalogShortcut.id || item.url === catalogHref,
+        );
+
+        if (alreadyHasCatalogShortcut) {
+          return section;
+        }
+
+        return {
+          ...section,
+          items: [...(section.items || []), catalogShortcut],
+        };
+      });
+    }
+
+    return [
+      ...sections,
+      {
+        id: 'catalog-quick-actions',
+        key: 'catalog-quick-actions',
+        type: 'links',
+        title: 'Acesso rapido',
+        description: 'Atalhos rapidos',
+        order: 25,
+        visible: true,
+        settings: { layout: 'compact' },
+        items: [catalogShortcut],
+      },
+    ];
+  }, [previewQuery, segmentState.modules.catalog, segmentState.modules.cart, segmentState.modules.orders, site]);
 
   useTenantTheme(site?.theme);
 
@@ -234,14 +307,6 @@ export function PublicSitePage() {
     return createPublicAppointmentRequest(site.business.slug, payload);
   }
 
-  async function handleOrder(payload) {
-    if (!site?.business?.slug) {
-      return;
-    }
-
-    return createPublicOrder(site.business.slug, payload);
-  }
-
   if (status === 'loading' || status === 'idle') {
     return <TenantLoadingScreen />;
   }
@@ -258,7 +323,7 @@ export function PublicSitePage() {
 
   return (
     <PublicSiteLayout business={site.business}>
-      {site.sections.map((section) => (
+      {displaySections.map((section) => (
         <SectionRenderer
           key={section.id}
           section={section}
@@ -267,16 +332,6 @@ export function PublicSitePage() {
           onTrackAction={trackAction}
         />
       ))}
-      {segmentState.modules.catalog ? (
-        <BusinessCatalogSection
-          tenantSlug={site.business.slug}
-          modules={segmentState.modules}
-          segmentConfig={segmentState.segmentConfig}
-          products={site.modulesData?.products || []}
-          onSubmitOrder={handleOrder}
-          onTrackAction={trackAction}
-        />
-      ) : null}
       {segmentState.modules.appointments ? (
         <BusinessAppointmentsSection
           segmentConfig={segmentState.segmentConfig}
