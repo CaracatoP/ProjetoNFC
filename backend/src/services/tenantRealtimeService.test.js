@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { TENANT_REALTIME_KINDS } from '../../../shared/constants/tenantRealtime.js';
 import { publishTenantUpdated, subscribeToTenantUpdates } from './tenantRealtimeService.js';
 
 describe('tenantRealtimeService', () => {
@@ -11,6 +12,7 @@ describe('tenantRealtimeService', () => {
       slug: 'barbearia-estilo-vivo',
       status: 'active',
       operation: 'updated',
+      kind: TENANT_REALTIME_KINDS.PRODUCT_UPDATED,
     });
 
     expect(listener).toHaveBeenCalledWith(
@@ -18,6 +20,7 @@ describe('tenantRealtimeService', () => {
         businessId: 'business-1',
         slug: 'barbearia-estilo-vivo',
         operation: 'updated',
+        kind: TENANT_REALTIME_KINDS.PRODUCT_UPDATED,
       }),
     );
 
@@ -34,6 +37,7 @@ describe('tenantRealtimeService', () => {
       previousSlug: 'barbearia-estilo-vivo',
       status: 'active',
       operation: 'updated',
+      kind: TENANT_REALTIME_KINDS.TENANT_UPDATED,
     });
 
     expect(listener).toHaveBeenCalledWith(
@@ -41,6 +45,26 @@ describe('tenantRealtimeService', () => {
         businessId: 'business-1',
         slug: 'barbearia-estilo-vivo-premium',
         previousSlug: 'barbearia-estilo-vivo',
+        kind: TENANT_REALTIME_KINDS.TENANT_UPDATED,
+      }),
+    );
+
+    unsubscribe();
+  });
+
+  it('defaults the realtime kind to tenant_updated when the caller does not provide one', () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeToTenantUpdates({ slug: 'barbearia-estilo-vivo' }, listener);
+
+    publishTenantUpdated({
+      businessId: 'business-1',
+      slug: 'barbearia-estilo-vivo',
+      status: 'active',
+    });
+
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: TENANT_REALTIME_KINDS.TENANT_UPDATED,
       }),
     );
 

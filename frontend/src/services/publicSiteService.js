@@ -7,11 +7,20 @@ const publicSiteResponseSchema = apiSuccessResponseSchema(publicSitePayloadSchem
 const PUBLIC_SITE_CACHE_TTL_MS = 30_000;
 const publicSiteCache = new Map();
 const inFlightPublicSiteRequests = new Map();
+const publicSiteCacheVersions = new Map();
 
 function buildPublicSiteCacheKey(kind, value) {
   return `${kind}:${String(value || '')
     .trim()
     .toLowerCase()}`;
+}
+
+function getPublicSiteCacheVersion(cacheKey) {
+  return publicSiteCacheVersions.get(cacheKey) || 0;
+}
+
+function bumpPublicSiteCacheVersion(cacheKey) {
+  publicSiteCacheVersions.set(cacheKey, getPublicSiteCacheVersion(cacheKey) + 1);
 }
 
 function buildPublicSiteRequestQuery(options = {}) {
@@ -39,6 +48,7 @@ function isFreshCacheEntry(entry, ttlMs) {
 async function requestPublicSite(url, cacheKey, options = {}) {
   const ttlMs = Number.isFinite(options.cacheTtlMs) ? Math.max(0, options.cacheTtlMs) : PUBLIC_SITE_CACHE_TTL_MS;
   const bypassCache = shouldBypassPublicCache(options);
+  const requestVersion = getPublicSiteCacheVersion(cacheKey);
 
   if (!bypassCache) {
     const cachedEntry = publicSiteCache.get(cacheKey);
@@ -66,7 +76,7 @@ async function requestPublicSite(url, cacheKey, options = {}) {
     .then((response) => {
       const normalizedPayload = normalizePublicSiteMedia(response.data);
 
-      if (!bypassCache) {
+      if (!bypassCache && getPublicSiteCacheVersion(cacheKey) === requestVersion) {
         publicSiteCache.set(cacheKey, {
           data: normalizedPayload,
           timestamp: Date.now(),
@@ -91,6 +101,36 @@ async function requestPublicSite(url, cacheKey, options = {}) {
 export function resetPublicSiteCache() {
   publicSiteCache.clear();
   inFlightPublicSiteRequests.clear();
+  publicSiteCacheVersions.clear();
+}
+
+function invalidatePublicSiteCacheKey(kind, value) {
+  const cacheKey = buildPublicSiteCacheKey(kind, value);
+  publicSiteCache.delete(cacheKey);
+  inFlightPublicSiteRequests.delete(cacheKey);
+  bumpPublicSiteCacheVersion(cacheKey);
+}
+
+export function invalidatePublicSiteCache(target = {}) {
+  if (target.slug) {
+    invalidatePublicSiteCacheKey('slug', target.slug);
+  }
+
+  if (target.host) {
+    invalidatePublicSiteCacheKey('host', target.host);
+  }
+
+  if (target.domains?.customDomain) {
+    invalidatePublicSiteCacheKey('host', target.domains.customDomain);
+  }
+
+  if (target.previousSlug) {
+    invalidatePublicSiteCacheKey('slug', target.previousSlug);
+  }
+
+  if (target.previousDomains?.customDomain) {
+    invalidatePublicSiteCacheKey('host', target.previousDomains.customDomain);
+  }
 }
 
 export async function getPublicSiteBySlug(slug, options = {}) {

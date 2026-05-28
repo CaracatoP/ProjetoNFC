@@ -1,9 +1,10 @@
 import { MemoryRouter } from 'react-router-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DashboardHomePage } from './DashboardHomePage.jsx';
 import { useAuth } from '@/context/AuthContext.jsx';
 import * as adminService from '@/services/adminService.js';
+import * as tenantRealtimeService from '@/services/tenantRealtimeService.js';
 import { ApiClientError } from '@/services/apiClient.js';
 
 vi.mock('@/context/AuthContext.jsx', () => ({
@@ -39,6 +40,10 @@ vi.mock('@/services/adminService.js', () => ({
   deleteTenantProduct: vi.fn(),
   updateTenantAppointmentRequestStatus: vi.fn(),
   updateTenantOrderStatus: vi.fn(),
+}));
+
+vi.mock('@/services/tenantRealtimeService.js', () => ({
+  subscribeToTenantUpdates: vi.fn(),
 }));
 
 const overviewFixture = {
@@ -344,8 +349,13 @@ const editorFixture = {
 };
 
 describe('DashboardHomePage', () => {
+  let realtimeCallbacks;
+  let realtimeCleanup;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    realtimeCallbacks = {};
+    realtimeCleanup = vi.fn();
 
     useAuth.mockReturnValue({
       token: 'admin-token',
@@ -427,6 +437,10 @@ describe('DashboardHomePage', () => {
       access: {
         billingStatus: 'trial',
       },
+    });
+    tenantRealtimeService.subscribeToTenantUpdates.mockImplementation((_target, callbacks = {}) => {
+      realtimeCallbacks = callbacks;
+      return realtimeCleanup;
     });
   });
 
@@ -1012,5 +1026,64 @@ describe('DashboardHomePage', () => {
         saveCall?.[2]?.sections.find((section) => section.key === 'quick-actions')?.settings?.hiddenActions,
       ).toEqual(['whatsapp']);
     });
+  });
+
+  it('refetches the selected tenant snapshot and overview when a realtime event arrives and cleans up on unmount', async () => {
+    const view = render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(tenantRealtimeService.subscribeToTenantUpdates).toHaveBeenCalledWith(
+        { businessId: 'business-1' },
+        expect.objectContaining({
+          onTenantUpdated: expect.any(Function),
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(adminService.fetchAdminOverview).toHaveBeenCalledTimes(1);
+      expect(adminService.listAdminBusinesses).toHaveBeenCalledTimes(1);
+      expect(adminService.getAdminBusiness).toHaveBeenCalledTimes(1);
+    });
+
+    adminService.fetchAdminOverview.mockResolvedValueOnce({
+      ...overviewFixture,
+      totals: {
+        ...overviewFixture.totals,
+        totalEvents: 25,
+      },
+    });
+    adminService.listAdminBusinesses.mockResolvedValueOnce([businessFixture]);
+    adminService.getAdminBusiness.mockResolvedValueOnce({
+      ...editorFixture,
+      analytics: {
+        ...editorFixture.analytics,
+        totalEvents: 25,
+      },
+    });
+
+    await act(async () => {
+      await realtimeCallbacks.onTenantUpdated?.({
+        businessId: 'business-1',
+        kind: 'order_created',
+        emittedAt: new Date().toISOString(),
+      });
+    });
+
+    await waitFor(() => {
+      expect(adminService.fetchAdminOverview).toHaveBeenCalledTimes(2);
+      expect(adminService.listAdminBusinesses).toHaveBeenCalledTimes(2);
+      expect(adminService.getAdminBusiness).toHaveBeenCalledTimes(2);
+    });
+
+    view.unmount();
+
+    expect(realtimeCleanup).toHaveBeenCalledTimes(1);
   });
 });

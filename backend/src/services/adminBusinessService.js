@@ -53,6 +53,7 @@ import {
   normalizeMeasurementUnit,
   normalizeProductMeasurement,
 } from '../../../shared/utils/productMeasurement.js';
+import { TENANT_REALTIME_KINDS } from '../../../shared/constants/tenantRealtime.js';
 
 function normalizeCoordinate(value) {
   if (value === '' || value === null || value === undefined) {
@@ -190,6 +191,7 @@ function buildBusinessPublicUrl(business = {}) {
 function publishBusinessRealtimeUpdate(editor, context = {}) {
   publishTenantUpdated({
     operation: context.operation || 'updated',
+    kind: context.kind || TENANT_REALTIME_KINDS.TENANT_UPDATED,
     businessId: editor?.business?.id,
     slug: editor?.business?.slug,
     previousSlug: context.previousSlug,
@@ -787,7 +789,10 @@ export async function createAdminBusiness(input) {
     },
   ]);
   const editor = await hydrateEditorResponse(String(business._id));
-  publishBusinessRealtimeUpdate(editor, { operation: 'created' });
+  publishBusinessRealtimeUpdate(editor, {
+    operation: 'created',
+    kind: TENANT_REALTIME_KINDS.TENANT_CREATED,
+  });
   return editor;
 }
 
@@ -837,6 +842,7 @@ export async function updateAdminBusiness(businessId, input) {
   const editor = await hydrateEditorResponse(businessId);
   publishBusinessRealtimeUpdate(editor, {
     operation: 'updated',
+    kind: TENANT_REALTIME_KINDS.TENANT_UPDATED,
     previousSlug: existingGraph.business?.slug,
     previousDomains: existingGraph.business?.domains,
   });
@@ -864,6 +870,7 @@ export async function updateAdminBusinessStatus(businessId, status) {
   const editor = await hydrateEditorResponse(businessId);
   publishBusinessRealtimeUpdate(editor, {
     operation: 'status_changed',
+    kind: TENANT_REALTIME_KINDS.TENANT_STATUS_UPDATED,
     previousSlug: existingGraph.business?.slug,
     previousDomains: existingGraph.business?.domains,
   });
@@ -881,6 +888,7 @@ export async function deleteAdminBusiness(businessId) {
   await deleteBusinessGraphRecords(businessId);
   publishTenantUpdated({
     operation: 'deleted',
+    kind: TENANT_REALTIME_KINDS.TENANT_DELETED,
     businessId,
     slug: existing.business.slug,
     previousSlug: existing.business.slug,

@@ -12,6 +12,7 @@ let User;
 let Business;
 let Plan;
 let Subscription;
+let subscribeToTenantUpdates;
 let mongoServer;
 let superAdminToken;
 
@@ -48,6 +49,7 @@ describe('Admin client routes', () => {
     ({ Business } = await import('../models/Business.js'));
     ({ Plan } = await import('../models/Plan.js'));
     ({ Subscription } = await import('../models/Subscription.js'));
+    ({ subscribeToTenantUpdates } = await import('../services/tenantRealtimeService.js'));
     ({ default: app } = await import('../app.js'));
 
     await connectDatabase();
@@ -285,6 +287,8 @@ describe('Admin client routes', () => {
   });
 
   it('lets level 0 change billing and plan on the linked tenant subscription', async () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeToTenantUpdates({ slug: 'barbearia-estilo-vivo' }, listener);
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' }).lean();
     const proPlan = await Plan.findOne({ code: 'pro' }).lean();
 
@@ -316,10 +320,13 @@ describe('Admin client routes', () => {
 
     expect(billingResponse.status).toBe(200);
     expect(billingResponse.body.data.subscription.status).toBe('overdue');
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ kind: 'plan_updated' }));
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ kind: 'billing_updated' }));
 
     const persistedSubscription = await Subscription.findOne({ businessId: business._id }).lean();
 
     expect(String(persistedSubscription.planId)).toBe(String(proPlan._id));
     expect(persistedSubscription.status).toBe('past_due');
+    unsubscribe();
   });
 });

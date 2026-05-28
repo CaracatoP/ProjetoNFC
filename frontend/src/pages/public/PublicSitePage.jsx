@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { TENANT_REALTIME_KINDS } from '@shared/constants/index.js';
 import { buildBusinessSegmentState } from '@shared/utils/segments.js';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { BusinessAppointmentsSection } from '@/components/business/BusinessAppointmentsSection.jsx';
@@ -11,11 +12,31 @@ import { PublicSiteLayout } from '@/components/layout/PublicSiteLayout.jsx';
 import { SectionRenderer } from '@/components/business/SectionRenderer.jsx';
 import { useAnalytics } from '@/hooks/useAnalytics.js';
 import { useBusinessSite } from '@/hooks/useBusinessSite.js';
-import { createPublicAppointmentRequest, createPublicOrder } from '@/services/publicSiteService.js';
+import {
+  createPublicAppointmentRequest,
+  createPublicOrder,
+  invalidatePublicSiteCache,
+} from '@/services/publicSiteService.js';
 import { subscribeToTenantUpdates } from '@/services/tenantRealtimeService.js';
 import { useTenantTheme } from '@/hooks/useTenantTheme.js';
 import { useTenant } from '@/context/TenantContext.jsx';
 import { getSectionAnchor } from '@/utils/sections.js';
+
+const PUBLIC_SITE_REFRESH_KINDS = new Set([
+  TENANT_REALTIME_KINDS.TENANT_CREATED,
+  TENANT_REALTIME_KINDS.TENANT_UPDATED,
+  TENANT_REALTIME_KINDS.TENANT_STATUS_UPDATED,
+  TENANT_REALTIME_KINDS.TENANT_DELETED,
+  TENANT_REALTIME_KINDS.PRODUCT_CREATED,
+  TENANT_REALTIME_KINDS.PRODUCT_UPDATED,
+  TENANT_REALTIME_KINDS.PRODUCT_DELETED,
+  TENANT_REALTIME_KINDS.PROFESSIONAL_CREATED,
+  TENANT_REALTIME_KINDS.PROFESSIONAL_UPDATED,
+  TENANT_REALTIME_KINDS.PROFESSIONAL_DELETED,
+  TENANT_REALTIME_KINDS.APPOINTMENT_SERVICE_CREATED,
+  TENANT_REALTIME_KINDS.APPOINTMENT_SERVICE_UPDATED,
+  TENANT_REALTIME_KINDS.APPOINTMENT_SERVICE_DELETED,
+]);
 
 function upsertHeadLink(attributes) {
   const selector = Object.entries(attributes)
@@ -130,6 +151,24 @@ export function PublicSitePage() {
 
     return subscribeToTenantUpdates(subscriptionTarget, {
       onTenantUpdated(payload) {
+        if (payload?.kind && !PUBLIC_SITE_REFRESH_KINDS.has(payload.kind)) {
+          return;
+        }
+
+        invalidatePublicSiteCache({
+          slug,
+          host: window.location.host,
+          domains: payload?.domains,
+          previousDomains: payload?.previousDomains,
+          previousSlug: payload?.previousSlug,
+        });
+        invalidatePublicSiteCache({
+          slug: payload?.slug,
+          previousSlug: payload?.previousSlug,
+          domains: payload?.domains,
+          previousDomains: payload?.previousDomains,
+        });
+
         if (payload?.slug && payload.slug !== slug) {
           const previewSearch = previewQuery.preview ? `?preview=1&t=${Date.now()}` : '';
           navigate(`/site/${payload.slug}${previewSearch}`, { replace: true });

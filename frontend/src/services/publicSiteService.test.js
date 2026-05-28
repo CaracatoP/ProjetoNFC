@@ -1,4 +1,4 @@
-import { getPublicSiteBySlug, resetPublicSiteCache } from './publicSiteService.js';
+import { getPublicSiteBySlug, invalidatePublicSiteCache, resetPublicSiteCache } from './publicSiteService.js';
 import { buildTenantTheme } from '@shared/utils/theme.js';
 
 const baseTheme = buildTenantTheme({
@@ -181,6 +181,87 @@ describe('publicSiteService', () => {
         'Cache-Control': 'no-store',
       }),
     });
+  });
+
+  it('does not repopulate the cache with a stale in-flight payload after invalidation', async () => {
+    let resolveFirstFetch;
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirstFetch = () =>
+              resolve({
+                ok: true,
+                status: 200,
+                json: vi.fn().mockResolvedValue({
+                  success: true,
+                  data: {
+                    business: {
+                      id: 'business-1',
+                      slug: 'barbearia-estilo-vivo',
+                      name: 'Barbearia Estilo Vivo',
+                      status: 'active',
+                      hours: [],
+                      contact: {},
+                      seo: {
+                        title: 'Barbearia Estilo Vivo',
+                        description: 'Versao antiga',
+                      },
+                    },
+                    theme: baseTheme,
+                    sections: [],
+                    links: [],
+                    seo: {
+                      title: 'Barbearia Estilo Vivo',
+                      description: 'Versao antiga',
+                    },
+                  },
+                }),
+              });
+          }),
+      )
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            business: {
+              id: 'business-1',
+              slug: 'barbearia-estilo-vivo',
+              name: 'Barbearia Estilo Vivo',
+              status: 'active',
+              hours: [],
+              contact: {},
+              seo: {
+                title: 'Barbearia Estilo Vivo',
+                description: 'Versao nova',
+              },
+            },
+            theme: baseTheme,
+            sections: [],
+            links: [],
+            seo: {
+              title: 'Barbearia Estilo Vivo',
+              description: 'Versao nova',
+            },
+          },
+        }),
+      });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const firstRequest = getPublicSiteBySlug('barbearia-estilo-vivo');
+    invalidatePublicSiteCache({ slug: 'barbearia-estilo-vivo' });
+    resolveFirstFetch();
+
+    const staleSite = await firstRequest;
+    const freshSite = await getPublicSiteBySlug('barbearia-estilo-vivo');
+
+    expect(staleSite.business.seo.description).toBe('Versao antiga');
+    expect(freshSite.business.seo.description).toBe('Versao nova');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('normalizes partial wifi payloads returned by the public tenant API', async () => {

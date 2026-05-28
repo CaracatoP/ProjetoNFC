@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 
@@ -12,6 +12,7 @@ let BusinessSection;
 let Professional;
 let AppointmentService;
 let Product;
+let subscribeToTenantUpdates;
 let mongoServer;
 
 describe('Public routes', () => {
@@ -30,6 +31,7 @@ describe('Public routes', () => {
     ({ Professional } = await import('../models/Professional.js'));
     ({ AppointmentService } = await import('../models/AppointmentService.js'));
     ({ Product } = await import('../models/Product.js'));
+    ({ subscribeToTenantUpdates } = await import('../services/tenantRealtimeService.js'));
     ({ default: app } = await import('../app.js'));
 
     await connectDatabase();
@@ -237,6 +239,8 @@ describe('Public routes', () => {
   });
 
   it('creates a public appointment request with pending status', async () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeToTenantUpdates({ slug: 'barbearia-estilo-vivo' }, listener);
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
     const professional = await Professional.create({
       businessId: business._id,
@@ -269,9 +273,19 @@ describe('Public routes', () => {
     expect(response.status).toBe(201);
     expect(response.body.data.status).toBe('pending');
     expect(response.body.data.customerName).toBe('Marcos');
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businessId: String(business._id),
+        slug: 'barbearia-estilo-vivo',
+        kind: 'appointment_created',
+      }),
+    );
+    unsubscribe();
   });
 
   it('creates a public order with received status and calculated total', async () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeToTenantUpdates({ slug: 'barbearia-estilo-vivo' }, listener);
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
     const product = await Product.create({
       businessId: business._id,
@@ -311,6 +325,14 @@ describe('Public routes', () => {
       displayQuantity: '2 unidades',
       itemTotal: 119.8,
     });
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businessId: String(business._id),
+        slug: 'barbearia-estilo-vivo',
+        kind: 'order_created',
+      }),
+    );
+    unsubscribe();
   });
 
   it('calculates proportional totals for kg products and ignores manipulated item totals from the frontend', async () => {

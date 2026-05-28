@@ -1,6 +1,7 @@
 import { canAssignRoleLevel, canManageBilling, canManageUserRecord, normalizeRoleLevel, resolveBillingAccessState } from '../../../shared/utils/access.js';
 import { ROLE_LEVELS } from '../../../shared/constants/access.js';
 import { SUBSCRIPTION_STATUS } from '../../../shared/constants/plans.js';
+import { TENANT_REALTIME_KINDS } from '../../../shared/constants/tenantRealtime.js';
 import { findBusinessById } from '../repositories/businessRepository.js';
 import { findPlanByCode, findSubscriptionWithPlanByBusinessId, upsertSubscriptionByBusinessId } from '../repositories/billingRepository.js';
 import {
@@ -14,6 +15,7 @@ import {
 import { AppError } from '../utils/appError.js';
 import { hashPassword } from '../utils/password.js';
 import { getSession } from './sessionAuthService.js';
+import { publishTenantUpdated } from './tenantRealtimeService.js';
 
 function normalizeText(value) {
   return String(value || '').trim();
@@ -105,6 +107,21 @@ async function buildClientResponse(userId) {
   return getSession(userId, { allowInactive: true });
 }
 
+function publishBusinessClientEvent(business, kind, operation = 'updated') {
+  if (!business) {
+    return;
+  }
+
+  publishTenantUpdated({
+    operation,
+    kind,
+    businessId: String(business._id || business.id || ''),
+    slug: business.slug || '',
+    status: business.status || '',
+    domains: business.domains || {},
+  });
+}
+
 export async function listAdminClients(actor, filters = {}) {
   const users = await listClientUsers(buildClientFilter(filters));
   const sessions = await Promise.all(users.map((user) => buildClientResponse(user._id)));
@@ -154,6 +171,8 @@ export async function getAdminClient(actor, clientId) {
 export async function updateAdminClient(actor, clientId, payload) {
   const client = await assertManagedClient(actor, clientId);
   const updatePayload = {};
+  let nextBusiness = null;
+  let previousBusiness = null;
 
   if (payload.name !== undefined) {
     updatePayload.name = normalizeText(payload.name);
@@ -167,7 +186,11 @@ export async function updateAdminClient(actor, clientId, payload) {
 
   if (payload.businessId !== undefined) {
     const businessId = normalizeText(payload.businessId);
-    await assertBusinessExists(businessId);
+    nextBusiness = await assertBusinessExists(businessId);
+    previousBusiness =
+      normalizeText(client.businessId) && normalizeText(client.businessId) !== businessId
+        ? await findBusinessById(client.businessId)
+        : nextBusiness;
     updatePayload.businessId = businessId;
     updatePayload.businessIds = [businessId];
   }
@@ -182,6 +205,12 @@ export async function updateAdminClient(actor, clientId, payload) {
   }
 
   const updated = await updateUser(client._id, updatePayload);
+  if (payload.businessId !== undefined) {
+    publishBusinessClientEvent(previousBusiness, TENANT_REALTIME_KINDS.CLIENT_BINDING_UPDATED);
+    if (String(previousBusiness?._id || '') !== String(nextBusiness?._id || '')) {
+      publishBusinessClientEvent(nextBusiness, TENANT_REALTIME_KINDS.CLIENT_BINDING_UPDATED);
+    }
+  }
   return buildClientResponse(updated._id);
 }
 
@@ -189,6 +218,8 @@ export async function updateAdminClientAccessLevel(actor, clientId, roleLevel) {
   const client = await assertManagedClient(actor, clientId);
   assertClientRoleAllowed(actor, Number(roleLevel), String(client._id));
   const updated = await updateUser(client._id, { roleLevel: Number(roleLevel) });
+  const business = normalizeText(client.businessId) ? await findBusinessById(client.businessId) : null;
+  publishBusinessClientEvent(business, TENANT_REALTIME_KINDS.CLIENT_ACCESS_UPDATED);
   return buildClientResponse(updated._id);
 }
 
@@ -202,6 +233,8 @@ export async function resetAdminClientPassword(actor, clientId, password) {
 export async function updateAdminClientStatus(actor, clientId, active) {
   const client = await assertManagedClient(actor, clientId);
   const updated = await updateUser(client._id, { status: active ? 'active' : 'disabled' });
+  const business = normalizeText(client.businessId) ? await findBusinessById(client.businessId) : null;
+  publishBusinessClientEvent(business, TENANT_REALTIME_KINDS.CLIENT_ACCESS_UPDATED);
   return buildClientResponse(updated._id);
 }
 
@@ -231,6 +264,7 @@ export async function updateAdminClientPlan(actor, clientId, planCode) {
     cancelAt: existingSubscription?.cancelAt || null,
   });
 
+  publishBusinessClientEvent(business, TENANT_REALTIME_KINDS.PLAN_UPDATED);
   return buildClientResponse(client._id);
 }
 
@@ -258,5 +292,6 @@ export async function updateAdminClientBillingStatus(actor, clientId, billingSta
     cancelAt: existingSubscription.cancelAt || null,
   });
 
+  publishBusinessClientEvent(business, TENANT_REALTIME_KINDS.BILLING_UPDATED);
   return buildClientResponse(client._id);
 }

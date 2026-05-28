@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ANALYTICS_SCOPE_LABELS,
   BILLING_ACCESS_LABELS,
@@ -21,6 +21,7 @@ import {
   newHourItem,
 } from '@/components/business/editor/tenantEditorUtils.js';
 import { useAuth } from '@/context/AuthContext.jsx';
+import { subscribeToTenantUpdates } from '@/services/tenantRealtimeService.js';
 import {
   createClientPanelAppointmentService,
   createClientPanelProduct,
@@ -90,6 +91,30 @@ function getErrorMessage(error) {
   }
 
   return error?.message || 'Nao foi possivel concluir esta operacao.';
+}
+
+function hasUnsavedDraft(currentDraft, currentEditor) {
+  return JSON.stringify(currentDraft || null) !== JSON.stringify(currentEditor || null);
+}
+
+function mergeBasicDraftIntoEditor(nextEditor, currentDraft) {
+  if (!currentDraft) {
+    return cloneDeep(nextEditor);
+  }
+
+  const basicDraft = buildBasicBusinessPayload(currentDraft).business;
+
+  return {
+    ...cloneDeep(nextEditor),
+    business: {
+      ...(nextEditor?.business || {}),
+      ...basicDraft,
+      address: basicDraft.address || nextEditor?.business?.address || {},
+      hours: basicDraft.hours || nextEditor?.business?.hours || [],
+      contact: basicDraft.contact || nextEditor?.business?.contact || {},
+      seo: basicDraft.seo || nextEditor?.business?.seo || {},
+    },
+  };
 }
 
 function AnalyticsMetric({ label, value, description }) {
@@ -490,6 +515,8 @@ export function ClientPanelPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [analyticsError, setAnalyticsError] = useState('');
+  const editorRef = useRef(null);
+  const draftRef = useRef(null);
 
   const capabilities = access?.capabilities || {};
   const validationErrors = useMemo(
@@ -500,13 +527,15 @@ export function ClientPanelPage() {
   const canSeeBasicsCard = Boolean(capabilities.canEditTenantBasics);
 
   const loadBusiness = useCallback(async () => {
+    const currentEditor = editorRef.current;
+    const currentDraft = draftRef.current;
     if (!token) {
       return null;
     }
 
     const nextEditor = await fetchClientPanelBusiness(token);
     setEditor(nextEditor);
-    setDraft(cloneDeep(nextEditor));
+    setDraft(hasUnsavedDraft(currentDraft, currentEditor) ? mergeBasicDraftIntoEditor(nextEditor, currentDraft) : cloneDeep(nextEditor));
     return nextEditor;
   }, [token]);
 
@@ -572,6 +601,51 @@ export function ClientPanelPage() {
   useEffect(() => {
     loadAnalytics();
   }, [loadAnalytics]);
+
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  useEffect(() => {
+    if (!token || isSuspendedClientAccess || !editor?.business?.id) {
+      return undefined;
+    }
+
+    let active = true;
+
+    const unsubscribe = subscribeToTenantUpdates(
+      {
+        businessId: editor.business.id,
+        slug: editor.business.slug,
+      },
+      {
+        async onTenantUpdated() {
+          if (!active) {
+            return;
+          }
+
+          try {
+            await Promise.all([loadBusiness(), loadAnalytics()]);
+          } catch (refreshError) {
+            if (!active) {
+              return;
+            }
+
+            setError(getErrorMessage(refreshError));
+          }
+        },
+      },
+    );
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+  }, [editor?.business?.id, editor?.business?.slug, isSuspendedClientAccess, loadAnalytics, loadBusiness, token]);
 
   const refreshAfterModuleAction = useCallback(
     async (busyKey, action, successMessage) => {

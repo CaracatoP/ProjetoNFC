@@ -1,9 +1,10 @@
 import { MemoryRouter } from 'react-router-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ClientPanelPage } from './ClientPanelPage.jsx';
 import { useAuth } from '@/context/AuthContext.jsx';
 import * as clientPanelService from '@/services/clientPanelService.js';
+import * as tenantRealtimeService from '@/services/tenantRealtimeService.js';
 
 vi.mock('@/context/AuthContext.jsx', () => ({
   useAuth: vi.fn(),
@@ -25,6 +26,10 @@ vi.mock('@/services/clientPanelService.js', () => ({
   deleteClientPanelAppointmentService: vi.fn(),
   updateClientPanelOrderStatus: vi.fn(),
   updateClientPanelAppointmentRequestStatus: vi.fn(),
+}));
+
+vi.mock('@/services/tenantRealtimeService.js', () => ({
+  subscribeToTenantUpdates: vi.fn(),
 }));
 
 const editorFixture = {
@@ -94,8 +99,13 @@ const editorFixture = {
 };
 
 describe('ClientPanelPage', () => {
+  let realtimeCallbacks;
+  let realtimeCleanup;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    realtimeCallbacks = {};
+    realtimeCleanup = vi.fn();
 
     clientPanelService.fetchClientPanelBusiness.mockResolvedValue(editorFixture);
     clientPanelService.updateClientPanelBusinessBasics.mockResolvedValue(editorFixture);
@@ -106,6 +116,10 @@ describe('ClientPanelPage', () => {
         last7DaysEvents: 10,
         pageViews: 16,
       },
+    });
+    tenantRealtimeService.subscribeToTenantUpdates.mockImplementation((_target, callbacks = {}) => {
+      realtimeCallbacks = callbacks;
+      return realtimeCleanup;
     });
   });
 
@@ -228,5 +242,88 @@ describe('ClientPanelPage', () => {
     expect(await screen.findByText(/pode visualizar o catalogo, mas nao editar produtos/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Profissionais/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Servicos/i })).not.toBeInTheDocument();
+  });
+
+  it('refetches the tenant after realtime updates without discarding unsaved basic edits and cleans up on unmount', async () => {
+    const user = userEvent.setup();
+    useAuth.mockReturnValue({
+      token: 'client-token',
+      user: { displayName: 'Cliente Dono', roleLevel: 2 },
+      subscription: { plan: { name: 'Premium' } },
+      access: {
+        billingStatus: 'paid',
+        analyticsScope: 'advanced',
+        capabilities: {
+          canEditTenantBasics: true,
+          canUploadMedia: true,
+          canViewCatalog: true,
+          canEditCatalog: true,
+          canViewOrders: true,
+          canManageOrders: true,
+          canViewAppointments: true,
+          canManageAppointments: true,
+          canViewProfessionals: true,
+          canEditProfessionals: true,
+          canViewServices: true,
+          canEditServices: true,
+          canViewAnalytics: true,
+        },
+      },
+      isSuspendedClientAccess: false,
+      logout: vi.fn(),
+    });
+
+    clientPanelService.fetchClientPanelBusiness
+      .mockResolvedValueOnce(editorFixture)
+      .mockResolvedValueOnce({
+        ...editorFixture,
+        business: {
+          ...editorFixture.business,
+          description: 'Atualizado pelo backend',
+        },
+      });
+
+    const view = render(
+      <MemoryRouter>
+        <ClientPanelPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Operacao do tenant')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(tenantRealtimeService.subscribeToTenantUpdates).toHaveBeenCalledWith(
+        {
+          businessId: 'business-1',
+          slug: 'barbearia-estilo-vivo',
+        },
+        expect.objectContaining({
+          onTenantUpdated: expect.any(Function),
+        }),
+      );
+    });
+
+    const nameInput = screen.getByLabelText('Nome do negocio');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Edicao local preservada');
+
+    await act(async () => {
+      await realtimeCallbacks.onTenantUpdated?.({
+        businessId: 'business-1',
+        kind: 'order_created',
+        emittedAt: new Date().toISOString(),
+      });
+    });
+
+    await waitFor(() => {
+      expect(clientPanelService.fetchClientPanelBusiness).toHaveBeenCalledTimes(2);
+      expect(clientPanelService.fetchClientPanelAnalytics).toHaveBeenCalledTimes(2);
+    });
+
+    expect(screen.getByLabelText('Nome do negocio')).toHaveValue('Edicao local preservada');
+
+    view.unmount();
+
+    expect(realtimeCleanup).toHaveBeenCalledTimes(1);
   });
 });

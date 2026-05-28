@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { normalizeHost } from '../../../shared/utils/tenantIdentity.js';
+import { TENANT_REALTIME_KINDS } from '../../../shared/constants/tenantRealtime.js';
 
 const tenantRealtimeEmitter = new EventEmitter();
 const TENANT_UPDATED_EVENT = 'tenant.updated';
@@ -14,6 +15,7 @@ function normalizeOptionalValue(value) {
 function buildEventPayload(payload = {}) {
   return {
     operation: String(payload.operation || 'updated'),
+    kind: String(payload.kind || TENANT_REALTIME_KINDS.TENANT_UPDATED),
     businessId: normalizeOptionalValue(payload.businessId),
     slug: normalizeOptionalValue(payload.slug),
     previousSlug: normalizeOptionalValue(payload.previousSlug),

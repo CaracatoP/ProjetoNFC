@@ -43,6 +43,8 @@ import {
   normalizeMeasurementUnit,
   normalizeProductMeasurement,
 } from '../../../shared/utils/productMeasurement.js';
+import { TENANT_REALTIME_KINDS } from '../../../shared/constants/tenantRealtime.js';
+import { publishTenantUpdated } from './tenantRealtimeService.js';
 
 function toPlainRecord(value) {
   if (!value) {
@@ -81,6 +83,21 @@ async function assertPublicBusinessBySlug(slug) {
   }
 
   return business;
+}
+
+function publishBusinessModuleEvent(business, kind, operation = 'updated') {
+  if (!business) {
+    return;
+  }
+
+  publishTenantUpdated({
+    operation,
+    kind,
+    businessId: String(business.id || business._id || ''),
+    slug: business.slug || '',
+    status: business.status || '',
+    domains: business.domains || {},
+  });
 }
 
 function assertTenantScope(entity, businessId, resourceLabel) {
@@ -155,24 +172,27 @@ export async function listTenantProfessionals(businessId) {
 }
 
 export async function createTenantProfessional(businessId, payload) {
-  await assertBusinessExists(businessId);
+  const business = await assertBusinessExists(businessId);
   const created = await createProfessionalRecord({ ...payload, businessId });
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.PROFESSIONAL_CREATED, 'created');
   return toPlainRecord(created);
 }
 
 export async function updateTenantProfessional(businessId, id, payload) {
-  await assertBusinessExists(businessId);
+  const business = await assertBusinessExists(businessId);
   const existing = await findProfessionalById(id);
   assertTenantScope(existing, businessId, 'Profissional');
   const updated = await updateProfessionalRecordByBusinessId(businessId, id, payload);
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.PROFESSIONAL_UPDATED);
   return toPlainRecord(updated);
 }
 
 export async function deleteTenantProfessional(businessId, id) {
-  await assertBusinessExists(businessId);
+  const business = await assertBusinessExists(businessId);
   const existing = await findProfessionalById(id);
   assertTenantScope(existing, businessId, 'Profissional');
   await deleteProfessionalRecordByBusinessId(businessId, id);
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.PROFESSIONAL_DELETED, 'deleted');
   return { deleted: true, id };
 }
 
@@ -182,24 +202,27 @@ export async function listTenantAppointmentServices(businessId) {
 }
 
 export async function createTenantAppointmentService(businessId, payload) {
-  await assertBusinessExists(businessId);
+  const business = await assertBusinessExists(businessId);
   const created = await createAppointmentServiceRecord({ ...payload, businessId });
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.APPOINTMENT_SERVICE_CREATED, 'created');
   return toPlainRecord(created);
 }
 
 export async function updateTenantAppointmentService(businessId, id, payload) {
-  await assertBusinessExists(businessId);
+  const business = await assertBusinessExists(businessId);
   const existing = await findAppointmentServiceById(id);
   assertTenantScope(existing, businessId, 'Servico');
   const updated = await updateAppointmentServiceRecordByBusinessId(businessId, id, payload);
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.APPOINTMENT_SERVICE_UPDATED);
   return toPlainRecord(updated);
 }
 
 export async function deleteTenantAppointmentService(businessId, id) {
-  await assertBusinessExists(businessId);
+  const business = await assertBusinessExists(businessId);
   const existing = await findAppointmentServiceById(id);
   assertTenantScope(existing, businessId, 'Servico');
   await deleteAppointmentServiceRecordByBusinessId(businessId, id);
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.APPOINTMENT_SERVICE_DELETED, 'deleted');
   return { deleted: true, id };
 }
 
@@ -209,24 +232,27 @@ export async function listTenantProducts(businessId) {
 }
 
 export async function createTenantProduct(businessId, payload) {
-  await assertBusinessExists(businessId);
+  const business = await assertBusinessExists(businessId);
   const created = await createProductRecord({ ...payload, businessId });
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.PRODUCT_CREATED, 'created');
   return serializeProductRecord(created);
 }
 
 export async function updateTenantProduct(businessId, id, payload) {
-  await assertBusinessExists(businessId);
+  const business = await assertBusinessExists(businessId);
   const existing = await findProductById(id);
   assertTenantScope(existing, businessId, 'Produto');
   const updated = await updateProductRecordByBusinessId(businessId, id, payload);
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.PRODUCT_UPDATED);
   return serializeProductRecord(updated);
 }
 
 export async function deleteTenantProduct(businessId, id) {
-  await assertBusinessExists(businessId);
+  const business = await assertBusinessExists(businessId);
   const existing = await findProductById(id);
   assertTenantScope(existing, businessId, 'Produto');
   await deleteProductRecordByBusinessId(businessId, id);
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.PRODUCT_DELETED, 'deleted');
   return { deleted: true, id };
 }
 
@@ -260,6 +286,7 @@ export async function createPublicAppointmentRequest(slug, payload) {
     status: 'pending',
   });
 
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.APPOINTMENT_CREATED, 'created');
   return toPlainRecord(created);
 }
 
@@ -269,10 +296,11 @@ export async function listTenantAppointmentRequests(businessId) {
 }
 
 export async function updateTenantAppointmentRequestStatus(businessId, id, status) {
-  await assertBusinessExists(businessId);
+  const business = await assertBusinessExists(businessId);
   const existing = await findAppointmentRequestById(id);
   assertTenantScope(existing, businessId, 'Solicitacao de agendamento');
   const updated = await updateAppointmentRequestRecordByBusinessId(businessId, id, { status });
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.APPOINTMENT_STATUS_UPDATED);
   return toPlainRecord(updated);
 }
 
@@ -342,6 +370,7 @@ export async function createPublicOrder(slug, payload) {
     status: 'received',
   });
 
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_CREATED, 'created');
   return serializeOrderRecord(created);
 }
 
@@ -351,9 +380,10 @@ export async function listTenantOrders(businessId) {
 }
 
 export async function updateTenantOrderStatus(businessId, id, status) {
-  await assertBusinessExists(businessId);
+  const business = await assertBusinessExists(businessId);
   const existing = await findOrderById(id);
   assertTenantScope(existing, businessId, 'Pedido');
   const updated = await updateOrderRecordByBusinessId(businessId, id, { status });
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_STATUS_UPDATED);
   return toPlainRecord(updated);
 }

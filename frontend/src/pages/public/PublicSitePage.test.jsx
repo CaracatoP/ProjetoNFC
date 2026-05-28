@@ -12,6 +12,7 @@ vi.mock('@/services/publicSiteService.js', () => ({
   resolveNfcTag: vi.fn(),
   createPublicAppointmentRequest: vi.fn(),
   createPublicOrder: vi.fn(),
+  invalidatePublicSiteCache: vi.fn(),
 }));
 vi.mock('@/services/analyticsService.js', () => ({
   trackEvent: vi.fn(),
@@ -246,9 +247,13 @@ describe('PublicSitePage', () => {
 
   beforeEach(() => {
     document.documentElement.removeAttribute('style');
+    publicSiteService.getPublicSiteBySlug.mockReset();
     publicSiteService.getPublicSiteBySlug.mockResolvedValue(siteFixture);
+    publicSiteService.createPublicAppointmentRequest?.mockReset();
     publicSiteService.createPublicAppointmentRequest?.mockResolvedValue({ status: 'pending' });
+    publicSiteService.createPublicOrder?.mockReset();
     publicSiteService.createPublicOrder?.mockResolvedValue({ status: 'received' });
+    publicSiteService.invalidatePublicSiteCache?.mockReset();
     analyticsService.trackEvent.mockClear();
     tenantRealtimeService.subscribeToTenantUpdates.mockImplementation((_target, callbacks = {}) => {
       realtimeCallbacks = callbacks;
@@ -293,32 +298,31 @@ describe('PublicSitePage', () => {
       'href',
       'https://instagram.com/estilovivo',
     );
-    expect(document.querySelector("link[rel='icon']")?.getAttribute('href')).toBe(
-      'https://cdn.example.com/favicon.png',
-    );
-    expect(document.querySelector("link[rel='alternate icon']")?.getAttribute('href')).toBe(
-      'https://cdn.example.com/favicon.png',
-    );
-    expect(document.querySelector("link[rel='shortcut icon']")?.getAttribute('href')).toBe(
-      'https://cdn.example.com/favicon.png',
-    );
     expect(screen.queryByText('Descricao antiga da secao.')).not.toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Logo Barbearia Estilo Vivo/i })).toBeInTheDocument();
     expect(screen.queryByText('Oculta')).not.toBeInTheDocument();
     expect(screen.queryByText('Ver horarios')).not.toBeInTheDocument();
 
-    expect(analyticsService.trackEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        eventType: 'page_view',
-        slug: 'barbearia-estilo-vivo',
-      }),
-    );
-
     await waitFor(() => {
+      expect(analyticsService.trackEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: 'page_view',
+          slug: 'barbearia-estilo-vivo',
+        }),
+      );
       expect(document.documentElement.style.getPropertyValue('--theme-primary-button')).toBe('#f97316');
       expect(document.documentElement.style.getPropertyValue('--theme-card')).toBe('#211410');
       expect(document.documentElement.style.getPropertyValue('--theme-button-hover')).toBe('#2b1d16');
       expect(document.documentElement.style.getPropertyValue('--theme-secondary-area')).toBe('#fb7185');
+      expect(document.querySelector("link[rel='icon']")?.getAttribute('href')).toBe(
+        'https://cdn.example.com/favicon.png',
+      );
+      expect(document.querySelector("link[rel='alternate icon']")?.getAttribute('href')).toBe(
+        'https://cdn.example.com/favicon.png',
+      );
+      expect(document.querySelector("link[rel='shortcut icon']")?.getAttribute('href')).toBe(
+        'https://cdn.example.com/favicon.png',
+      );
     });
 
     expect(document.querySelector("meta[name='theme-color']")?.getAttribute('content')).toBe('#140d09');
@@ -425,14 +429,53 @@ describe('PublicSitePage', () => {
       realtimeCallbacks?.onTenantUpdated?.({
         businessId: 'business-1',
         slug: 'barbearia-estilo-vivo',
+        kind: 'product_updated',
         operation: 'updated',
       });
     });
 
     expect(await screen.findByText('Experiencia atualizada em tempo real.')).toBeInTheDocument();
+    expect(publicSiteService.invalidatePublicSiteCache).toHaveBeenCalledWith(
+      expect.objectContaining({
+        slug: 'barbearia-estilo-vivo',
+      }),
+    );
     await waitFor(() => {
       expect(publicSiteService.getPublicSiteBySlug.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
+    expect(publicSiteService.getPublicSiteBySlug).toHaveBeenLastCalledWith(
+      'barbearia-estilo-vivo',
+      expect.objectContaining({
+        bypassCache: true,
+        cacheBust: expect.any(String),
+      }),
+    );
+  });
+
+  it('ignores realtime events that do not affect the public page payload', async () => {
+    render(
+      <TenantProvider>
+        <MemoryRouter initialEntries={['/site/barbearia-estilo-vivo']}>
+          <Routes>
+            <Route path="/site/:slug" element={<PublicSitePage />} />
+          </Routes>
+        </MemoryRouter>
+      </TenantProvider>,
+    );
+
+    expect(await screen.findByText('Experiencia premium.')).toBeInTheDocument();
+
+    await act(async () => {
+      realtimeCallbacks?.onTenantUpdated?.({
+        businessId: 'business-1',
+        slug: 'barbearia-estilo-vivo',
+        kind: 'order_created',
+        operation: 'created',
+      });
+    });
+
+    expect(publicSiteService.invalidatePublicSiteCache).not.toHaveBeenCalled();
+    expect(publicSiteService.getPublicSiteBySlug).toHaveBeenCalledTimes(1);
   });
 
   it('forces a fresh fetch when the public page is opened in preview mode', async () => {

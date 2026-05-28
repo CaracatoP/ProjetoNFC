@@ -1,0 +1,25 @@
+export const TENANT_REALTIME_KINDS = Object.freeze({
+  TENANT_CREATED: 'tenant_created',
+  TENANT_UPDATED: 'tenant_updated',
+  TENANT_STATUS_UPDATED: 'tenant_status_updated',
+  TENANT_DELETED: 'tenant_deleted',
+  PRODUCT_CREATED: 'product_created',
+  PRODUCT_UPDATED: 'product_updated',
+  PRODUCT_DELETED: 'product_deleted',
+  PROFESSIONAL_CREATED: 'professional_created',
+  PROFESSIONAL_UPDATED: 'professional_updated',
+  PROFESSIONAL_DELETED: 'professional_deleted',
+  APPOINTMENT_SERVICE_CREATED: 'appointment_service_created',
+  APPOINTMENT_SERVICE_UPDATED: 'appointment_service_updated',
+  APPOINTMENT_SERVICE_DELETED: 'appointment_service_deleted',
+  ORDER_CREATED: 'order_created',
+  ORDER_STATUS_UPDATED: 'order_status_updated',
+  APPOINTMENT_CREATED: 'appointment_created',
+  APPOINTMENT_STATUS_UPDATED: 'appointment_status_updated',
+  PLAN_UPDATED: 'plan_updated',
+  BILLING_UPDATED: 'billing_updated',
+  CLIENT_ACCESS_UPDATED: 'client_access_updated',
+  CLIENT_BINDING_UPDATED: 'client_binding_updated',
+});
+
+export const TENANT_REALTIME_KIND_VALUES = Object.freeze(Object.values(TENANT_REALTIME_KINDS));

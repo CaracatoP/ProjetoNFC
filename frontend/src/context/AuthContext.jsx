@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   fetchSession,
   getStoredSessionToken,
@@ -9,6 +9,7 @@ import {
 
 const AuthContext = createContext(null);
 const CLIENT_BLOCKED_BILLING_STATUSES = new Set(['suspended', 'cancelled']);
+const SESSION_REFRESH_INTERVAL_MS = 90_000;
 
 function resolveHomePath(session) {
   const roleLevel = session?.user?.roleLevel ?? 5;
@@ -21,6 +22,69 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
+
+  const applySession = useCallback((nextSession) => {
+    setSession(nextSession);
+    setUser(nextSession?.user || null);
+    setStatus('authenticated');
+    setError('');
+    return nextSession;
+  }, []);
+
+  const clearSessionState = useCallback((nextError = '') => {
+    setStoredSessionToken('');
+    setToken('');
+    setSession(null);
+    setUser(null);
+    setStatus('guest');
+    setError(nextError);
+  }, []);
+
+  const refreshSession = useCallback(async () => {
+    if (!token) {
+      return null;
+    }
+
+    try {
+      const nextSession = await fetchSession(token);
+      return applySession(nextSession);
+    } catch (refreshError) {
+      clearSessionState('Sua sessao expirou. Entre novamente para continuar.');
+      throw refreshError;
+    }
+  }, [applySession, clearSessionState, token]);
+
+  const login = useCallback(
+    async (credentials) => {
+      setStatus('loading');
+      setError('');
+
+      try {
+        const nextSession = await loginSession(credentials);
+        setStoredSessionToken(nextSession.token);
+        setToken(nextSession.token);
+        applySession(nextSession);
+        return nextSession;
+      } catch (loginError) {
+        setStatus('guest');
+        setError(loginError.message);
+        throw loginError;
+      }
+    },
+    [applySession],
+  );
+
+  const logout = useCallback(async () => {
+    try {
+      if (token) {
+        await logoutSession(token);
+      }
+    } catch (_error) {
+      // Logout local mesmo se a API falhar.
+    } finally {
+      clearSessionState('');
+    }
+  }, [clearSessionState, token]);
 
   useEffect(() => {
     let active = true;
@@ -42,21 +106,13 @@ export function AuthProvider({ children }) {
           return;
         }
 
-        setSession(nextSession);
-        setUser(nextSession.user);
-        setStatus('authenticated');
-        setError('');
+        applySession(nextSession);
       } catch (_error) {
         if (!active) {
           return;
         }
 
-        setStoredSessionToken('');
-        setToken('');
-        setSession(null);
-        setUser(null);
-        setStatus('guest');
-        setError('Sua sessao expirou. Entre novamente para continuar.');
+        clearSessionState('Sua sessao expirou. Entre novamente para continuar.');
       }
     }
 
@@ -65,7 +121,69 @@ export function AuthProvider({ children }) {
     return () => {
       active = false;
     };
-  }, [token]);
+  }, [applySession, clearSessionState, token]);
+
+  useEffect(() => {
+    if (!token || status !== 'authenticated') {
+      return undefined;
+    }
+
+    let intervalId = null;
+    let active = true;
+    let refreshing = false;
+
+    const stopInterval = () => {
+      if (intervalId) {
+        window.clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const runRefresh = async () => {
+      if (!active || refreshing || document.visibilityState === 'hidden') {
+        return;
+      }
+
+      refreshing = true;
+
+      try {
+        await refreshSession();
+      } catch {
+        // O refreshSession ja aplica o fallback de sessao expirada.
+      } finally {
+        refreshing = false;
+      }
+    };
+
+    const startInterval = () => {
+      stopInterval();
+
+      if (document.visibilityState !== 'hidden') {
+        intervalId = window.setInterval(() => {
+          void runRefresh();
+        }, SESSION_REFRESH_INTERVAL_MS);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        stopInterval();
+        return;
+      }
+
+      startInterval();
+      void runRefresh();
+    };
+
+    startInterval();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      active = false;
+      stopInterval();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [refreshSession, status, token]);
 
   const value = useMemo(
     () => ({
@@ -83,54 +201,11 @@ export function AuthProvider({ children }) {
       isClientUser: (session?.user?.roleLevel ?? 99) >= 2,
       isSuspendedClientAccess: CLIENT_BLOCKED_BILLING_STATUSES.has(session?.access?.billingStatus || ''),
       homePath: resolveHomePath(session),
-      login: async (credentials) => {
-        setStatus('loading');
-        setError('');
-
-        try {
-          const nextSession = await loginSession(credentials);
-          setStoredSessionToken(nextSession.token);
-          setToken(nextSession.token);
-          setSession(nextSession);
-          setUser(nextSession.user);
-          setStatus('authenticated');
-          return nextSession;
-        } catch (loginError) {
-          setStatus('guest');
-          setError(loginError.message);
-          throw loginError;
-        }
-      },
-      refreshSession: async () => {
-        if (!token) {
-          return null;
-        }
-
-        const nextSession = await fetchSession(token);
-        setSession(nextSession);
-        setUser(nextSession.user);
-        setStatus('authenticated');
-        setError('');
-        return nextSession;
-      },
-      logout: async () => {
-        try {
-          if (token) {
-            await logoutSession(token);
-          }
-        } catch (_error) {
-          // Logout local mesmo se a API falhar.
-        } finally {
-          setStoredSessionToken('');
-          setToken('');
-          setSession(null);
-          setUser(null);
-          setStatus('guest');
-          setError('');
-        }
-      },
+      login,
+      refreshSession,
+      logout,
     }),
-    [error, session, status, token, user],
+    [error, login, logout, refreshSession, session, status, token, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

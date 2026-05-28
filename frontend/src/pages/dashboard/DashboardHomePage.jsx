@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { subscribeToTenantUpdates } from '@/services/tenantRealtimeService.js';
 import { slugify } from '@shared/utils/tenantIdentity.js';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
@@ -244,7 +245,7 @@ export function DashboardHomePage() {
     };
   }, [selectedBusinessId, token]);
 
-  async function refreshCollections(preferredBusinessId = '') {
+  const refreshCollections = useCallback(async (preferredBusinessId = '') => {
     const [nextOverview, nextBusinesses] = await Promise.all([
       fetchAdminOverview(token),
       listAdminBusinesses(token),
@@ -265,9 +266,9 @@ export function DashboardHomePage() {
 
       return nextBusinesses[0]?.id || '';
     });
-  }
+  }, [token]);
 
-  async function refreshEditorSnapshot(targetBusinessId = selectedBusinessId) {
+  const refreshEditorSnapshot = useCallback(async (targetBusinessId = selectedBusinessId) => {
     if (!token || !targetBusinessId) {
       return null;
     }
@@ -275,7 +276,50 @@ export function DashboardHomePage() {
     const nextEditor = await getAdminBusiness(token, targetBusinessId);
     setEditor(nextEditor);
     return nextEditor;
-  }
+  }, [selectedBusinessId, token]);
+
+  useEffect(() => {
+    if (!token || !selectedBusinessId) {
+      return undefined;
+    }
+
+    let active = true;
+
+    const unsubscribe = subscribeToTenantUpdates(
+      { businessId: selectedBusinessId },
+      {
+        async onTenantUpdated() {
+          if (!active) {
+            return;
+          }
+
+          try {
+            await Promise.all([
+              refreshCollections(selectedBusinessId),
+              refreshEditorSnapshot(selectedBusinessId),
+            ]);
+
+            if (!active) {
+              return;
+            }
+
+            refreshPreview();
+          } catch (refreshError) {
+            if (!active) {
+              return;
+            }
+
+            setError(getErrorMessage(refreshError));
+          }
+        },
+      },
+    );
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+  }, [refreshCollections, refreshEditorSnapshot, refreshPreview, selectedBusinessId, token]);
 
   async function handleCreate(payload) {
     setCreating(true);

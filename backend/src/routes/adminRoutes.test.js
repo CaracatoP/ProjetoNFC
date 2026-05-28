@@ -16,6 +16,7 @@ let Professional;
 let AppointmentService;
 let AppointmentRequest;
 let Order;
+let subscribeToTenantUpdates;
 let mongoServer;
 let adminToken;
 
@@ -56,6 +57,7 @@ describe('Admin routes', () => {
     ({ AppointmentService } = await import('../models/AppointmentService.js'));
     ({ AppointmentRequest } = await import('../models/AppointmentRequest.js'));
     ({ Order } = await import('../models/Order.js'));
+    ({ subscribeToTenantUpdates } = await import('../services/tenantRealtimeService.js'));
     ({ default: app } = await import('../app.js'));
 
     await connectDatabase();
@@ -829,6 +831,8 @@ describe('Admin routes', () => {
   });
 
   it('creates and updates appointment module records scoped to the tenant', async () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeToTenantUpdates({ slug: 'barbearia-estilo-vivo' }, listener);
     const listResponse = await request(app)
       .get('/api/admin/businesses')
       .set('Authorization', `Bearer ${adminToken}`);
@@ -912,12 +916,19 @@ describe('Admin routes', () => {
 
     expect(updateServiceResponse.status).toBe(200);
     expect(updateServiceResponse.body.data.price).toBe(85);
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ kind: 'professional_created' }));
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ kind: 'appointment_service_created' }));
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ kind: 'professional_updated' }));
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ kind: 'appointment_service_updated' }));
 
     expect(await Professional.countDocuments({ businessId: targetId })).toBeGreaterThan(0);
     expect(await AppointmentService.countDocuments({ businessId: targetId })).toBeGreaterThan(0);
+    unsubscribe();
   });
 
   it('creates and updates product/order records scoped to the tenant', async () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeToTenantUpdates({ slug: 'barbearia-estilo-vivo' }, listener);
     const listResponse = await request(app)
       .get('/api/admin/businesses')
       .set('Authorization', `Bearer ${adminToken}`);
@@ -971,10 +982,15 @@ describe('Admin routes', () => {
 
     expect(updateProductResponse.status).toBe(200);
     expect(updateProductResponse.body.data.price).toBe(44.9);
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ kind: 'product_created' }));
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ kind: 'product_updated' }));
     expect(await Product.countDocuments({ businessId: targetId })).toBeGreaterThan(0);
+    unsubscribe();
   });
 
   it('lists and updates inbound appointment requests and orders from the admin side', async () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeToTenantUpdates({ slug: 'barbearia-estilo-vivo' }, listener);
     const appointmentRequestResponse = await request(app)
       .post('/api/public/site/barbearia-estilo-vivo/appointment-requests')
       .send({
@@ -1038,9 +1054,14 @@ describe('Admin routes', () => {
     expect(updateAppointmentStatusResponse.body.data.status).toBe('confirmed');
     expect(updateOrderStatusResponse.status).toBe(200);
     expect(updateOrderStatusResponse.body.data.status).toBe('preparing');
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ kind: 'appointment_created' }));
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ kind: 'order_created' }));
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ kind: 'appointment_status_updated' }));
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ kind: 'order_status_updated' }));
 
     expect(await AppointmentRequest.countDocuments({ businessId: targetId })).toBeGreaterThan(0);
     expect(await Order.countDocuments({ businessId: targetId })).toBeGreaterThan(0);
+    unsubscribe();
   });
 
   it('rejects scoped module mutations when the resource belongs to another tenant', async () => {
