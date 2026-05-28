@@ -38,6 +38,7 @@ import {
   buildUserAgentBreakdowns,
   calculateActionRate,
 } from '../utils/adminAnalytics.js';
+import { normalizeBusinessContact } from '../../../shared/utils/businessContact.js';
 import {
   getCanonicalSectionType,
   normalizeHost,
@@ -239,31 +240,7 @@ function normalizeBusinessPayload(payload = {}) {
       longitude: normalizeCoordinate(payload.address?.longitude),
     },
     hours: normalizeHours(payload.hours),
-    contact: {
-      whatsapp: String(payload.contact?.whatsapp || '').trim(),
-      phone: String(payload.contact?.phone || '').trim(),
-      email: String(payload.contact?.email || '').trim(),
-      wifi: payload.contact?.wifi?.ssid || payload.contact?.wifi?.password
-        ? {
-            ssid: String(payload.contact?.wifi?.ssid || '').trim(),
-            password: String(payload.contact?.wifi?.password || '').trim(),
-            security: String(payload.contact?.wifi?.security || 'WPA').trim(),
-            title: String(payload.contact?.wifi?.title || '').trim(),
-            description: String(payload.contact?.wifi?.description || '').trim(),
-          }
-        : undefined,
-      pix: payload.contact?.pix?.key
-        ? {
-            keyType: String(payload.contact?.pix?.keyType || '').trim(),
-            key: String(payload.contact?.pix?.key || '').trim(),
-            receiverName: String(payload.contact?.pix?.receiverName || '').trim(),
-            city: String(payload.contact?.pix?.city || '').trim(),
-            description: String(payload.contact?.pix?.description || '').trim(),
-            actionLabel: String(payload.contact?.pix?.actionLabel || '').trim(),
-            actionDescription: String(payload.contact?.pix?.actionDescription || '').trim(),
-          }
-        : undefined,
-    },
+    contact: normalizeBusinessContact(payload.contact || {}),
     seo: {
       title: seoTitle,
       description: seoDescription,

@@ -1,4 +1,5 @@
 import { BUSINESS_STATUS, LINK_GROUPS, LINK_TYPES, SECTION_TYPES } from '../../../shared/constants/index.js';
+import { normalizeBusinessContact } from '../../../shared/utils/businessContact.js';
 import { buildBusinessSegmentState } from '../../../shared/utils/segments.js';
 import { normalizePhoneActionValue, slugify } from '../../../shared/utils/tenantIdentity.js';
 import { createDefaultTheme } from '../../../shared/utils/theme.js';
@@ -273,13 +274,13 @@ export function buildDefaultTenantSetup(input = {}) {
       embedUrl: String(input.address?.embedUrl || '').trim(),
     },
     hours: Array.isArray(input.hours) ? input.hours : [],
-    contact: {
-      whatsapp: String(input.contact?.whatsapp || input.whatsapp || '').trim(),
-      phone: String(input.contact?.phone || input.phone || '').trim(),
-      email: String(input.contact?.email || input.email || '').trim(),
-      wifi: input.contact?.wifi || undefined,
-      pix: input.contact?.pix || undefined,
-    },
+    contact: normalizeBusinessContact({
+      whatsapp: input.contact?.whatsapp || input.whatsapp,
+      phone: input.contact?.phone || input.phone,
+      email: input.contact?.email || input.email,
+      wifi: input.contact?.wifi,
+      pix: input.contact?.pix,
+    }),
     seo: {
       title: `${name} | Pagina NFC`,
       description: description || `Pagina NFC oficial de ${name}.`,

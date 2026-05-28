@@ -57,4 +57,67 @@ describe('publicSitePayloadSchema', () => {
     expect(parsed.sections[0].items[0].imageUrl).toBe('https://cdn.example.com/corte.jpg');
     expect(parsed.sections[0].items[1].imageUrl).toBeUndefined();
   });
+
+  it('normalizes missing or partial wifi contact data into stable strings', () => {
+    const missingWifiParsed = publicSitePayloadSchema.parse({
+      business: {
+        id: 'business-1',
+        slug: 'acougue-central',
+        name: 'Acougue Central',
+        status: 'active',
+        contact: {},
+        seo: {
+          title: 'Acougue Central',
+          description: 'Pagina publica',
+        },
+      },
+      theme: baseTheme,
+      sections: [],
+      links: [],
+      seo: {
+        title: 'Acougue Central',
+        description: 'Pagina publica',
+      },
+    });
+
+    const partialWifiParsed = publicSitePayloadSchema.parse({
+      business: {
+        id: 'business-2',
+        slug: 'acougue-central-copy',
+        name: 'Acougue Central Copy',
+        status: 'active',
+        contact: {
+          wifi: {
+            security: 'WPA',
+          },
+        },
+        seo: {
+          title: 'Acougue Central Copy',
+          description: 'Pagina publica',
+        },
+      },
+      theme: baseTheme,
+      sections: [],
+      links: [],
+      seo: {
+        title: 'Acougue Central Copy',
+        description: 'Pagina publica',
+      },
+    });
+
+    expect(missingWifiParsed.business.contact.wifi).toEqual({
+      ssid: '',
+      password: '',
+      security: 'WPA',
+      title: '',
+      description: '',
+    });
+    expect(partialWifiParsed.business.contact.wifi).toEqual({
+      ssid: '',
+      password: '',
+      security: 'WPA',
+      title: '',
+      description: '',
+    });
+  });
 });

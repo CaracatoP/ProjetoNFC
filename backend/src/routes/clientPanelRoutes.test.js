@@ -225,6 +225,21 @@ describe('Client panel routes', () => {
   }
 
   it('lets the tenant owner load the panel snapshot and update only basic settings', async () => {
+    await Business.updateOne(
+      { _id: primaryBusiness._id },
+      {
+        $set: {
+          'contact.wifi.security': 'WPA',
+        },
+        $unset: {
+          'contact.wifi.ssid': 1,
+          'contact.wifi.password': 1,
+          'contact.wifi.title': 1,
+          'contact.wifi.description': 1,
+        },
+      },
+    );
+
     const ownerToken = await login('owner@cliente.local', 'owner123456');
 
     const detailResponse = await request(app)
@@ -234,6 +249,13 @@ describe('Client panel routes', () => {
     expect(detailResponse.status).toBe(200);
     expect(detailResponse.body.data.business.slug).toBe('barbearia-estilo-vivo');
     expect(detailResponse.body.data.modulesData).toBeTruthy();
+    expect(detailResponse.body.data.business.contact.wifi).toEqual({
+      ssid: '',
+      password: '',
+      security: 'WPA',
+      title: '',
+      description: '',
+    });
 
     const updateResponse = await request(app)
       .put('/api/panel/business/basics')

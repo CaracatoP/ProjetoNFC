@@ -1,9 +1,12 @@
 import mongoose from 'mongoose';
 import { BUSINESS_SEGMENT_VALUES, BUSINESS_STATUS_VALUES } from '../../../shared/constants/index.js';
+import { normalizeBusinessContact } from '../../../shared/utils/businessContact.js';
 import { buildBusinessSegmentState } from '../../../shared/utils/segments.js';
 import { baseSchemaOptions } from '../utils/mongoose.js';
 
 const defaultSegmentState = buildBusinessSegmentState();
+const baseToJSONTransform = baseSchemaOptions.toJSON?.transform;
+const baseToObjectTransform = baseSchemaOptions.toObject?.transform;
 
 const businessSchema = new mongoose.Schema(
   {
@@ -84,7 +87,25 @@ const businessSchema = new mongoose.Schema(
       },
     ],
   },
-  baseSchemaOptions,
+  {
+    ...baseSchemaOptions,
+    toJSON: {
+      ...baseSchemaOptions.toJSON,
+      transform: (doc, ret) => {
+        const transformed = baseToJSONTransform ? baseToJSONTransform(doc, ret) : ret;
+        transformed.contact = normalizeBusinessContact(transformed.contact || {});
+        return transformed;
+      },
+    },
+    toObject: {
+      ...baseSchemaOptions.toObject,
+      transform: (doc, ret) => {
+        const transformed = baseToObjectTransform ? baseToObjectTransform(doc, ret) : ret;
+        transformed.contact = normalizeBusinessContact(transformed.contact || {});
+        return transformed;
+      },
+    },
+  },
 );
 
 businessSchema.index(

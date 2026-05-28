@@ -182,4 +182,52 @@ describe('publicSiteService', () => {
       }),
     });
   });
+
+  it('normalizes partial wifi payloads returned by the public tenant API', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            business: {
+              id: 'business-3',
+              slug: 'acougue-central-copy',
+              name: 'Acougue Central Copy',
+              status: 'active',
+              hours: [],
+              contact: {
+                wifi: {
+                  security: 'WPA',
+                },
+              },
+              seo: {
+                title: 'Acougue Central Copy',
+                description: 'Pagina publica',
+              },
+            },
+            theme: baseTheme,
+            sections: [],
+            links: [],
+            seo: {
+              title: 'Acougue Central Copy',
+              description: 'Pagina publica',
+            },
+          },
+        }),
+      }),
+    );
+
+    const site = await getPublicSiteBySlug('acougue-central-copy');
+
+    expect(site.business.contact.wifi).toEqual({
+      ssid: '',
+      password: '',
+      security: 'WPA',
+      title: '',
+      description: '',
+    });
+  });
 });

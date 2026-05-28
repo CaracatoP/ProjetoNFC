@@ -423,6 +423,162 @@ describe('Admin routes', () => {
     expect(originalFinalResponse.body.data.business.slug).toBe('barbearia-estilo-vivo');
   });
 
+  it('normalizes legacy tenants without wifi before returning admin and public payloads', async () => {
+    const originalBusiness = await Business.findOne({ slug: 'barbearia-estilo-vivo' }).lean();
+
+    await Business.updateOne(
+      { _id: originalBusiness._id },
+      {
+        $unset: {
+          'contact.wifi': 1,
+        },
+      },
+    );
+
+    const adminDetailResponse = await request(app)
+      .get(`/api/admin/businesses/${originalBusiness._id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const publicDetailResponse = await request(app).get('/api/public/site/barbearia-estilo-vivo');
+
+    expect(adminDetailResponse.status).toBe(200);
+    expect(adminDetailResponse.body.data.business.contact.wifi).toEqual({
+      ssid: '',
+      password: '',
+      security: 'WPA',
+      title: '',
+      description: '',
+    });
+
+    expect(publicDetailResponse.status).toBe(200);
+    expect(publicDetailResponse.body.data.business.contact.wifi).toEqual({
+      ssid: '',
+      password: '',
+      security: 'WPA',
+      title: '',
+      description: '',
+    });
+  });
+
+  it('normalizes duplicated tenant wifi defaults and keeps duplicate contact edits isolated from the original', async () => {
+    const listResponse = await request(app)
+      .get('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const originalBusiness = listResponse.body.data.find((item) => item.slug === 'barbearia-estilo-vivo');
+    const originalId = originalBusiness.id;
+
+    await Business.updateOne(
+      { _id: originalId },
+      {
+        $set: {
+          'contact.wifi.security': 'WPA',
+        },
+        $unset: {
+          'contact.wifi.ssid': 1,
+          'contact.wifi.password': 1,
+          'contact.wifi.title': 1,
+          'contact.wifi.description': 1,
+        },
+      },
+    );
+
+    const originalDetailResponse = await request(app)
+      .get(`/api/admin/businesses/${originalId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(originalDetailResponse.status).toBe(200);
+    expect(originalDetailResponse.body.data.business.contact.wifi).toEqual({
+      ssid: '',
+      password: '',
+      security: 'WPA',
+      title: '',
+      description: '',
+    });
+
+    const createDuplicateResponse = await request(app)
+      .post('/api/admin/businesses')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        business: {
+          ...originalDetailResponse.body.data.business,
+          name: 'Barbearia Estilo Vivo Copy Wifi',
+          slug: 'barbearia-estilo-vivo-copy-wifi',
+          domains: {
+            subdomain: '',
+            customDomain: '',
+          },
+        },
+        theme: originalDetailResponse.body.data.theme,
+        links: originalDetailResponse.body.data.links,
+        sections: originalDetailResponse.body.data.sections,
+        nfcTag: {
+          ...(originalDetailResponse.body.data.nfcTag || {}),
+          code: '',
+        },
+      });
+
+    expect(createDuplicateResponse.status).toBe(201);
+    expect(createDuplicateResponse.body.data.business.contact.wifi).toEqual({
+      ssid: '',
+      password: '',
+      security: 'WPA',
+      title: '',
+      description: '',
+    });
+
+    const duplicateId = createDuplicateResponse.body.data.business.id;
+
+    const duplicatePublicResponse = await request(app).get('/api/public/site/barbearia-estilo-vivo-copy-wifi');
+
+    expect(duplicatePublicResponse.status).toBe(200);
+    expect(duplicatePublicResponse.body.data.business.contact.wifi).toEqual({
+      ssid: '',
+      password: '',
+      security: 'WPA',
+      title: '',
+      description: '',
+    });
+
+    const duplicateUpdateResponse = await request(app)
+      .put(`/api/admin/businesses/${duplicateId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        business: {
+          ...createDuplicateResponse.body.data.business,
+          id: duplicateId,
+          contact: {
+            ...createDuplicateResponse.body.data.business.contact,
+            wifi: {
+              ...(createDuplicateResponse.body.data.business.contact.wifi || {}),
+              ssid: 'WiFi Copy',
+              password: 'senha-copy',
+              security: 'WPA2',
+            },
+          },
+        },
+        theme: createDuplicateResponse.body.data.theme,
+        links: createDuplicateResponse.body.data.links,
+        sections: createDuplicateResponse.body.data.sections,
+        nfcTag: createDuplicateResponse.body.data.nfcTag,
+      });
+
+    expect(duplicateUpdateResponse.status).toBe(200);
+
+    const originalAfterDuplicateEditResponse = await request(app)
+      .get(`/api/admin/businesses/${originalId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(originalAfterDuplicateEditResponse.status).toBe(200);
+    expect(originalAfterDuplicateEditResponse.body.data.business.contact.wifi).toEqual({
+      ssid: '',
+      password: '',
+      security: 'WPA',
+      title: '',
+      description: '',
+    });
+  });
+
   it('toggles the tenant status and blocks public rendering while inactive', async () => {
     const listResponse = await request(app)
       .get('/api/admin/businesses')

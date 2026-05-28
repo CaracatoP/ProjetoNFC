@@ -25,6 +25,7 @@ import {
   normalizePhoneActionValue,
 } from '../../../shared/utils/tenantIdentity.js';
 import { buildBusinessSegmentState } from '../../../shared/utils/segments.js';
+import { normalizeBusinessContact } from '../../../shared/utils/businessContact.js';
 import { buildTenantTheme } from '../../../shared/utils/theme.js';
 
 function isManagedLinkMatch(link, action) {
@@ -414,7 +415,7 @@ async function getPublicSiteByBusiness(business) {
       address: business.address,
       hours: business.hours || [],
       rating: business.rating,
-      contact: business.contact || {},
+      contact: normalizeBusinessContact(business.contact || {}),
       seo: {
         title: business.seo?.title,
         description: business.seo?.description,

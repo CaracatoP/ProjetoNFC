@@ -1,8 +1,10 @@
 import { resolveMediaUrl } from '@/utils/formatters.js';
+import { normalizeBusinessContact } from '@shared/utils/businessContact.js';
 
 export function normalizeBusinessMedia(business = {}) {
   return {
     ...business,
+    contact: normalizeBusinessContact(business.contact || {}),
     logoUrl: resolveMediaUrl(business.logoUrl),
     bannerUrl: resolveMediaUrl(business.bannerUrl),
     seo: business.seo

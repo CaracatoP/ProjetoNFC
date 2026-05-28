@@ -15,6 +15,7 @@ import {
   normalizeRoleLevel,
   resolveAnalyticsScope,
 } from '../../../shared/utils/access.js';
+import { normalizeBusinessContact } from '../../../shared/utils/businessContact.js';
 import { ROLE_LEVELS } from '../../../shared/constants/access.js';
 import { getBusinessAnalyticsSummary } from '../repositories/adminRepository.js';
 import { uploadAdminImage } from './adminUploadService.js';
@@ -138,10 +139,13 @@ function buildAnalyticsPayload(analyticsSummary, scope) {
 const CLIENT_PANEL_UPLOAD_ASSET_TYPES = new Set(['logo', 'banner', 'product', 'professional']);
 
 function sanitizeClientContactForPanel(contact = {}) {
+  const normalizedContact = normalizeBusinessContact(contact);
+
   return {
-    whatsapp: contact.whatsapp || '',
-    phone: contact.phone || '',
-    email: contact.email || '',
+    whatsapp: normalizedContact.whatsapp,
+    phone: normalizedContact.phone,
+    email: normalizedContact.email,
+    wifi: normalizedContact.wifi,
   };
 }
 

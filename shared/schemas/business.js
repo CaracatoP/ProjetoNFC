@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BUSINESS_MODULE_KEY_VALUES, BUSINESS_SEGMENT_VALUES, BUSINESS_STATUS_VALUES } from '../constants/index.js';
+import { normalizeBusinessContact, normalizeBusinessWifi } from '../utils/businessContact.js';
 
 export const businessHourSchema = z.object({
   id: z.string(),
@@ -15,13 +16,16 @@ export const businessAddressSchema = z.object({
   longitude: z.number().optional(),
 });
 
-export const businessWifiSchema = z.object({
-  ssid: z.string(),
-  password: z.string(),
-  security: z.string().default('WPA'),
-  title: z.string().optional(),
-  description: z.string().optional(),
-});
+export const businessWifiSchema = z.preprocess(
+  (value) => normalizeBusinessWifi(value),
+  z.object({
+    ssid: z.string().default(''),
+    password: z.string().default(''),
+    security: z.string().default('WPA'),
+    title: z.string().default(''),
+    description: z.string().default(''),
+  }),
+);
 
 export const businessPixSchema = z.object({
   keyType: z.string(),
@@ -33,13 +37,16 @@ export const businessPixSchema = z.object({
   actionDescription: z.string().optional(),
 });
 
-export const businessContactSchema = z.object({
-  whatsapp: z.string().optional(),
-  phone: z.string().optional(),
-  email: z.string().email().optional().or(z.literal('')),
-  wifi: businessWifiSchema.optional(),
-  pix: businessPixSchema.optional(),
-});
+export const businessContactSchema = z.preprocess(
+  (value) => normalizeBusinessContact(value),
+  z.object({
+    whatsapp: z.string().optional(),
+    phone: z.string().optional(),
+    email: z.string().email().optional().or(z.literal('')),
+    wifi: businessWifiSchema.default(normalizeBusinessWifi()),
+    pix: businessPixSchema.optional(),
+  }),
+);
 
 export const seoSchema = z.object({
   title: z.string(),
@@ -67,7 +74,7 @@ export const businessSchema = z.object({
   hours: z.array(businessHourSchema).default([]),
   rating: z.string().optional(),
   domains: businessDomainsSchema.default({}),
-  contact: businessContactSchema.default({}),
+  contact: businessContactSchema.default(normalizeBusinessContact()),
   segment: z.enum(BUSINESS_SEGMENT_VALUES).default('other'),
   modules: z
     .object(

@@ -51,6 +51,7 @@ Introduce a central helper responsible for normalizing business contact data:
 - `pix` behavior remains unchanged except that it continues to be wrapped under a normalized `contact` object.
 
 This helper becomes the only place where `contact/wifi` defaults are defined.
+It must also be **idempotent**: running it multiple times on already-normalized data must produce the exact same output shape and values.
 
 ### 2. Backend integration points
 
@@ -62,6 +63,7 @@ Apply the helper in these places:
 - admin editor hydration/serialization
 - public site serialization
 - client panel business serialization if it exposes `business.contact`
+- a model/serializer boundary for `Business` (`toObject`, `toJSON`, or the closest shared mapper equivalent) so future flows that bypass the main service normalizer still emit safe `contact/wifi` payloads
 
 The duplication flow should continue cloning input snapshots, but the duplicated payload must pass through the same backend normalizer used by regular create/edit flows so duplicated tenants are persisted and returned consistently.
 
@@ -136,6 +138,7 @@ After implementation:
 ## Risks
 
 - If normalization is applied only on one serialization path, the bug may still appear in another consumer.
+- If the helper is not idempotent, repeated hydration/save cycles could drift payload shape over time.
 - If the schema is loosened without backend normalization, inconsistent data could keep accumulating in storage.
 
 The fix should therefore prioritize shared backend normalization first, with schema tolerance as a defensive compatibility layer.
