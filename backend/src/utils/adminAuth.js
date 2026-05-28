@@ -1,8 +1,9 @@
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { AppError } from './appError.js';
+import { normalizeRoleLevel } from '../../../shared/utils/access.js';
 
-const ADMIN_TOKEN_ISSUERS = ['taplink-admin', 'nfc-linktree-saas'];
+const SESSION_TOKEN_ISSUERS = ['taplink-admin', 'nfc-linktree-saas'];
 
 function assertAdminJwtSecret() {
   if (String(env.adminTokenSecret || '').trim()) {
@@ -17,6 +18,22 @@ function assertAdminJwtSecret() {
 }
 
 export function buildAdminUserProfile(user) {
+  const sessionProfile = buildSessionUserProfile(user);
+
+  return {
+    id: sessionProfile.id,
+    email: sessionProfile.email,
+    username: sessionProfile.username,
+    displayName: sessionProfile.displayName,
+    roles: sessionProfile.roles,
+    role: sessionProfile.role,
+    roleLevel: sessionProfile.roleLevel,
+    businessId: sessionProfile.businessId,
+    status: sessionProfile.status,
+  };
+}
+
+export function buildSessionUserProfile(user) {
   const roles = Array.isArray(user?.roles) ? user.roles : [];
 
   return {
@@ -26,11 +43,13 @@ export function buildAdminUserProfile(user) {
     displayName: user?.name || 'Admin',
     roles,
     role: roles[0] || 'admin',
+    roleLevel: normalizeRoleLevel(user),
+    businessId: user?.businessId ? String(user.businessId) : '',
     status: user?.status || 'active',
   };
 }
 
-export function createAdminSessionToken(user) {
+export function createSessionToken(user) {
   assertAdminJwtSecret();
 
   return jwt.sign(
@@ -38,6 +57,8 @@ export function createAdminSessionToken(user) {
       sub: String(user._id),
       roles: user.roles || [],
       email: user.email,
+      roleLevel: normalizeRoleLevel(user),
+      businessId: user?.businessId ? String(user.businessId) : '',
     },
     env.adminTokenSecret,
     {
@@ -48,15 +69,23 @@ export function createAdminSessionToken(user) {
   );
 }
 
-export function verifyAdminSessionToken(token) {
+export function createAdminSessionToken(user) {
+  return createSessionToken(user);
+}
+
+export function verifySessionToken(token) {
   assertAdminJwtSecret();
 
   try {
     return jwt.verify(String(token || ''), env.adminTokenSecret, {
-      issuer: ADMIN_TOKEN_ISSUERS,
+      issuer: SESSION_TOKEN_ISSUERS,
       audience: 'admin-panel',
     });
   } catch (_error) {
     return null;
   }
+}
+
+export function verifyAdminSessionToken(token) {
+  return verifySessionToken(token);
 }

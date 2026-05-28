@@ -20,6 +20,11 @@ const PublicSitePage = lazy(() =>
     default: module.PublicSitePage,
   })),
 );
+const ClientPanelPage = lazy(() =>
+  import('@/pages/panel/ClientPanelPage.jsx').then((module) => ({
+    default: module.ClientPanelPage,
+  })),
+);
 
 function AppRouteLoadingScreen() {
   return (
@@ -44,8 +49,16 @@ export default function App() {
               <Route
                 path="/dashboard/*"
                 element={
-                  <RequireAuth>
+                  <RequireAuth mode="admin">
                     <DashboardHomePage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/panel/*"
+                element={
+                  <RequireAuth mode="client">
+                    <ClientPanelPage />
                   </RequireAuth>
                 }
               />

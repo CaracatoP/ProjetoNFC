@@ -156,6 +156,7 @@ export function InlineImageUploadField({
   uploadingLabel = 'Enviando imagem...',
   manualLabel = 'URL da imagem',
   placeholder = 'https://...',
+  disabled = false,
   onChange,
   onUpload,
   onRemove,
@@ -171,6 +172,7 @@ export function InlineImageUploadField({
 
       <AdminField label={manualLabel} description={description} error={error}>
         <input
+          disabled={disabled}
           value={value || ''}
           onChange={(event) => onChange?.(event.target.value)}
           placeholder={placeholder}
@@ -179,12 +181,13 @@ export function InlineImageUploadField({
       </AdminField>
 
       <div className="admin-inline-actions">
-        <label className="button button--secondary button--md admin-file-action" htmlFor={inputId}>
+        <label className={`button button--secondary button--md admin-file-action ${disabled ? 'button--disabled' : ''}`} htmlFor={disabled ? undefined : inputId}>
           {hasImage ? replaceLabel : uploadLabel}
           <input
             id={inputId}
             type="file"
             accept="image/*"
+            disabled={disabled}
             onChange={async (event) => {
               const file = event.target.files?.[0];
 
@@ -200,6 +203,7 @@ export function InlineImageUploadField({
           <Button
             variant="secondary"
             className="button--danger-tone"
+            disabled={disabled}
             onClick={() => {
               onChange?.('');
               onRemove?.();

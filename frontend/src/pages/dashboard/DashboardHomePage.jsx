@@ -3,6 +3,7 @@ import { slugify } from '@shared/utils/tenantIdentity.js';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 import { EmptyState } from '@/components/common/EmptyState.jsx';
+import { AdminClientsPanel } from '@/components/business/AdminClientsPanel.jsx';
 import { AppShell } from '@/components/layout/AppShell.jsx';
 import { AdminAnalyticsView } from '@/components/business/AdminAnalyticsView.jsx';
 import { TenantEditorPanel } from '@/components/business/TenantEditorPanel.jsx';
@@ -106,7 +107,7 @@ function getErrorMessage(error) {
 }
 
 export function DashboardHomePage() {
-  const { token, user, logout } = useAuth();
+  const { token, user, access, logout } = useAuth();
   const [overview, setOverview] = useState(null);
   const [businesses, setBusinesses] = useState([]);
   const [selectedBusinessId, setSelectedBusinessId] = useState('');
@@ -581,6 +582,9 @@ export function DashboardHomePage() {
               <Button variant={activeView === 'analytics' ? 'primary' : 'secondary'} onClick={() => setActiveView('analytics')}>
                 Analises
               </Button>
+              <Button variant={activeView === 'clients' ? 'primary' : 'secondary'} onClick={() => setActiveView('clients')}>
+                Clientes
+              </Button>
             </div>
 
             {activeView === 'workspace' ? (
@@ -638,7 +642,7 @@ export function DashboardHomePage() {
                   </div>
                 </div>
               </div>
-            ) : (
+            ) : activeView === 'analytics' ? (
               <AdminAnalyticsView
                 overview={overview}
                 editor={editor}
@@ -648,6 +652,16 @@ export function DashboardHomePage() {
                 onSelectBusiness={setSelectedBusinessId}
                 onOpenWorkspace={() => setActiveView('workspace')}
                 loadingEditor={loadingEditor}
+              />
+            ) : (
+              <AdminClientsPanel
+                token={token}
+                businesses={businesses}
+                canManageBilling={Boolean(access?.capabilities?.canManageBilling)}
+                onOpenBusiness={(businessId) => {
+                  setSelectedBusinessId(businessId);
+                  setActiveView('workspace');
+                }}
               />
             )}
           </div>

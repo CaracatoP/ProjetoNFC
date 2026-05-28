@@ -150,6 +150,8 @@ export function TenantModuleManagementSection({
   moduleActions,
   busyKey = '',
   onUpload,
+  mode = 'admin',
+  permissions = {},
 }) {
   const segmentState = useMemo(() => buildBusinessSegmentState(draft.business), [draft.business]);
   const modulesData = draft.modulesData || {};
@@ -164,18 +166,40 @@ export function TenantModuleManagementSection({
   const [orderFilter, setOrderFilter] = useState('all');
   const [appointmentFilter, setAppointmentFilter] = useState('all');
   const [uploadingAssetKey, setUploadingAssetKey] = useState('');
+  const capabilityState = {
+    canConfigureModules: mode === 'admin',
+    canViewCatalog: permissions.canViewCatalog ?? true,
+    canEditCatalog: permissions.canEditCatalog ?? true,
+    canViewOrders: permissions.canViewOrders ?? true,
+    canManageOrders: permissions.canManageOrders ?? true,
+    canViewAppointments: permissions.canViewAppointments ?? true,
+    canManageAppointments: permissions.canManageAppointments ?? true,
+    canViewProfessionals: permissions.canViewProfessionals ?? true,
+    canEditProfessionals: permissions.canEditProfessionals ?? true,
+    canViewServices: permissions.canViewServices ?? true,
+    canEditServices: permissions.canEditServices ?? true,
+    canUploadMedia: permissions.canUploadMedia ?? true,
+  };
 
   const visibleTabs = useMemo(
     () =>
       [
-        { id: 'segment', label: 'Segmento e modulos' },
-        { id: 'catalog', label: 'Catalogo' },
-        { id: 'orders', label: 'Pedidos' },
-        { id: 'appointments', label: 'Agendamentos' },
-        { id: 'professionals', label: 'Profissionais' },
-        { id: 'services', label: 'Servicos' },
-      ].filter((tab) => tabIsVisible(tab.id, segmentState.modules)),
-    [segmentState.modules],
+        { id: 'segment', label: 'Segmento e modulos', visible: capabilityState.canConfigureModules },
+        { id: 'catalog', label: 'Catalogo', visible: capabilityState.canViewCatalog },
+        { id: 'orders', label: 'Pedidos', visible: capabilityState.canViewOrders },
+        { id: 'appointments', label: 'Agendamentos', visible: capabilityState.canViewAppointments },
+        { id: 'professionals', label: 'Profissionais', visible: capabilityState.canViewProfessionals },
+        { id: 'services', label: 'Servicos', visible: capabilityState.canViewServices },
+      ].filter((tab) => tab.visible && tabIsVisible(tab.id, segmentState.modules)),
+    [
+      capabilityState.canConfigureModules,
+      capabilityState.canViewAppointments,
+      capabilityState.canViewCatalog,
+      capabilityState.canViewOrders,
+      capabilityState.canViewProfessionals,
+      capabilityState.canViewServices,
+      segmentState.modules,
+    ],
   );
 
   useEffect(() => {
@@ -267,16 +291,23 @@ export function TenantModuleManagementSection({
   const activeModules = BUSINESS_MODULE_KEY_VALUES.filter((key) => segmentState.modules[key]);
   const preset = getSegmentPreset(segmentState.segment);
   const busyMessage = getBusyMessage(busyKey);
-  const ordersBusy = busyKey === 'update-order-status';
-  const appointmentsBusy = busyKey === 'update-appointment-request-status';
+  const ordersBusy = busyKey === 'update-order-status' || !capabilityState.canManageOrders;
+  const appointmentsBusy = busyKey === 'update-appointment-request-status' || !capabilityState.canManageAppointments;
+  const catalogReadOnly = !capabilityState.canEditCatalog;
+  const professionalsReadOnly = !capabilityState.canEditProfessionals;
+  const servicesReadOnly = !capabilityState.canEditServices;
 
   return (
     <div className="admin-card-stack admin-card-stack--airy">
       <div className="admin-panel-card__header">
         <div>
-          <SectionEyebrow>Segmentacao</SectionEyebrow>
-          <h2>Segmento e modulos</h2>
-          <p>Escolha um preset de negocio, veja os modulos sugeridos e ajuste manualmente o que precisa ficar ativo.</p>
+          <SectionEyebrow>{mode === 'admin' ? 'Segmentacao' : 'Operacao do tenant'}</SectionEyebrow>
+          <h2>{mode === 'admin' ? 'Segmento e modulos' : 'Modulos ativos do tenant'}</h2>
+          <p>
+            {mode === 'admin'
+              ? 'Escolha um preset de negocio, veja os modulos sugeridos e ajuste manualmente o que precisa ficar ativo.'
+              : 'Acompanhe os modulos ativos e gerencie somente as areas liberadas para o seu nivel de acesso.'}
+          </p>
         </div>
       </div>
 
@@ -299,7 +330,7 @@ export function TenantModuleManagementSection({
         <div className="admin-card-stack">
           <div className="admin-form-grid">
             <AdminField label="Segmento da empresa">
-              <select value={segmentState.segment} onChange={(event) => updateBusinessSegment(event.target.value)}>
+              <select value={segmentState.segment} onChange={(event) => updateBusinessSegment(event.target.value)} disabled={!capabilityState.canConfigureModules}>
                 {BUSINESS_SEGMENT_VALUES.map((segmentValue) => (
                   <option key={segmentValue} value={segmentValue}>
                     {getSegmentPreset(segmentValue).label}
@@ -320,6 +351,7 @@ export function TenantModuleManagementSection({
                 <input
                   type="checkbox"
                   checked={Boolean(segmentState.modules[key])}
+                  disabled={!capabilityState.canConfigureModules}
                   onChange={(event) => toggleModule(key, event.target.checked)}
                 />
                 <div>
@@ -349,12 +381,13 @@ export function TenantModuleManagementSection({
 
       {activeTab === 'professionals' ? (
         <div className="admin-card-stack">
+          {professionalsReadOnly ? <p className="admin-muted-copy">Seu nivel atual pode visualizar profissionais, mas nao editar este cadastro.</p> : null}
           <div className="admin-form-grid">
             <AdminField label="Nome">
-              <input value={newProfessional.name} onChange={(event) => setNewProfessional((current) => ({ ...current, name: event.target.value }))} />
+              <input disabled={professionalsReadOnly} value={newProfessional.name} onChange={(event) => setNewProfessional((current) => ({ ...current, name: event.target.value }))} />
             </AdminField>
             <AdminField label="Funcao">
-              <input value={newProfessional.role} onChange={(event) => setNewProfessional((current) => ({ ...current, role: event.target.value }))} />
+              <input disabled={professionalsReadOnly} value={newProfessional.role} onChange={(event) => setNewProfessional((current) => ({ ...current, role: event.target.value }))} />
             </AdminField>
           </div>
           <InlineImageUploadField
@@ -362,8 +395,9 @@ export function TenantModuleManagementSection({
             manualLabel="URL do avatar"
             value={newProfessional.avatar}
             alt={newProfessional.name || 'Avatar do profissional'}
-            uploading={uploadingAssetKey === 'new-professional-avatar'}
+            uploading={capabilityState.canUploadMedia && uploadingAssetKey === 'new-professional-avatar'}
             uploadingLabel="Enviando avatar..."
+            disabled={professionalsReadOnly || !capabilityState.canUploadMedia}
             onChange={(value) => setNewProfessional((current) => ({ ...current, avatar: value }))}
             onUpload={(file) =>
               handleInlineUpload({
@@ -380,7 +414,7 @@ export function TenantModuleManagementSection({
             onRemove={() => setNewProfessional((current) => ({ ...current, avatar: '' }))}
           />
           <Button
-            disabled={!newProfessional.name.trim() || busyKey === 'create-professional'}
+            disabled={professionalsReadOnly || !newProfessional.name.trim() || busyKey === 'create-professional'}
             onClick={async () => {
               await moduleActions?.createProfessional?.(newProfessional);
               setNewProfessional(initialProfessional());
@@ -396,6 +430,7 @@ export function TenantModuleManagementSection({
                   <div className="admin-form-grid">
                     <AdminField label="Nome">
                       <input
+                        disabled={professionalsReadOnly}
                         value={professional.name || ''}
                         onChange={(event) =>
                           setEditingProfessionals((current) =>
@@ -406,6 +441,7 @@ export function TenantModuleManagementSection({
                     </AdminField>
                     <AdminField label="Funcao">
                       <input
+                        disabled={professionalsReadOnly}
                         value={professional.role || ''}
                         onChange={(event) =>
                           setEditingProfessionals((current) =>
@@ -420,8 +456,9 @@ export function TenantModuleManagementSection({
                     manualLabel="URL do avatar"
                     value={professional.avatar || ''}
                     alt={professional.name || 'Avatar do profissional'}
-                    uploading={uploadingAssetKey === `professional-${index}`}
+                    uploading={capabilityState.canUploadMedia && uploadingAssetKey === `professional-${index}`}
                     uploadingLabel="Enviando avatar..."
+                    disabled={professionalsReadOnly || !capabilityState.canUploadMedia}
                     onChange={(value) =>
                       setEditingProfessionals((current) =>
                         updateListItem(current, index, (item) => ({ ...item, avatar: value })),
@@ -450,7 +487,7 @@ export function TenantModuleManagementSection({
                   <div className="admin-inline-actions">
                     <Button
                       variant="secondary"
-                      disabled={!professional.name?.trim() || busyKey === 'update-professional'}
+                      disabled={professionalsReadOnly || !professional.name?.trim() || busyKey === 'update-professional'}
                       onClick={() => moduleActions?.updateProfessional?.(professional.id, professional)}
                     >
                       {busyKey === 'update-professional' ? 'Salvando...' : 'Salvar profissional'}
@@ -458,7 +495,7 @@ export function TenantModuleManagementSection({
                     <Button
                       variant="secondary"
                       className="button--danger-tone"
-                      disabled={busyKey === 'delete-professional'}
+                      disabled={professionalsReadOnly || busyKey === 'delete-professional'}
                       onClick={() => moduleActions?.deleteProfessional?.(professional.id)}
                     >
                       {busyKey === 'delete-professional' ? 'Removendo...' : 'Remover'}
@@ -475,21 +512,22 @@ export function TenantModuleManagementSection({
 
       {activeTab === 'services' ? (
         <div className="admin-card-stack">
+          {servicesReadOnly ? <p className="admin-muted-copy">Seu nivel atual pode visualizar servicos, mas nao editar este cadastro.</p> : null}
           <div className="admin-form-grid">
             <AdminField label="Servico">
-              <input value={newAppointmentService.name} onChange={(event) => setNewAppointmentService((current) => ({ ...current, name: event.target.value }))} />
+              <input disabled={servicesReadOnly} value={newAppointmentService.name} onChange={(event) => setNewAppointmentService((current) => ({ ...current, name: event.target.value }))} />
             </AdminField>
             <AdminField label="Preco">
-              <input type="number" min="0" step="0.01" value={newAppointmentService.price} onChange={(event) => setNewAppointmentService((current) => ({ ...current, price: Number(event.target.value) }))} />
+              <input disabled={servicesReadOnly} type="number" min="0" step="0.01" value={newAppointmentService.price} onChange={(event) => setNewAppointmentService((current) => ({ ...current, price: Number(event.target.value) }))} />
             </AdminField>
             <AdminField label="Duracao (min)">
-              <input type="number" min="5" step="5" value={newAppointmentService.durationMinutes} onChange={(event) => setNewAppointmentService((current) => ({ ...current, durationMinutes: Number(event.target.value) }))} />
+              <input disabled={servicesReadOnly} type="number" min="5" step="5" value={newAppointmentService.durationMinutes} onChange={(event) => setNewAppointmentService((current) => ({ ...current, durationMinutes: Number(event.target.value) }))} />
             </AdminField>
           </div>
           <AdminField label="Descricao">
-            <textarea rows="3" value={newAppointmentService.description} onChange={(event) => setNewAppointmentService((current) => ({ ...current, description: event.target.value }))} />
+            <textarea disabled={servicesReadOnly} rows="3" value={newAppointmentService.description} onChange={(event) => setNewAppointmentService((current) => ({ ...current, description: event.target.value }))} />
           </AdminField>
-          <Button disabled={!newAppointmentService.name.trim() || busyKey === 'create-appointment-service'} onClick={async () => {
+          <Button disabled={servicesReadOnly || !newAppointmentService.name.trim() || busyKey === 'create-appointment-service'} onClick={async () => {
             await moduleActions?.createAppointmentService?.(newAppointmentService);
             setNewAppointmentService(initialAppointmentService());
           }}>
@@ -502,23 +540,23 @@ export function TenantModuleManagementSection({
                 <div key={service.id || index} className="admin-repeater-card">
                   <div className="admin-form-grid">
                     <AdminField label="Servico">
-                      <input value={service.name || ''} onChange={(event) => setEditingAppointmentServices((current) => updateListItem(current, index, (item) => ({ ...item, name: event.target.value })))} />
+                      <input disabled={servicesReadOnly} value={service.name || ''} onChange={(event) => setEditingAppointmentServices((current) => updateListItem(current, index, (item) => ({ ...item, name: event.target.value })))} />
                     </AdminField>
                     <AdminField label="Preco">
-                      <input type="number" min="0" step="0.01" value={service.price ?? 0} onChange={(event) => setEditingAppointmentServices((current) => updateListItem(current, index, (item) => ({ ...item, price: Number(event.target.value) })))} />
+                      <input disabled={servicesReadOnly} type="number" min="0" step="0.01" value={service.price ?? 0} onChange={(event) => setEditingAppointmentServices((current) => updateListItem(current, index, (item) => ({ ...item, price: Number(event.target.value) })))} />
                     </AdminField>
                     <AdminField label="Duracao (min)">
-                      <input type="number" min="5" step="5" value={service.durationMinutes ?? 30} onChange={(event) => setEditingAppointmentServices((current) => updateListItem(current, index, (item) => ({ ...item, durationMinutes: Number(event.target.value) })))} />
+                      <input disabled={servicesReadOnly} type="number" min="5" step="5" value={service.durationMinutes ?? 30} onChange={(event) => setEditingAppointmentServices((current) => updateListItem(current, index, (item) => ({ ...item, durationMinutes: Number(event.target.value) })))} />
                     </AdminField>
                   </div>
                   <AdminField label="Descricao">
-                    <textarea rows="3" value={service.description || ''} onChange={(event) => setEditingAppointmentServices((current) => updateListItem(current, index, (item) => ({ ...item, description: event.target.value })))} />
+                    <textarea disabled={servicesReadOnly} rows="3" value={service.description || ''} onChange={(event) => setEditingAppointmentServices((current) => updateListItem(current, index, (item) => ({ ...item, description: event.target.value })))} />
                   </AdminField>
                   <div className="admin-inline-actions">
-                    <Button variant="secondary" disabled={!service.name?.trim() || busyKey === 'update-appointment-service'} onClick={() => moduleActions?.updateAppointmentService?.(service.id, service)}>
+                    <Button variant="secondary" disabled={servicesReadOnly || !service.name?.trim() || busyKey === 'update-appointment-service'} onClick={() => moduleActions?.updateAppointmentService?.(service.id, service)}>
                       {busyKey === 'update-appointment-service' ? 'Salvando...' : 'Salvar servico'}
                     </Button>
-                    <Button variant="secondary" className="button--danger-tone" disabled={busyKey === 'delete-appointment-service'} onClick={() => moduleActions?.deleteAppointmentService?.(service.id)}>
+                    <Button variant="secondary" className="button--danger-tone" disabled={servicesReadOnly || busyKey === 'delete-appointment-service'} onClick={() => moduleActions?.deleteAppointmentService?.(service.id)}>
                       {busyKey === 'delete-appointment-service' ? 'Removendo...' : 'Remover'}
                     </Button>
                   </div>
@@ -533,6 +571,7 @@ export function TenantModuleManagementSection({
 
       {activeTab === 'catalog' ? (
         <div className="admin-card-stack">
+          {catalogReadOnly ? <p className="admin-muted-copy">Seu nivel atual pode visualizar o catalogo, mas nao editar produtos.</p> : null}
           <datalist id={categorySuggestionsId}>
             {categorySuggestions.map((category) => (
               <option key={category} value={category} />
@@ -541,21 +580,22 @@ export function TenantModuleManagementSection({
 
           <div className="admin-form-grid">
             <AdminField label="Produto">
-              <input value={newProduct.name} onChange={(event) => setNewProduct((current) => ({ ...current, name: event.target.value }))} />
+              <input disabled={catalogReadOnly} value={newProduct.name} onChange={(event) => setNewProduct((current) => ({ ...current, name: event.target.value }))} />
             </AdminField>
             <AdminField label="Categoria">
-              <input list={categorySuggestionsId} value={newProduct.category} onChange={(event) => setNewProduct((current) => ({ ...current, category: event.target.value }))} />
+              <input disabled={catalogReadOnly} list={categorySuggestionsId} value={newProduct.category} onChange={(event) => setNewProduct((current) => ({ ...current, category: event.target.value }))} />
             </AdminField>
             <AdminField label="Preco">
-              <input type="number" min="0" step="0.01" value={newProduct.price} onChange={(event) => setNewProduct((current) => ({ ...current, price: Number(event.target.value) }))} />
+              <input disabled={catalogReadOnly} type="number" min="0" step="0.01" value={newProduct.price} onChange={(event) => setNewProduct((current) => ({ ...current, price: Number(event.target.value) }))} />
             </AdminField>
           </div>
           <InlineImageUploadField
             label="Imagem do produto"
             value={newProduct.image}
             alt={newProduct.name || 'Imagem do produto'}
-            uploading={uploadingAssetKey === 'new-product-image'}
+            uploading={capabilityState.canUploadMedia && uploadingAssetKey === 'new-product-image'}
             uploadingLabel="Enviando imagem..."
+            disabled={catalogReadOnly || !capabilityState.canUploadMedia}
             onChange={(value) => setNewProduct((current) => ({ ...current, image: value, imagePublicId: '' }))}
             onUpload={(file) =>
               handleInlineUpload({
@@ -573,9 +613,9 @@ export function TenantModuleManagementSection({
             onRemove={() => setNewProduct((current) => ({ ...current, image: '', imagePublicId: '' }))}
           />
           <AdminField label="Descricao">
-            <textarea rows="3" value={newProduct.description} onChange={(event) => setNewProduct((current) => ({ ...current, description: event.target.value }))} />
+            <textarea disabled={catalogReadOnly} rows="3" value={newProduct.description} onChange={(event) => setNewProduct((current) => ({ ...current, description: event.target.value }))} />
           </AdminField>
-          <Button disabled={!newProduct.name.trim() || busyKey === 'create-product'} onClick={async () => {
+          <Button disabled={catalogReadOnly || !newProduct.name.trim() || busyKey === 'create-product'} onClick={async () => {
             await moduleActions?.createProduct?.(newProduct);
             setNewProduct(initialProduct());
           }}>
@@ -588,21 +628,22 @@ export function TenantModuleManagementSection({
                 <div key={product.id || index} className="admin-repeater-card">
                   <div className="admin-form-grid">
                     <AdminField label="Produto">
-                      <input value={product.name || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, name: event.target.value })))} />
+                      <input disabled={catalogReadOnly} value={product.name || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, name: event.target.value })))} />
                     </AdminField>
                     <AdminField label="Categoria">
-                      <input list={categorySuggestionsId} value={product.category || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, category: event.target.value })))} />
+                      <input disabled={catalogReadOnly} list={categorySuggestionsId} value={product.category || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, category: event.target.value })))} />
                     </AdminField>
                     <AdminField label="Preco">
-                      <input type="number" min="0" step="0.01" value={product.price ?? 0} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, price: Number(event.target.value) })))} />
+                      <input disabled={catalogReadOnly} type="number" min="0" step="0.01" value={product.price ?? 0} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, price: Number(event.target.value) })))} />
                     </AdminField>
                   </div>
                   <InlineImageUploadField
                     label="Imagem do produto"
                     value={product.image || ''}
                     alt={product.name || 'Imagem do produto'}
-                    uploading={uploadingAssetKey === `product-${index}`}
+                    uploading={capabilityState.canUploadMedia && uploadingAssetKey === `product-${index}`}
                     uploadingLabel="Enviando imagem..."
+                    disabled={catalogReadOnly || !capabilityState.canUploadMedia}
                     onChange={(value) =>
                       setEditingProducts((current) =>
                         updateListItem(current, index, (item) => ({
@@ -638,13 +679,13 @@ export function TenantModuleManagementSection({
                     }
                   />
                   <AdminField label="Descricao">
-                    <textarea rows="3" value={product.description || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, description: event.target.value })))} />
+                    <textarea disabled={catalogReadOnly} rows="3" value={product.description || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, description: event.target.value })))} />
                   </AdminField>
                   <div className="admin-inline-actions">
-                    <Button variant="secondary" disabled={!product.name?.trim() || busyKey === 'update-product'} onClick={() => moduleActions?.updateProduct?.(product.id, product)}>
+                    <Button variant="secondary" disabled={catalogReadOnly || !product.name?.trim() || busyKey === 'update-product'} onClick={() => moduleActions?.updateProduct?.(product.id, product)}>
                       {busyKey === 'update-product' ? 'Salvando...' : 'Salvar produto'}
                     </Button>
-                    <Button variant="secondary" className="button--danger-tone" disabled={busyKey === 'delete-product'} onClick={() => moduleActions?.deleteProduct?.(product.id)}>
+                    <Button variant="secondary" className="button--danger-tone" disabled={catalogReadOnly || busyKey === 'delete-product'} onClick={() => moduleActions?.deleteProduct?.(product.id)}>
                       {busyKey === 'delete-product' ? 'Removendo...' : 'Remover'}
                     </Button>
                   </div>

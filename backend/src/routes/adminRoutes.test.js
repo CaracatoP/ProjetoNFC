@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import { hashPassword } from '../utils/password.js';
 
 let app;
 let connectDatabase;
@@ -96,6 +97,8 @@ describe('Admin routes', () => {
 
     expect(persistedAdmin).toBeTruthy();
     expect(persistedAdmin.roles).toContain('superadmin');
+    expect(persistedAdmin.roleLevel).toBe(0);
+    expect(persistedAdmin.bootstrapManaged).toBe(true);
     expect(persistedAdmin.passwordHash).toBeTruthy();
 
     const invalidLoginResponse = await request(app).post('/api/admin/auth/login').send({
@@ -105,6 +108,112 @@ describe('Admin routes', () => {
 
     expect(invalidLoginResponse.status).toBe(401);
     expect(invalidLoginResponse.body.error.code).toBe('admin_invalid_credentials');
+  });
+
+  it('normalizes the bootstrap admin to level 0 when a legacy record already exists', async () => {
+    await User.deleteMany({});
+    const passwordHash = await hashPassword('admin123456');
+
+    await User.collection.insertOne({
+      name: 'Operacao TapLink',
+      email: 'admin@nfc.local',
+      passwordHash,
+      roles: ['superadmin'],
+      status: 'active',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const loginResponse = await request(app).post('/api/admin/auth/login').send({
+      username: 'admin@nfc.local',
+      password: 'admin123456',
+    });
+
+    expect(loginResponse.status).toBe(200);
+
+    const persistedAdmin = await User.findOne({ email: 'admin@nfc.local' }).lean();
+
+    expect(persistedAdmin).toBeTruthy();
+    expect(persistedAdmin.roles).toContain('superadmin');
+    expect(persistedAdmin.roleLevel).toBe(0);
+    expect(persistedAdmin.bootstrapManaged).toBe(true);
+  });
+
+  it('normalizes legacy internal admin users without roleLevel to level 1', async () => {
+    await User.collection.insertOne({
+      name: 'Equipe Operacional',
+      email: 'ops@nfc.local',
+      passwordHash: await hashPassword('ops123456'),
+      roles: ['admin'],
+      status: 'active',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const loginResponse = await request(app).post('/api/admin/auth/login').send({
+      username: 'admin@nfc.local',
+      password: 'admin123456',
+    });
+
+    expect(loginResponse.status).toBe(200);
+
+    const persistedInternalAdmin = await User.findOne({ email: 'ops@nfc.local' }).lean();
+
+    expect(persistedInternalAdmin).toBeTruthy();
+    expect(persistedInternalAdmin.roleLevel).toBe(1);
+    expect(persistedInternalAdmin.bootstrapManaged).not.toBe(true);
+  });
+
+  it('does not promote a user without internal markers to level 0', async () => {
+    await User.collection.insertOne({
+      name: 'Cliente Sem Marcador',
+      email: 'cliente@nfc.local',
+      passwordHash: await hashPassword('cliente123456'),
+      roles: [],
+      status: 'active',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const loginResponse = await request(app).post('/api/admin/auth/login').send({
+      username: 'admin@nfc.local',
+      password: 'admin123456',
+    });
+
+    expect(loginResponse.status).toBe(200);
+
+    const nonInternalUser = await User.findOne({ email: 'cliente@nfc.local' }).lean();
+
+    expect(nonInternalUser).toBeTruthy();
+    expect(nonInternalUser.roleLevel).toBeUndefined();
+    expect(nonInternalUser.bootstrapManaged).not.toBe(true);
+  });
+
+  it('fails clearly when bootstrap email points to a non-internal user', async () => {
+    await User.deleteMany({});
+
+    await User.collection.insertOne({
+      name: 'Conta Errada',
+      email: 'admin@nfc.local',
+      passwordHash: await hashPassword('admin123456'),
+      roles: [],
+      status: 'active',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const loginResponse = await request(app).post('/api/admin/auth/login').send({
+      username: 'admin@nfc.local',
+      password: 'admin123456',
+    });
+
+    expect(loginResponse.status).toBe(500);
+    expect(loginResponse.body.error.code).toBe('admin_bootstrap_conflict');
+
+    const persistedUser = await User.findOne({ email: 'admin@nfc.local' }).lean();
+
+    expect(persistedUser).toBeTruthy();
+    expect(persistedUser.roleLevel).toBeUndefined();
   });
 
   it('rejects login for disabled admin users', async () => {

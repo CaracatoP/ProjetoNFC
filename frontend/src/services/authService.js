@@ -27,7 +27,55 @@ export function buildAdminAuthHeaders(token) {
     : {};
 }
 
+export function getStoredSessionToken() {
+  return getStoredAdminToken();
+}
+
+export function setStoredSessionToken(token) {
+  setStoredAdminToken(token);
+}
+
+export function buildSessionAuthHeaders(token) {
+  return buildAdminAuthHeaders(token);
+}
+
+export async function loginSession(credentials) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/auth/login`, {
+    method: 'POST',
+    body: JSON.stringify(credentials),
+  });
+
+  return response.data;
+}
+
+export async function fetchSession(token) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/auth/me`, {
+    headers: buildSessionAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
+export async function logoutSession(token) {
+  await apiRequest(`${appConfig.apiBaseUrl}/auth/logout`, {
+    method: 'POST',
+    headers: buildSessionAuthHeaders(token),
+  });
+}
+
 export async function loginAdmin(credentials) {
+  return loginSession(credentials);
+}
+
+export async function fetchAdminSession(token) {
+  return fetchSession(token);
+}
+
+export async function logoutAdmin(token) {
+  return logoutSession(token);
+}
+
+export async function loginLegacyAdmin(credentials) {
   const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/auth/login`, {
     method: 'POST',
     body: JSON.stringify(credentials),
@@ -36,7 +84,7 @@ export async function loginAdmin(credentials) {
   return response.data;
 }
 
-export async function fetchAdminSession(token) {
+export async function fetchLegacyAdminSession(token) {
   const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/auth/session`, {
     headers: buildAdminAuthHeaders(token),
   });
@@ -44,7 +92,7 @@ export async function fetchAdminSession(token) {
   return response.data;
 }
 
-export async function logoutAdmin(token) {
+export async function logoutLegacyAdmin(token) {
   await apiRequest(`${appConfig.apiBaseUrl}/admin/auth/logout`, {
     method: 'POST',
     headers: buildAdminAuthHeaders(token),

@@ -2124,6 +2124,11 @@ img {
   background: color-mix(in srgb, var(--theme-primary) 16%, transparent);
 }
 
+.admin-section-chip--warning {
+  border-color: color-mix(in srgb, #f97316 36%, var(--theme-border));
+  background: color-mix(in srgb, #f97316 18%, transparent);
+}
+
 .admin-toggle-button {
   min-height: 40px;
   padding-inline: 0.95rem;
@@ -3656,6 +3661,63 @@ img {
   background: color-mix(in srgb, var(--theme-surface-alt) 58%, transparent);
 }
 
+.dashboard-shell .admin-clients-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  gap: 1.35rem;
+  align-items: start;
+}
+
+.dashboard-shell .admin-clients-sidebar {
+  display: grid;
+  gap: 1.1rem;
+}
+
+.dashboard-shell .admin-client-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.dashboard-shell .admin-client-list__button {
+  display: grid;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 1rem 1.05rem;
+  border-radius: calc(var(--radius-lg) - 0.45rem);
+  border: 1px solid color-mix(in srgb, var(--theme-border) 88%, transparent);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--theme-surface-alt) 72%, transparent), color-mix(in srgb, var(--theme-surface) 96%, transparent));
+  color: inherit;
+  text-align: left;
+  transition: border-color 180ms ease, transform 180ms ease, background 180ms ease;
+}
+
+.dashboard-shell .admin-client-list__button:hover {
+  border-color: color-mix(in srgb, var(--theme-primary) 24%, var(--theme-border));
+  transform: translateY(-1px);
+}
+
+.dashboard-shell .admin-client-list__button--selected {
+  border-color: color-mix(in srgb, var(--theme-primary) 34%, var(--theme-border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-primary) 16%, transparent);
+}
+
+.dashboard-shell .admin-client-list__content {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.dashboard-shell .admin-client-list__content span,
+.dashboard-shell .admin-client-list__content small {
+  color: var(--theme-text-muted);
+}
+
+.dashboard-shell .admin-client-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
 .dashboard-shell .admin-analytics-view {
   display: grid;
   gap: clamp(1.35rem, 2vw, 1.85rem);
@@ -3947,6 +4009,10 @@ img {
 
   .dashboard-shell .admin-dashboard-switcher .button {
     flex: 1 1 0;
+  }
+
+  .dashboard-shell .admin-clients-layout {
+    grid-template-columns: 1fr;
   }
 
   .dashboard-shell .analytics-trend-chart {

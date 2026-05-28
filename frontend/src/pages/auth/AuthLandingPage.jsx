@@ -7,14 +7,14 @@ import { useAuth } from '@/context/AuthContext.jsx';
 
 export function AuthLandingPage() {
   const location = useLocation();
-  const { login, status, error, isAuthenticated } = useAuth();
+  const { login, status, error, isAuthenticated, homePath } = useAuth();
   const [form, setForm] = useState({
     email: '',
     password: '',
   });
   const [localError, setLocalError] = useState('');
 
-  const redirectTo = location.state?.from || '/dashboard';
+  const redirectTo = location.state?.from || homePath || '/dashboard';
   const submitting = status === 'loading';
   const visibleError = localError || error;
 
@@ -37,15 +37,15 @@ export function AuthLandingPage() {
         password: form.password,
       });
     } catch (loginError) {
-      setLocalError(loginError.message || 'Nao foi possivel iniciar a sessao administrativa.');
+      setLocalError(loginError.message || 'Nao foi possivel iniciar a sessao no painel.');
     }
   }
 
   return (
     <AppShell
-      eyebrow="TapLink Admin"
-      title="Painel interno para operar tenants"
-      description="Acesso reservado para sua operacao no TapLink. Cadastre comercios, ajuste conteudo, suba imagens e acompanhe analytics em um unico fluxo."
+      eyebrow="TapLink"
+      title="Painel de acesso ao seu tenant"
+      description="Entre com um usuario autorizado para operar o TapLink com o nivel certo de acesso, plano resolvido e escopo seguro por tenant."
       shellClassName="dashboard-shell dashboard-shell--auth"
       heroClassName="dashboard-shell__hero"
       contentClassName="dashboard-shell__content"
@@ -56,13 +56,13 @@ export function AuthLandingPage() {
           <div className="admin-panel-card__header">
             <div>
               <h2>Entrar no backoffice</h2>
-              <p>Use um usuario admin persistido no backend para acessar o painel TapLink com sessao segura.</p>
+              <p>Use seu e-mail e senha para entrar no painel TapLink com sessao segura e redirecionamento automatico por nivel.</p>
             </div>
           </div>
 
           <form className="admin-form admin-form--stack" onSubmit={handleSubmit}>
             <label className="admin-field">
-              <span>E-mail administrativo</span>
+              <span>E-mail de acesso</span>
               <input
                 type="email"
                 autoComplete="username"
@@ -79,7 +79,7 @@ export function AuthLandingPage() {
                 autoComplete="current-password"
                 value={form.password}
                 onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-                placeholder="Sua senha administrativa"
+                placeholder="Sua senha de acesso"
               />
             </label>
 

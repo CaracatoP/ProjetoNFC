@@ -12,6 +12,21 @@ export async function fetchAdminOverview(token) {
   return response.data;
 }
 
+function buildQueryString(filters = {}) {
+  const params = new URLSearchParams();
+
+  Object.entries(filters || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') {
+      return;
+    }
+
+    params.set(key, String(value));
+  });
+
+  const queryString = params.toString();
+  return queryString ? `?${queryString}` : '';
+}
+
 export async function listAdminBusinesses(token) {
   const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/businesses`, {
     headers: buildAdminAuthHeaders(token),
@@ -194,6 +209,100 @@ export async function updateTenantOrderStatus(token, businessId, orderId, status
     method: 'PATCH',
     headers: buildAdminAuthHeaders(token),
     body: JSON.stringify({ status }),
+  });
+
+  return response.data;
+}
+
+export async function listAdminClients(token, filters = {}) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/clients${buildQueryString(filters)}`, {
+    headers: buildAdminAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
+export async function getAdminClient(token, clientId) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/clients/${clientId}`, {
+    headers: buildAdminAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
+export async function createAdminClientAccount(token, payload) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/clients`, {
+    method: 'POST',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return response.data;
+}
+
+export async function updateAdminClientAccount(token, clientId, payload) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/clients/${clientId}`, {
+    method: 'PUT',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return response.data;
+}
+
+export async function updateAdminClientAccessLevel(token, clientId, roleLevel) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/clients/${clientId}/access-level`, {
+    method: 'PATCH',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify({ roleLevel }),
+  });
+
+  return response.data;
+}
+
+export async function resetAdminClientPassword(token, clientId, password) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/clients/${clientId}/reset-password`, {
+    method: 'PATCH',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify({ password }),
+  });
+
+  return response.data;
+}
+
+export async function blockAdminClient(token, clientId) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/clients/${clientId}/block`, {
+    method: 'PATCH',
+    headers: buildAdminAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
+export async function unblockAdminClient(token, clientId) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/clients/${clientId}/unblock`, {
+    method: 'PATCH',
+    headers: buildAdminAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
+export async function updateAdminClientPlan(token, clientId, planCode) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/clients/${clientId}/plan`, {
+    method: 'PATCH',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify({ planCode }),
+  });
+
+  return response.data;
+}
+
+export async function updateAdminClientBillingStatus(token, clientId, billingStatus) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/clients/${clientId}/billing-status`, {
+    method: 'PATCH',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify({ billingStatus }),
   });
 
   return response.data;

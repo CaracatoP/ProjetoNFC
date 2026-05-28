@@ -13,10 +13,19 @@ vi.mock('@/context/AuthContext.jsx', () => ({
 vi.mock('@/services/adminService.js', () => ({
   fetchAdminOverview: vi.fn(),
   listAdminBusinesses: vi.fn(),
+  listAdminClients: vi.fn(),
   getAdminBusiness: vi.fn(),
   createAdminBusiness: vi.fn(),
+  createAdminClientAccount: vi.fn(),
   updateAdminBusiness: vi.fn(),
   updateAdminBusinessStatus: vi.fn(),
+  updateAdminClientAccount: vi.fn(),
+  updateAdminClientAccessLevel: vi.fn(),
+  updateAdminClientBillingStatus: vi.fn(),
+  updateAdminClientPlan: vi.fn(),
+  resetAdminClientPassword: vi.fn(),
+  blockAdminClient: vi.fn(),
+  unblockAdminClient: vi.fn(),
   deleteAdminBusiness: vi.fn(),
   uploadAdminImage: vi.fn(),
   createTenantProfessional: vi.fn(),
@@ -341,11 +350,38 @@ describe('DashboardHomePage', () => {
     useAuth.mockReturnValue({
       token: 'admin-token',
       user: { displayName: 'Operacao TapLink' },
+      access: { capabilities: { canManageBilling: true } },
+      roleLevel: 0,
       logout: vi.fn(),
     });
 
     adminService.fetchAdminOverview.mockResolvedValue(overviewFixture);
     adminService.listAdminBusinesses.mockResolvedValue([businessFixture]);
+    adminService.listAdminClients.mockResolvedValue([
+      {
+        user: {
+          id: 'client-1',
+          displayName: 'Carlos Dono',
+          email: 'carlos@cliente.local',
+          roleLevel: 2,
+          status: 'active',
+        },
+        business: {
+          id: 'business-1',
+          name: 'Barbearia Estilo Vivo',
+          slug: 'barbearia-estilo-vivo',
+        },
+        subscription: {
+          plan: {
+            code: 'premium',
+            name: 'Premium',
+          },
+        },
+        access: {
+          billingStatus: 'paid',
+        },
+      },
+    ]);
     adminService.getAdminBusiness.mockResolvedValue(editorFixture);
     adminService.createAdminBusiness.mockResolvedValue({
       ...editorFixture,
@@ -368,6 +404,29 @@ describe('DashboardHomePage', () => {
     adminService.uploadAdminImage.mockResolvedValue({
       url: 'https://res.cloudinary.com/demo/image/upload/v1/taplink/barbearia-estilo-vivo/logo.png',
       publicId: 'taplink/barbearia-estilo-vivo/logo-demo',
+    });
+    adminService.createAdminClientAccount.mockResolvedValue({
+      user: {
+        id: 'client-2',
+        displayName: 'Cliente Novo',
+        email: 'novo@cliente.local',
+        roleLevel: 2,
+        status: 'active',
+      },
+      business: {
+        id: 'business-1',
+        name: 'Barbearia Estilo Vivo',
+        slug: 'barbearia-estilo-vivo',
+      },
+      subscription: {
+        plan: {
+          code: 'starter',
+          name: 'Starter',
+        },
+      },
+      access: {
+        billingStatus: 'trial',
+      },
     });
   });
 
@@ -883,6 +942,42 @@ describe('DashboardHomePage', () => {
     expect(screen.getByText('Visitas ao longo do tempo')).toBeInTheDocument();
     expect(screen.getByText('Atalhos mais usados')).toBeInTheDocument();
     expect(screen.queryByText('Novo comercio')).not.toBeInTheDocument();
+  });
+
+  it('opens the clients area and allows the super admin to create a tenant-linked access', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Clientes/i }));
+
+    expect(await screen.findByText('Base comercial')).toBeInTheDocument();
+
+    const createCard = screen.getByText('Cadastrar cliente').closest('section');
+    const createScope = within(createCard);
+
+    await user.type(createScope.getByLabelText('Nome'), 'Cliente Novo');
+    await user.type(createScope.getByLabelText('E-mail'), 'novo@cliente.local');
+    await user.type(createScope.getByLabelText('Senha inicial'), 'senha12345');
+    await user.click(createScope.getByRole('button', { name: /Criar cliente/i }));
+
+    await waitFor(() => {
+      expect(adminService.createAdminClientAccount).toHaveBeenCalledWith(
+        'admin-token',
+        expect.objectContaining({
+          name: 'Cliente Novo',
+          email: 'novo@cliente.local',
+          businessId: 'business-1',
+          roleLevel: 2,
+        }),
+      );
+    });
   });
 
   it('persists removed quick actions in the save payload instead of recreating them', async () => {

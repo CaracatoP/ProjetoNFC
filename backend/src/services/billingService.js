@@ -18,7 +18,7 @@ const DEFAULT_PLAN_DEFINITIONS = [
     priceCents: 4900,
     currency: 'BRL',
     active: true,
-    features: ['tenant com branding completo', 'analytics basico', 'uploads de midia'],
+    features: ['tenant com branding completo', 'catalogo e modulos essenciais', 'uploads de midia'],
   },
   {
     code: 'pro',
@@ -27,7 +27,16 @@ const DEFAULT_PLAN_DEFINITIONS = [
     priceCents: 9900,
     currency: 'BRL',
     active: true,
-    features: ['multiplos fluxos', 'dominio customizado', 'recursos premium'],
+    features: ['analytics basico', 'dominio customizado', 'operacao multi-modulo'],
+  },
+  {
+    code: 'premium',
+    name: 'Premium',
+    type: PLAN_TYPES.PREMIUM,
+    priceCents: 14900,
+    currency: 'BRL',
+    active: true,
+    features: ['analytics avancado', 'mais autonomia operacional', 'recursos premium'],
   },
   {
     code: 'enterprise',
@@ -36,7 +45,7 @@ const DEFAULT_PLAN_DEFINITIONS = [
     priceCents: 0,
     currency: 'BRL',
     active: true,
-    features: ['SLA', 'customizacoes avancadas', 'suporte dedicado'],
+    features: ['analytics completo', 'customizacoes avancadas', 'suporte dedicado'],
   },
 ];
 

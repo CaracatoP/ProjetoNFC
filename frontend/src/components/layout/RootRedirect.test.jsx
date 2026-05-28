@@ -12,6 +12,7 @@ describe('RootRedirect', () => {
     useAuth.mockReturnValue({
       status: 'idle',
       isAuthenticated: false,
+      homePath: '/dashboard',
     });
 
     render(
@@ -26,10 +27,11 @@ describe('RootRedirect', () => {
     expect(await screen.findByText('Auth')).toBeInTheDocument();
   });
 
-  it('redirects authenticated users to /dashboard', async () => {
+  it('redirects authenticated admins to /dashboard', async () => {
     useAuth.mockReturnValue({
       status: 'idle',
       isAuthenticated: true,
+      homePath: '/dashboard',
     });
 
     render(
@@ -42,5 +44,24 @@ describe('RootRedirect', () => {
     );
 
     expect(await screen.findByText('Dashboard')).toBeInTheDocument();
+  });
+
+  it('redirects authenticated tenant users to /panel', async () => {
+    useAuth.mockReturnValue({
+      status: 'idle',
+      isAuthenticated: true,
+      homePath: '/panel',
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<RootRedirect />} />
+          <Route path="/panel" element={<div>Painel</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Painel')).toBeInTheDocument();
   });
 });

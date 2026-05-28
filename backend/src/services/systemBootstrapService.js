@@ -4,10 +4,61 @@ import { countAdminUsers, createAdminUser, findAdminUserByEmail, updateAdminUser
 import { AppError } from '../utils/appError.js';
 import { logger } from '../utils/logger.js';
 import { hashPassword } from '../utils/password.js';
+import { User } from '../models/User.js';
 import { ensureDefaultPlans } from './billingService.js';
+
+const SUPER_ADMIN_ROLE_LEVEL = 0;
+const INTERNAL_ADMIN_ROLE_LEVEL = 1;
+
+function buildMissingRoleLevelQuery() {
+  return {
+    $or: [{ roleLevel: { $exists: false } }, { roleLevel: null }],
+  };
+}
 
 function normalizeBootstrapRole(role) {
   return role === ADMIN_ROLES.ADMIN ? ADMIN_ROLES.ADMIN : ADMIN_ROLES.SUPERADMIN;
+}
+
+function userHasRole(user, role) {
+  return Array.isArray(user?.roles) && user.roles.includes(role);
+}
+
+function isClearlyInternalLegacyUser(user) {
+  return userHasRole(user, ADMIN_ROLES.ADMIN) || userHasRole(user, ADMIN_ROLES.SUPERADMIN);
+}
+
+function canPromoteExistingBootstrapUser(user) {
+  return Boolean(user?.bootstrapManaged || user?.roleLevel === SUPER_ADMIN_ROLE_LEVEL || userHasRole(user, ADMIN_ROLES.SUPERADMIN));
+}
+
+export async function normalizeLegacyInternalUsers() {
+  const missingRoleLevelQuery = buildMissingRoleLevelQuery();
+
+  await User.updateMany(
+    {
+      ...missingRoleLevelQuery,
+      roles: ADMIN_ROLES.SUPERADMIN,
+    },
+    {
+      $set: {
+        roleLevel: SUPER_ADMIN_ROLE_LEVEL,
+      },
+    },
+  );
+
+  await User.updateMany(
+    {
+      ...missingRoleLevelQuery,
+      roles: ADMIN_ROLES.ADMIN,
+      $nor: [{ roles: ADMIN_ROLES.SUPERADMIN }],
+    },
+    {
+      $set: {
+        roleLevel: INTERNAL_ADMIN_ROLE_LEVEL,
+      },
+    },
+  );
 }
 
 function validateRuntimeConfiguration() {
@@ -56,6 +107,8 @@ export async function ensureBootstrapAdminUser() {
   const email = String(env.adminBootstrapEmail || '').trim().toLowerCase();
   const password = String(env.adminBootstrapPassword || '');
 
+  await normalizeLegacyInternalUsers();
+
   if (!email || !password) {
     return null;
   }
@@ -69,11 +122,37 @@ export async function ensureBootstrapAdminUser() {
       email,
       passwordHash,
       roles: [normalizeBootstrapRole(env.adminBootstrapRole)],
+      roleLevel: SUPER_ADMIN_ROLE_LEVEL,
+      bootstrapManaged: true,
       status: ADMIN_USER_STATUS.ACTIVE,
     });
 
     logger.info({ email }, 'Bootstrap admin user created');
     return user;
+  }
+
+  if (!isClearlyInternalLegacyUser(existingUser) && !existingUser.bootstrapManaged) {
+    logger.error(
+      { email, userId: String(existingUser._id) },
+      'Bootstrap admin email points to a non-internal user and cannot be promoted automatically',
+    );
+    throw new AppError(
+      'O e-mail de bootstrap aponta para um usuario sem marcador interno. Corrija a configuracao antes de continuar.',
+      500,
+      'admin_bootstrap_conflict',
+    );
+  }
+
+  if (!canPromoteExistingBootstrapUser(existingUser)) {
+    logger.error(
+      { email, userId: String(existingUser._id), roles: existingUser.roles || [], roleLevel: existingUser.roleLevel ?? null },
+      'Bootstrap admin email points to an internal user that is not eligible for automatic level-0 promotion',
+    );
+    throw new AppError(
+      'O e-mail de bootstrap aponta para um usuario interno que nao pode ser promovido automaticamente a nivel 0.',
+      500,
+      'admin_bootstrap_conflict',
+    );
   }
 
   const nextRoles = Array.from(
@@ -91,6 +170,14 @@ export async function ensureBootstrapAdminUser() {
 
   if (nextRoles.length !== (existingUser.roles || []).length) {
     updatePayload.roles = nextRoles;
+  }
+
+  if (existingUser.roleLevel !== SUPER_ADMIN_ROLE_LEVEL) {
+    updatePayload.roleLevel = SUPER_ADMIN_ROLE_LEVEL;
+  }
+
+  if (!existingUser.bootstrapManaged) {
+    updatePayload.bootstrapManaged = true;
   }
 
   if (!Object.keys(updatePayload).length) {
