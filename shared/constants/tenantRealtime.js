@@ -14,6 +14,7 @@ export const TENANT_REALTIME_KINDS = Object.freeze({
   APPOINTMENT_SERVICE_DELETED: 'appointment_service_deleted',
   ORDER_CREATED: 'order_created',
   ORDER_STATUS_UPDATED: 'order_status_updated',
+  ORDER_ARCHIVED: 'order_archived',
   APPOINTMENT_CREATED: 'appointment_created',
   APPOINTMENT_STATUS_UPDATED: 'appointment_status_updated',
   PLAN_UPDATED: 'plan_updated',

@@ -25,6 +25,7 @@ vi.mock('@/services/clientPanelService.js', () => ({
   updateClientPanelAppointmentService: vi.fn(),
   deleteClientPanelAppointmentService: vi.fn(),
   updateClientPanelOrderStatus: vi.fn(),
+  deleteClientPanelOrder: vi.fn(),
   updateClientPanelAppointmentRequestStatus: vi.fn(),
 }));
 
@@ -198,6 +199,54 @@ describe('ClientPanelPage', () => {
         }),
       );
     });
+  });
+
+  it('lets client mode minimize and expand the basic settings card', async () => {
+    const user = userEvent.setup();
+    useAuth.mockReturnValue({
+      token: 'client-token',
+      user: { displayName: 'Cliente Dono', roleLevel: 2 },
+      subscription: { plan: { name: 'Premium' } },
+      access: {
+        billingStatus: 'paid',
+        analyticsScope: 'advanced',
+        capabilities: {
+          canEditTenantBasics: true,
+          canUploadMedia: true,
+          canViewCatalog: true,
+          canEditCatalog: true,
+          canViewOrders: true,
+          canManageOrders: true,
+          canViewAppointments: true,
+          canManageAppointments: true,
+          canViewProfessionals: true,
+          canEditProfessionals: true,
+          canViewServices: true,
+          canEditServices: true,
+          canViewAnalytics: true,
+        },
+      },
+      isSuspendedClientAccess: false,
+      logout: vi.fn(),
+    });
+
+    render(
+      <MemoryRouter>
+        <ClientPanelPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Dados publicos do negocio')).toBeInTheDocument();
+    expect(screen.getByLabelText('Nome do negocio')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Minimizar configuracoes basicas/i }));
+
+    expect(screen.queryByLabelText('Nome do negocio')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Expandir configuracoes basicas/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Expandir configuracoes basicas/i }));
+
+    expect(screen.getByLabelText('Nome do negocio')).toBeInTheDocument();
   });
 
   it('keeps the panel read-only for level 5 users', async () => {

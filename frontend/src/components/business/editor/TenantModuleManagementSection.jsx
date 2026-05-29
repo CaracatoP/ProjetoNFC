@@ -200,6 +200,11 @@ export function TenantModuleManagementSection({
   const [orderFilter, setOrderFilter] = useState('all');
   const [appointmentFilter, setAppointmentFilter] = useState('all');
   const [uploadingAssetKey, setUploadingAssetKey] = useState('');
+  const [catalogProductsCollapsed, setCatalogProductsCollapsed] = useState(false);
+  const [collapsedOrderGroups, setCollapsedOrderGroups] = useState(() =>
+    Object.fromEntries(ORDER_STATUS_ORDER.map((status) => [status, status !== 'received'])),
+  );
+  const [pendingOrderArchiveId, setPendingOrderArchiveId] = useState('');
   const capabilityState = {
     canConfigureModules: mode === 'admin',
     canViewCatalog: permissions.canViewCatalog ?? true,
@@ -337,6 +342,7 @@ export function TenantModuleManagementSection({
   const preset = getSegmentPreset(segmentState.segment);
   const busyMessage = getBusyMessage(busyKey);
   const ordersBusy = busyKey === 'update-order-status' || !capabilityState.canManageOrders;
+  const archiveOrderBusy = busyKey === 'delete-order' || !capabilityState.canManageOrders;
   const appointmentsBusy = busyKey === 'update-appointment-request-status' || !capabilityState.canManageAppointments;
   const catalogReadOnly = !capabilityState.canEditCatalog;
   const professionalsReadOnly = !capabilityState.canEditProfessionals;
@@ -361,6 +367,26 @@ export function TenantModuleManagementSection({
     if (isClientMode) {
       setIsClientCreateProductOpen(false);
     }
+  }
+
+  function isOrderGroupCollapsed(status) {
+    if (!isClientMode) {
+      return false;
+    }
+
+    return collapsedOrderGroups[status] ?? status !== 'received';
+  }
+
+  function toggleOrderGroup(status) {
+    setCollapsedOrderGroups((current) => ({
+      ...current,
+      [status]: !isOrderGroupCollapsed(status),
+    }));
+  }
+
+  async function handleArchiveOrder(orderId) {
+    await moduleActions?.deleteOrder?.(orderId);
+    setPendingOrderArchiveId('');
   }
 
   return (
@@ -812,8 +838,26 @@ export function TenantModuleManagementSection({
           )}
 
           {editingProducts.length ? (
-            <div className="admin-repeater-list">
-              {filteredEditingProducts.map(({ product, originalIndex }) => (
+            <section className="admin-card-stack admin-product-existing-section">
+              {isClientMode ? (
+                <div className="admin-product-existing-section__header">
+                  <div className="admin-product-existing-section__copy">
+                    <strong>Produtos cadastrados</strong>
+                    <span>{editingProducts.length} item(ns) no catalogo atual.</span>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setCatalogProductsCollapsed((current) => !current)}
+                    aria-label={catalogProductsCollapsed ? 'Expandir produtos cadastrados' : 'Minimizar produtos cadastrados'}
+                  >
+                    {catalogProductsCollapsed ? 'Expandir' : 'Minimizar'}
+                  </Button>
+                </div>
+              ) : null}
+
+              {!catalogProductsCollapsed ? (
+              <div className="admin-repeater-list">
+                {filteredEditingProducts.map(({ product, originalIndex }) => (
                 <div
                   key={product.id || originalIndex}
                   className={`admin-repeater-card admin-repeater-card--product${compactCatalogLayout ? ' admin-repeater-card--product-compact' : ''}`}
@@ -918,8 +962,10 @@ export function TenantModuleManagementSection({
                     </Button>
                   </div>
                 </div>
-              ))}
-            </div>
+                ))}
+              </div>
+              ) : null}
+            </section>
           ) : null}
 
           {editingProducts.length && !filteredEditingProducts.length ? (
@@ -1003,9 +1049,21 @@ export function TenantModuleManagementSection({
             orderGroups.map((group) => (
               <section key={group.status} className="admin-module-status-group">
                 <div className="admin-module-status-group__header">
-                  <strong>{group.label}</strong>
-                  <span>{group.items.length} item(ns)</span>
+                  <div className="admin-module-status-group__copy">
+                    <strong>{group.label}</strong>
+                    <span>{group.items.length} item(ns)</span>
+                  </div>
+                  {isClientMode ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => toggleOrderGroup(group.status)}
+                      aria-label={isOrderGroupCollapsed(group.status) ? `Expandir grupo ${group.label}` : `Minimizar grupo ${group.label}`}
+                    >
+                      {isOrderGroupCollapsed(group.status) ? 'Expandir' : 'Minimizar'}
+                    </Button>
+                  ) : null}
                 </div>
+                {!isOrderGroupCollapsed(group.status) ? (
                 <div className="admin-repeater-list">
                   {group.items.map((order) => (
                     <div key={order.id} className="admin-repeater-card">
@@ -1033,9 +1091,50 @@ export function TenantModuleManagementSection({
                           ))}
                         </select>
                       </AdminField>
+                      {isClientMode && capabilityState.canManageOrders ? (
+                        <div className="admin-card-stack admin-order-archive">
+                          {pendingOrderArchiveId === order.id ? (
+                            <div className="admin-order-archive__confirm">
+                              <p>Deseja excluir mesmo este pedido?</p>
+                              <div className="admin-inline-actions">
+                                <Button
+                                  variant="secondary"
+                                  className="button--danger-tone"
+                                  disabled={archiveOrderBusy}
+                                  onClick={() => handleArchiveOrder(order.id)}
+                                  aria-label={`Confirmar exclusao do pedido ${order.customerName}`}
+                                >
+                                  {busyKey === 'delete-order' ? 'Arquivando...' : 'Confirmar exclusao'}
+                                </Button>
+                                <Button
+                                  variant="secondary"
+                                  disabled={archiveOrderBusy}
+                                  onClick={() => setPendingOrderArchiveId('')}
+                                  aria-label={`Cancelar exclusao do pedido ${order.customerName}`}
+                                >
+                                  Cancelar
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="admin-inline-actions">
+                              <Button
+                                variant="secondary"
+                                className="button--danger-tone"
+                                disabled={archiveOrderBusy}
+                                onClick={() => setPendingOrderArchiveId(order.id)}
+                                aria-label={`Excluir pedido ${order.customerName}`}
+                              >
+                                Excluir pedido
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>
+                ) : null}
               </section>
             ))
           ) : (

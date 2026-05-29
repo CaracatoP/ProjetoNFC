@@ -146,6 +146,15 @@ export async function updateClientPanelOrderStatus(token, orderId, status) {
   return response.data;
 }
 
+export async function deleteClientPanelOrder(token, orderId) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/panel/orders/${orderId}`, {
+    method: 'DELETE',
+    headers: buildSessionAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
 export async function updateClientPanelAppointmentRequestStatus(token, requestId, status) {
   const response = await apiRequest(`${appConfig.apiBaseUrl}/panel/appointment-requests/${requestId}/status`, {
     method: 'PATCH',

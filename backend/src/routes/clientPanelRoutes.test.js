@@ -13,6 +13,7 @@ let Business;
 let Plan;
 let Subscription;
 let Product;
+let Order;
 let mongoServer;
 let primaryBusiness;
 let secondaryBusiness;
@@ -51,6 +52,7 @@ describe('Client panel routes', () => {
     ({ Plan } = await import('../models/Plan.js'));
     ({ Subscription } = await import('../models/Subscription.js'));
     ({ Product } = await import('../models/Product.js'));
+    ({ Order } = await import('../models/Order.js'));
     ({ default: app } = await import('../app.js'));
 
     await connectDatabase();
@@ -345,6 +347,60 @@ describe('Client panel routes', () => {
     expect(createProductResponse.body.error.code).toBe('panel_products_forbidden');
   });
 
+  it('archives panel orders for the same tenant and hides them from normal listings', async () => {
+    const ownerToken = await login('owner@cliente.local', 'owner123456');
+    const createdOrder = await createOrderForPrimaryBusiness();
+
+    const archiveResponse = await request(app)
+      .delete(`/api/panel/orders/${createdOrder.id}`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(archiveResponse.status).toBe(200);
+    expect(archiveResponse.body.data.archived).toBe(true);
+    expect(archiveResponse.body.data.id).toBe(createdOrder.id);
+
+    const archivedRecord = await Order.findById(createdOrder.id).lean();
+    expect(archivedRecord.archivedAt).toBeTruthy();
+
+    const listOrdersResponse = await request(app)
+      .get('/api/panel/orders')
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(listOrdersResponse.status).toBe(200);
+    expect(listOrdersResponse.body.data.some((item) => item.id === createdOrder.id)).toBe(false);
+  });
+
+  it('blocks cross-tenant order archive attempts from the client panel', async () => {
+    const managerToken = await login('manager@cliente.local', 'manager123456');
+    const foreignOrder = await Order.create({
+      businessId: secondaryBusiness._id,
+      customerName: 'Pedido estrangeiro',
+      customerPhone: '11911111111',
+      items: [
+        {
+          name: 'Produto do outro tenant',
+          quantity: 1,
+          unitPrice: 10,
+          measurementUnit: 'unit',
+          displayQuantity: '1 unidade',
+          itemTotal: 10,
+          notes: '',
+        },
+      ],
+      total: 10,
+      deliveryType: 'pickup',
+      status: 'received',
+      notes: '',
+    });
+
+    const response = await request(app)
+      .delete(`/api/panel/orders/${String(foreignOrder._id)}`)
+      .set('Authorization', `Bearer ${managerToken}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body.error.code).toBe('module_resource_not_found');
+  });
+
   it('keeps the viewer read-only for orders while still allowing inspection', async () => {
     const viewerToken = await login('viewer@cliente.local', 'viewer123456');
     const createdOrder = await createOrderForPrimaryBusiness();
@@ -378,6 +434,13 @@ describe('Client panel routes', () => {
 
     expect(updateOrderResponse.status).toBe(403);
     expect(updateOrderResponse.body.error.code).toBe('panel_orders_forbidden');
+
+    const archiveOrderResponse = await request(app)
+      .delete(`/api/panel/orders/${createdOrder.id}`)
+      .set('Authorization', `Bearer ${viewerToken}`);
+
+    expect(archiveOrderResponse.status).toBe(403);
+    expect(archiveOrderResponse.body.error.code).toBe('panel_orders_forbidden');
 
     const listProfessionalsResponse = await request(app)
       .get('/api/panel/professionals')

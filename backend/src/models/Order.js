@@ -77,6 +77,7 @@ const orderSchema = new mongoose.Schema(
     address: { type: String, trim: true },
     status: { type: String, enum: ORDER_STATUS_VALUES, default: 'received', index: true },
     notes: { type: String, trim: true },
+    archivedAt: { type: Date, default: null, index: true },
   },
   {
     ...baseSchemaOptions,
@@ -102,5 +103,6 @@ const orderSchema = new mongoose.Schema(
 );
 
 orderSchema.index({ businessId: 1, status: 1, createdAt: -1 });
+orderSchema.index({ businessId: 1, archivedAt: 1, createdAt: -1 });
 
 export const Order = mongoose.models.Order || mongoose.model('Order', orderSchema);

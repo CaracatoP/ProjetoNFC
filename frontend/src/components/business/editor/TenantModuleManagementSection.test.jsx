@@ -324,4 +324,132 @@ describe('TenantModuleManagementSection', () => {
 
     expect(screen.getByText('Nenhum produto encontrado com essa busca.')).toBeInTheDocument();
   });
+
+  it('lets client mode collapse existing catalog products and order status groups', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <TenantModuleManagementSection
+        draft={buildDraft({
+          modulesData: {
+            professionals: [],
+            appointmentServices: [],
+            appointmentRequests: [],
+            orders: [
+              {
+                id: 'order-1',
+                customerName: 'Carlos',
+                customerPhone: '5511999999999',
+                deliveryType: 'pickup',
+                total: 79.8,
+                status: 'received',
+                items: [{ name: 'Pomada', quantity: 2, unitPrice: 39.9, measurementUnit: 'unit', itemTotal: 79.8 }],
+                notes: '',
+              },
+              {
+                id: 'order-2',
+                customerName: 'Marina',
+                customerPhone: '5511988887777',
+                deliveryType: 'delivery',
+                total: 29.9,
+                status: 'ready',
+                items: [{ name: 'Escova', quantity: 1, unitPrice: 29.9, measurementUnit: 'unit', itemTotal: 29.9 }],
+                notes: 'Entregar na recepcao',
+              },
+            ],
+            products: [
+              {
+                id: 'product-1',
+                name: 'Pomada modeladora',
+                category: 'Finalizacao',
+                price: 39.9,
+                image: '',
+                measurementUnit: 'unit',
+                description: 'Fixacao media',
+                active: true,
+              },
+            ],
+          },
+        })}
+        onDraftChange={vi.fn()}
+        moduleActions={{}}
+        mode="client"
+        permissions={{
+          canViewCatalog: true,
+          canEditCatalog: true,
+          canViewOrders: true,
+          canManageOrders: true,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Catalogo' }));
+
+    expect(screen.getByDisplayValue('Pomada modeladora')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Minimizar produtos cadastrados/i }));
+    expect(screen.queryByDisplayValue('Pomada modeladora')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Expandir produtos cadastrados/i }));
+    expect(screen.getByDisplayValue('Pomada modeladora')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Pedidos' }));
+
+    expect(screen.getByText('Carlos')).toBeInTheDocument();
+    expect(screen.queryByText('Marina')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Expandir grupo Prontos/i }));
+    expect(screen.getByText('Marina')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Minimizar grupo Recebidos/i }));
+    expect(screen.queryByText('Carlos')).not.toBeInTheDocument();
+  });
+
+  it('requires inline double confirmation before archiving an order in client mode', async () => {
+    const user = userEvent.setup();
+    const deleteOrder = vi.fn().mockResolvedValue({ archived: true, id: 'order-1' });
+
+    render(
+      <TenantModuleManagementSection
+        draft={buildDraft()}
+        onDraftChange={vi.fn()}
+        moduleActions={{ deleteOrder }}
+        mode="client"
+        permissions={{
+          canViewOrders: true,
+          canManageOrders: true,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Pedidos' }));
+    await user.click(screen.getByRole('button', { name: /Excluir pedido Carlos/i }));
+
+    expect(screen.getByText(/Deseja excluir mesmo este pedido/i)).toBeInTheDocument();
+    expect(deleteOrder).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: /Confirmar exclusao do pedido Carlos/i }));
+
+    await waitFor(() => {
+      expect(deleteOrder).toHaveBeenCalledWith('order-1');
+    });
+  });
+
+  it('keeps the main admin mode behavior expanded without client-only collapse controls', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <TenantModuleManagementSection
+        draft={buildDraft()}
+        onDraftChange={vi.fn()}
+        moduleActions={{}}
+        mode="admin"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Pedidos' }));
+
+    expect(screen.getByText('Carlos')).toBeInTheDocument();
+    expect(screen.getByText('Marina')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Minimizar grupo Recebidos/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Excluir pedido Carlos/i })).not.toBeInTheDocument();
+  });
 });

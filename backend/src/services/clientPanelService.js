@@ -32,6 +32,7 @@ import {
   listTenantOrders,
   listTenantProducts,
   listTenantProfessionals,
+  archiveTenantOrder,
   updateTenantAppointmentRequestStatus,
   updateTenantAppointmentService,
   updateTenantOrderStatus,
@@ -430,6 +431,18 @@ export async function updateClientPanelOrderStatus(sessionUser, orderId, status)
   );
 
   return updateTenantOrderStatus(context.businessId, orderId, status);
+}
+
+export async function deleteClientPanelOrder(sessionUser, orderId) {
+  const context = await resolveClientPanelContext(sessionUser);
+  assertBillingAllowsPanelAccess(sessionUser, context.accessContext);
+  assertCapability(
+    canManageOrders(sessionUser, context.accessContext),
+    'Voce nao pode arquivar pedidos deste tenant.',
+    'panel_orders_forbidden',
+  );
+
+  return archiveTenantOrder(context.businessId, orderId);
 }
 
 export async function listClientPanelAppointmentRequests(sessionUser) {

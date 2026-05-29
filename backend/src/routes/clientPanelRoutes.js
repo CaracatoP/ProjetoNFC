@@ -6,6 +6,7 @@ import {
   createClientPanelProductController,
   createClientPanelProfessionalController,
   deleteClientPanelAppointmentServiceController,
+  deleteClientPanelOrderController,
   deleteClientPanelProductController,
   deleteClientPanelProfessionalController,
   getClientPanelAnalyticsController,
@@ -80,6 +81,7 @@ router.delete('/appointment-services/:id', validateRequest({ params: resourceIdP
 
 router.get('/orders', listClientPanelOrdersController);
 router.patch('/orders/:id/status', validateRequest({ params: resourceIdParamsSchema, body: orderStatusBodySchema }), updateClientPanelOrderStatusController);
+router.delete('/orders/:id', validateRequest({ params: resourceIdParamsSchema }), deleteClientPanelOrderController);
 
 router.get('/appointment-requests', listClientPanelAppointmentRequestsController);
 router.patch('/appointment-requests/:id/status', validateRequest({ params: resourceIdParamsSchema, body: appointmentRequestStatusBodySchema }), updateClientPanelAppointmentRequestStatusController);

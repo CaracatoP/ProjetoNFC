@@ -27,6 +27,7 @@ import {
   createClientPanelProduct,
   createClientPanelProfessional,
   deleteClientPanelAppointmentService,
+  deleteClientPanelOrder,
   deleteClientPanelProduct,
   deleteClientPanelProfessional,
   fetchClientPanelAnalytics,
@@ -148,8 +149,10 @@ function BasicSettingsCard({
   onChange,
   onUpload,
   onSave,
+  collapsible = false,
 }) {
   const [uploadingField, setUploadingField] = useState('');
+  const [collapsed, setCollapsed] = useState(false);
 
   const handleInlineUpload = async (file, assetType, patch) => {
     if (!file || !onUpload) {
@@ -173,10 +176,26 @@ function BasicSettingsCard({
           <h2>Dados publicos do negocio</h2>
           <p>Atualize nome, descricao, contato, horarios e imagens basicas sem tocar em configuracoes sensiveis do tenant.</p>
         </div>
+        {collapsible ? (
+          <div className="admin-toolbar__group admin-toolbar__group--end">
+            <Button
+              variant="secondary"
+              onClick={() => setCollapsed((current) => !current)}
+              aria-label={collapsed ? 'Expandir configuracoes basicas' : 'Minimizar configuracoes basicas'}
+            >
+              {collapsed ? 'Expandir' : 'Minimizar'}
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {!canEdit ? <p className="admin-muted-copy">Seu nivel atual pode visualizar esses dados, mas nao editar esta area.</p> : null}
 
+      {collapsed ? (
+        <p className="admin-muted-copy">Expanda esta secao quando quiser editar nome, contato, horarios e imagens basicas do tenant.</p>
+      ) : null}
+
+      {!collapsed ? (
       <div className="admin-card-stack admin-card-stack--airy">
         <div className="admin-form-grid">
           <AdminField label="Nome do negocio" error={validationErrors['business.name']}>
@@ -492,6 +511,7 @@ function BasicSettingsCard({
           </Button>
         </div>
       </div>
+      ) : null}
     </Card>
   );
 }
@@ -691,6 +711,8 @@ export function ClientPanelPage() {
         refreshAfterModuleAction('delete-appointment-service', () => deleteClientPanelAppointmentService(token, serviceId), 'Servico removido com sucesso.'),
       updateOrderStatus: (orderId, status) =>
         refreshAfterModuleAction('update-order-status', () => updateClientPanelOrderStatus(token, orderId, status), 'Status do pedido atualizado com sucesso.'),
+      deleteOrder: (orderId) =>
+        refreshAfterModuleAction('delete-order', () => deleteClientPanelOrder(token, orderId), 'Pedido arquivado com sucesso.'),
       updateAppointmentRequestStatus: (requestId, status) =>
         refreshAfterModuleAction('update-appointment-request-status', () => updateClientPanelAppointmentRequestStatus(token, requestId, status), 'Status do agendamento atualizado com sucesso.'),
     }),
@@ -823,6 +845,7 @@ export function ClientPanelPage() {
               onChange={(updater) => setDraft((current) => (typeof updater === 'function' ? updater(cloneDeep(current)) : updater))}
               onUpload={handleUpload}
               onSave={handleSaveBasics}
+              collapsible
             />
           ) : null}
 

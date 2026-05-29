@@ -1,7 +1,7 @@
 import { Order } from '../models/Order.js';
 
 export function listOrdersByBusinessId(businessId) {
-  return Order.find({ businessId }).sort({ createdAt: -1 }).lean();
+  return Order.find({ businessId, archivedAt: null }).sort({ createdAt: -1 }).lean();
 }
 
 export function createOrderRecord(payload) {
@@ -17,5 +17,13 @@ export function updateOrderRecord(id, payload) {
 }
 
 export function updateOrderRecordByBusinessId(businessId, id, payload) {
-  return Order.findOneAndUpdate({ _id: id, businessId }, payload, { new: true, runValidators: true });
+  return Order.findOneAndUpdate({ _id: id, businessId, archivedAt: null }, payload, { new: true, runValidators: true });
+}
+
+export function archiveOrderRecordByBusinessId(businessId, id, archivedAt = new Date()) {
+  return Order.findOneAndUpdate(
+    { _id: id, businessId, archivedAt: null },
+    { archivedAt },
+    { new: true, runValidators: true },
+  );
 }

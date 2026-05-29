@@ -4,6 +4,7 @@ import {
   createClientPanelAppointmentService,
   createClientPanelProduct,
   createClientPanelProfessional,
+  deleteClientPanelOrder,
   deleteClientPanelAppointmentService,
   deleteClientPanelProduct,
   deleteClientPanelProfessional,
@@ -194,6 +195,14 @@ export async function updateClientPanelOrderStatusController(req, res, next) {
       res,
       await updateClientPanelOrderStatus(req.sessionUser, getParams(req).id, getBody(req).status),
     );
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function deleteClientPanelOrderController(req, res, next) {
+  try {
+    return successResponse(res, await deleteClientPanelOrder(req.sessionUser, getParams(req).id));
   } catch (error) {
     return next(error);
   }

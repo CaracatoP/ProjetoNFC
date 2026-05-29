@@ -18,6 +18,7 @@ import {
   createOrderRecord,
   findOrderById,
   listOrdersByBusinessId,
+  archiveOrderRecordByBusinessId,
   updateOrderRecordByBusinessId,
 } from '../repositories/orderRepository.js';
 import {
@@ -384,6 +385,25 @@ export async function updateTenantOrderStatus(businessId, id, status) {
   const existing = await findOrderById(id);
   assertTenantScope(existing, businessId, 'Pedido');
   const updated = await updateOrderRecordByBusinessId(businessId, id, { status });
+  if (!updated) {
+    throw new AppError('Pedido nao encontrado', 404, 'module_resource_not_found');
+  }
   publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_STATUS_UPDATED);
   return toPlainRecord(updated);
+}
+
+export async function archiveTenantOrder(businessId, id) {
+  const business = await assertBusinessExists(businessId);
+  const existing = await findOrderById(id);
+  assertTenantScope(existing, businessId, 'Pedido');
+  const archived = await archiveOrderRecordByBusinessId(businessId, id, new Date());
+  if (!archived) {
+    throw new AppError('Pedido nao encontrado', 404, 'module_resource_not_found');
+  }
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_ARCHIVED, 'archived');
+  return {
+    archived: true,
+    id: String(archived._id || id),
+    archivedAt: archived.archivedAt,
+  };
 }
