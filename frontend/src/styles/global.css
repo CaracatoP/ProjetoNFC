@@ -3637,10 +3637,14 @@ img {
 
 @media (max-width: 640px) {
   .catalog-page-back-button {
-    top: max(0.85rem, calc(env(safe-area-inset-top) + 0.65rem));
-    left: 0.85rem;
-    min-width: 3rem;
-    min-height: 3rem;
+    top: max(0.75rem, calc(env(safe-area-inset-top) + 0.5rem));
+    left: 0.75rem;
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    font-size: 1rem;
+    box-shadow:
+      0 12px 24px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 
   .catalog-search-field,
