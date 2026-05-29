@@ -3639,6 +3639,8 @@ img {
   .catalog-page-back-button {
     top: max(0.75rem, calc(env(safe-area-inset-top) + 0.5rem));
     left: 0.75rem;
+    width: 2.5rem;
+    height: 2.5rem;
     min-width: 2.5rem;
     min-height: 2.5rem;
     font-size: 1rem;
@@ -4254,6 +4256,11 @@ img {
   top: max(1rem, calc(env(safe-area-inset-top) + 0.75rem));
   left: max(1rem, calc((100vw - var(--layout-max-width)) / 2 + 1.25rem));
   z-index: 26;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.25rem;
+  height: 3.25rem;
   min-width: 3.25rem;
   min-height: 3.25rem;
   padding: 0;
