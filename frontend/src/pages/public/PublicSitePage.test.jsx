@@ -538,7 +538,7 @@ describe('PublicSitePage', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'Barbearia Estilo Vivo' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Voltar para a pagina principal/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Voltar para a pagina inicial/i })).toHaveClass('catalog-page-back-button');
   });
 
   it('cleans inline tenant theme variables when the public page unmounts', async () => {

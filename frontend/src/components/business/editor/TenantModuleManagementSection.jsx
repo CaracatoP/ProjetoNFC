@@ -119,6 +119,26 @@ function buildCategorySuggestions(products = []) {
   ).sort((first, second) => first.localeCompare(second, 'pt-BR'));
 }
 
+function normalizeProductSearchTerm(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function matchesProductSearch(product, searchTerm) {
+  if (!searchTerm) {
+    return true;
+  }
+
+  const haystack = [
+    product?.name,
+    product?.category,
+    product?.description,
+  ]
+    .map((value) => String(value || '').trim().toLowerCase())
+    .join(' ');
+
+  return haystack.includes(searchTerm);
+}
+
 function filterAndGroupByStatus(items = [], filterValue, statusOrder, labels) {
   const visibleItems = filterValue === 'all' ? items : items.filter((item) => item.status === filterValue);
 
@@ -176,6 +196,7 @@ export function TenantModuleManagementSection({
   const [editingProfessionals, setEditingProfessionals] = useState([]);
   const [editingAppointmentServices, setEditingAppointmentServices] = useState([]);
   const [editingProducts, setEditingProducts] = useState([]);
+  const [productSearchValue, setProductSearchValue] = useState('');
   const [orderFilter, setOrderFilter] = useState('all');
   const [appointmentFilter, setAppointmentFilter] = useState('all');
   const [uploadingAssetKey, setUploadingAssetKey] = useState('');
@@ -251,6 +272,13 @@ export function TenantModuleManagementSection({
       ),
     [appointmentFilter, modulesData.appointmentRequests],
   );
+  const filteredEditingProducts = useMemo(() => {
+    const normalizedSearchTerm = normalizeProductSearchTerm(productSearchValue);
+
+    return editingProducts
+      .map((product, originalIndex) => ({ product, originalIndex }))
+      .filter(({ product }) => matchesProductSearch(product, normalizedSearchTerm));
+  }, [editingProducts, productSearchValue]);
 
   function updateBusinessSegment(nextSegment) {
     const nextSegmentState = buildBusinessSegmentState({ segment: nextSegment });
@@ -616,6 +644,16 @@ export function TenantModuleManagementSection({
             ))}
           </datalist>
 
+          <label className="admin-field admin-product-search-field">
+            <span>Buscar produto</span>
+            <input
+              type="search"
+              value={productSearchValue}
+              onChange={(event) => setProductSearchValue(event.target.value)}
+              placeholder="Buscar produto por nome, categoria ou descricao"
+            />
+          </label>
+
           {isClientMode ? (
             !catalogReadOnly ? (
               <section
@@ -775,15 +813,15 @@ export function TenantModuleManagementSection({
 
           {editingProducts.length ? (
             <div className="admin-repeater-list">
-              {editingProducts.map((product, index) => (
+              {filteredEditingProducts.map(({ product, originalIndex }) => (
                 <div
-                  key={product.id || index}
+                  key={product.id || originalIndex}
                   className={`admin-repeater-card admin-repeater-card--product${compactCatalogLayout ? ' admin-repeater-card--product-compact' : ''}`}
                 >
                   {compactCatalogLayout ? (
                     <div className="admin-product-card__header">
                       <div className="admin-product-card__copy">
-                        <strong>{product.name || `Produto ${index + 1}`}</strong>
+                        <strong>{product.name || `Produto ${originalIndex + 1}`}</strong>
                         <span>
                           {normalizeCategoryLabel(product.category)} / {getMeasurementUnitLabel(product.measurementUnit || DEFAULT_PRODUCT_MEASUREMENT_UNIT)}
                         </span>
@@ -792,13 +830,13 @@ export function TenantModuleManagementSection({
                   ) : null}
                   <div className={productFormGridClassName}>
                     <AdminField label="Produto">
-                      <input disabled={catalogReadOnly} value={product.name || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, name: event.target.value })))} />
+                      <input disabled={catalogReadOnly} value={product.name || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, originalIndex, (item) => ({ ...item, name: event.target.value })))} />
                     </AdminField>
                     <AdminField label="Preco">
-                      <input disabled={catalogReadOnly} type="number" min="0" step="0.01" value={product.price ?? 0} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, price: Number(event.target.value) })))} />
+                      <input disabled={catalogReadOnly} type="number" min="0" step="0.01" value={product.price ?? 0} onChange={(event) => setEditingProducts((current) => updateListItem(current, originalIndex, (item) => ({ ...item, price: Number(event.target.value) })))} />
                     </AdminField>
                     <AdminField label="Categoria">
-                      <input disabled={catalogReadOnly} list={categorySuggestionsId} value={product.category || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, category: event.target.value })))} />
+                      <input disabled={catalogReadOnly} list={categorySuggestionsId} value={product.category || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, originalIndex, (item) => ({ ...item, category: event.target.value })))} />
                     </AdminField>
                     <AdminField label="Unidade de venda">
                       <select
@@ -806,7 +844,7 @@ export function TenantModuleManagementSection({
                         value={product.measurementUnit || DEFAULT_PRODUCT_MEASUREMENT_UNIT}
                         onChange={(event) =>
                           setEditingProducts((current) =>
-                            updateListItem(current, index, (item) => ({
+                            updateListItem(current, originalIndex, (item) => ({
                               ...item,
                               measurementUnit: event.target.value,
                             })),
@@ -827,12 +865,12 @@ export function TenantModuleManagementSection({
                         label="Imagem do produto"
                         value={product.image || ''}
                         alt={product.name || 'Imagem do produto'}
-                        uploading={capabilityState.canUploadMedia && uploadingAssetKey === `product-${index}`}
+                        uploading={capabilityState.canUploadMedia && uploadingAssetKey === `product-${originalIndex}`}
                         uploadingLabel="Enviando imagem..."
                         disabled={catalogReadOnly || !capabilityState.canUploadMedia}
                         onChange={(value) =>
                           setEditingProducts((current) =>
-                            updateListItem(current, index, (item) => ({
+                            updateListItem(current, originalIndex, (item) => ({
                               ...item,
                               image: value,
                               imagePublicId: value ? item.imagePublicId || '' : '',
@@ -843,10 +881,10 @@ export function TenantModuleManagementSection({
                           handleInlineUpload({
                             file,
                             assetType: 'product',
-                            uploadKey: `product-${index}`,
+                            uploadKey: `product-${originalIndex}`,
                             onComplete: (uploaded) =>
                               setEditingProducts((current) =>
-                                updateListItem(current, index, (item) => ({
+                                updateListItem(current, originalIndex, (item) => ({
                                   ...item,
                                   image: uploaded?.url || '',
                                   imagePublicId: uploaded?.publicId || '',
@@ -856,7 +894,7 @@ export function TenantModuleManagementSection({
                         }
                         onRemove={() =>
                           setEditingProducts((current) =>
-                            updateListItem(current, index, (item) => ({
+                            updateListItem(current, originalIndex, (item) => ({
                               ...item,
                               image: '',
                               imagePublicId: '',
@@ -867,7 +905,7 @@ export function TenantModuleManagementSection({
                     </div>
                     <div className="admin-product-form__description">
                       <AdminField label="Descricao">
-                        <textarea disabled={catalogReadOnly} rows={productDescriptionRows} value={product.description || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, index, (item) => ({ ...item, description: event.target.value })))} />
+                        <textarea disabled={catalogReadOnly} rows={productDescriptionRows} value={product.description || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, originalIndex, (item) => ({ ...item, description: event.target.value })))} />
                       </AdminField>
                     </div>
                   </div>
@@ -882,8 +920,12 @@ export function TenantModuleManagementSection({
                 </div>
               ))}
             </div>
+          ) : null}
+
+          {editingProducts.length && !filteredEditingProducts.length ? (
+            <p className="admin-muted-copy">Nenhum produto encontrado com essa busca.</p>
           ) : (
-            <p className="admin-muted-copy">Nenhum produto cadastrado</p>
+            !editingProducts.length ? <p className="admin-muted-copy">Nenhum produto cadastrado</p> : null
           )}
         </div>
       ) : null}

@@ -202,4 +202,34 @@ describe('BusinessCatalogSection', () => {
       );
     });
   });
+
+  it('filters catalog products locally and shows a friendly empty state for search misses', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <BusinessCatalogSection
+        tenantSlug="acougue-central"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={vi.fn()}
+      />,
+    );
+
+    const searchInput = screen.getByPlaceholderText(/Buscar produto, categoria ou descricao/i);
+    expect(screen.getByRole('heading', { name: 'Finalizacao' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Carnes' })).toBeInTheDocument();
+
+    await user.type(searchInput, 'picanha');
+
+    expect(screen.getByText('Picanha')).toBeInTheDocument();
+    expect(screen.queryByText('Pomada modeladora')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Finalizacao' })).not.toBeInTheDocument();
+
+    await user.clear(searchInput);
+    await user.type(searchInput, 'nao existe');
+
+    expect(screen.getByText('Nenhum produto encontrado')).toBeInTheDocument();
+    expect(screen.getByText(/Tente buscar por outro nome, categoria ou descricao/i)).toBeInTheDocument();
+  });
 });

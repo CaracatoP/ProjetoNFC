@@ -47,6 +47,20 @@ function buildBackHref(slug, search) {
   return `/site/${slug}${search || ''}`;
 }
 
+function BackToLandingButton({ slug, search, navigate }) {
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      className="catalog-page-back-button"
+      aria-label="Voltar para a pagina inicial"
+      onClick={() => navigate(buildBackHref(slug, search))}
+    >
+      ←
+    </Button>
+  );
+}
+
 export function PublicCatalogPage() {
   const { slug = '' } = useParams();
   const location = useLocation();
@@ -108,12 +122,8 @@ export function PublicCatalogPage() {
   if (!(segmentState.modules.catalog || segmentState.modules.cart || segmentState.modules.orders)) {
     return (
       <PublicSiteLayout business={site.business}>
+        <BackToLandingButton slug={site.business.slug} search={location.search} navigate={navigate} />
         <Card className="section-card">
-          <div className="catalog-page-header">
-            <Button type="button" variant="secondary" onClick={() => navigate(buildBackHref(site.business.slug, location.search))}>
-              Voltar para a pagina principal
-            </Button>
-          </div>
           <EmptyState title="Catalogo indisponivel no momento" description="Este tenant nao esta com o catalogo liberado agora." />
         </Card>
       </PublicSiteLayout>
@@ -122,11 +132,9 @@ export function PublicCatalogPage() {
 
   return (
     <PublicSiteLayout business={site.business}>
+      <BackToLandingButton slug={site.business.slug} search={location.search} navigate={navigate} />
       <Card className="section-card catalog-page-shell">
         <div className="catalog-page-header">
-          <Button type="button" variant="secondary" onClick={() => navigate(buildBackHref(site.business.slug, location.search))}>
-            Voltar para a pagina principal
-          </Button>
           <div className="catalog-page-header__content">
             <span className="admin-section-chip admin-section-chip--muted">Catalogo</span>
             <h1>{site.business.name}</h1>

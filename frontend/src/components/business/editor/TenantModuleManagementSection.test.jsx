@@ -270,4 +270,58 @@ describe('TenantModuleManagementSection', () => {
       );
     });
   });
+
+  it('filters catalog products in the management panel with a local search field', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <TenantModuleManagementSection
+        draft={buildDraft({
+          modulesData: {
+            professionals: [],
+            appointmentServices: [],
+            appointmentRequests: [],
+            orders: [],
+            products: [
+              {
+                id: 'product-1',
+                name: 'Pomada modeladora',
+                category: 'Finalizacao',
+                price: 39.9,
+                image: '',
+                measurementUnit: 'unit',
+                description: 'Fixacao media',
+                active: true,
+              },
+              {
+                id: 'product-2',
+                name: 'Carvao Premium',
+                category: 'Churrasco',
+                price: 29.9,
+                image: '',
+                measurementUnit: 'unit',
+                description: 'Queima lenta',
+                active: true,
+              },
+            ],
+          },
+        })}
+        onDraftChange={vi.fn()}
+        moduleActions={{}}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Catalogo' }));
+
+    const searchInput = screen.getByPlaceholderText(/Buscar produto por nome, categoria ou descricao/i);
+    await user.type(searchInput, 'churrasco');
+
+    expect(screen.getByDisplayValue('Carvao Premium')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Pomada modeladora')).not.toBeInTheDocument();
+
+    await user.clear(searchInput);
+    await user.type(searchInput, 'nao existe');
+
+    expect(screen.getByText('Nenhum produto encontrado com essa busca.')).toBeInTheDocument();
+  });
 });

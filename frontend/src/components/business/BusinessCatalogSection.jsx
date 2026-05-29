@@ -92,6 +92,26 @@ function normalizeCategoryLabel(value) {
   return String(value || '').trim() || 'Outros';
 }
 
+function normalizeSearchTerm(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function matchesProductSearch(product, searchTerm) {
+  if (!searchTerm) {
+    return true;
+  }
+
+  const haystack = [
+    product?.name,
+    normalizeCategoryLabel(product?.category),
+    product?.description,
+  ]
+    .map((value) => String(value || '').trim().toLowerCase())
+    .join(' ');
+
+  return haystack.includes(searchTerm);
+}
+
 function normalizePhoneDigits(value) {
   return String(value || '').replace(/\D+/g, '');
 }
@@ -253,11 +273,13 @@ export function BusinessCatalogSection({
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState('');
   const hydratedSlugRef = useRef('');
   const normalizedProducts = useMemo(
     () => (products || []).map((product) => normalizeProductMeasurement(product)),
     [products],
   );
+  const normalizedSearch = useMemo(() => normalizeSearchTerm(searchValue), [searchValue]);
 
   useEffect(() => {
     setCart(readStoredCart(tenantSlug));
@@ -272,10 +294,15 @@ export function BusinessCatalogSection({
     persistStoredCart(tenantSlug, cart);
   }, [cart, tenantSlug]);
 
+  const filteredProducts = useMemo(
+    () => normalizedProducts.filter((product) => matchesProductSearch(product, normalizedSearch)),
+    [normalizedProducts, normalizedSearch],
+  );
+
   const groupedProducts = useMemo(() => {
     const groups = new Map();
 
-    normalizedProducts.forEach((product) => {
+    filteredProducts.forEach((product) => {
       const category = normalizeCategoryLabel(product.category);
 
       if (!groups.has(category)) {
@@ -289,7 +316,7 @@ export function BusinessCatalogSection({
       category,
       items,
     }));
-  }, [normalizedProducts]);
+  }, [filteredProducts]);
 
   const cartItems = useMemo(
     () =>
@@ -666,114 +693,133 @@ export function BusinessCatalogSection({
         description={segmentConfig?.catalogDescription || 'Confira os itens publicados por este tenant.'}
       />
 
-      <div className="catalog-groups">
-        {groupedProducts.map((group) => (
-          <section key={group.category} className="catalog-category-group">
-            <div className="catalog-category-group__header">
-              <h3>{group.category}</h3>
-              <span>{group.items.length} item(ns)</span>
-            </div>
+      <div className="catalog-toolbar">
+        <label className="admin-field catalog-search-field">
+          <span>Buscar produto</span>
+          <input
+            type="search"
+            value={searchValue}
+            onChange={(event) => setSearchValue(event.target.value)}
+            placeholder="Buscar produto, categoria ou descricao"
+          />
+        </label>
+      </div>
 
-            <div className="catalog-grid">
-              {group.items.map((product) => {
-                const imageUrl = resolveMediaUrl(product.image, {
-                  width: 720,
-                  height: 720,
-                  fit: 'fill',
-                });
+      {groupedProducts.length ? (
+        <div className="catalog-groups">
+          {groupedProducts.map((group) => (
+            <section key={group.category} className="catalog-category-group">
+              <div className="catalog-category-group__header">
+                <h3>{group.category}</h3>
+                <span>{group.items.length} item(ns)</span>
+              </div>
 
-                return (
-                  <article key={product.id} className="catalog-card">
-                    {imageUrl ? (
-                      <div className="catalog-card__media">
-                        <img src={imageUrl} alt={product.name} width="720" height="720" loading="lazy" decoding="async" />
-                      </div>
-                    ) : null}
-                    <div className="catalog-card__content">
-                      <div className="catalog-card__header">
-                        <h3>{product.name}</h3>
-                        <strong>
-                          {formatCurrency(product.price)} / {getMeasurementUnitLabel(product.measurementUnit)}
-                        </strong>
-                      </div>
-                      <span className="admin-section-chip admin-section-chip--muted">{group.category}</span>
-                      {product.description ? <p>{product.description}</p> : null}
-                      {modules.cart || modules.orders ? (
-                        <div className="catalog-card__actions">
-                          {isFractionalMeasurementUnit(product.measurementUnit) ? (
-                            <div className="catalog-card__fractional">
-                              <label className="admin-field">
-                                <span>{getFractionInputConfig(product.measurementUnit).label}</span>
-                                <input
-                                  type="number"
-                                  min={getFractionInputConfig(product.measurementUnit).min}
-                                  step={getFractionInputConfig(product.measurementUnit).step}
-                                  value={getFractionInputValue(product)}
-                                  onChange={(event) => setFractionInput(product.id, event.target.value)}
-                                />
-                              </label>
-                              {getFractionInputConfig(product.measurementUnit).quickOptions.length ? (
-                                <div className="catalog-card__quick-actions">
-                                  {getFractionInputConfig(product.measurementUnit).quickOptions.map((quickValue) => (
-                                    <Button
-                                      key={`${product.id}-${quickValue}`}
-                                      type="button"
-                                      variant="secondary"
-                                      onClick={() => setFractionInput(product.id, String(quickValue))}
-                                    >
-                                      {product.measurementUnit === 'kg' && quickValue >= 1000
-                                        ? `${quickValue / 1000}kg`
-                                        : `${quickValue}${getFractionInputConfig(product.measurementUnit).suffix}`}
-                                    </Button>
-                                  ))}
-                                </div>
-                              ) : null}
-                              <div className="catalog-card__fractional-footer">
-                                <span>
-                                  No carrinho: {buildMeasurementDisplayQuantity(cart[product.id] || 0, product.measurementUnit) || '0'}
-                                </span>
-                                <Button type="button" onClick={() => addFractionalProductToCart(product)}>
-                                  Adicionar
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                aria-label={`Diminuir quantidade de ${product.name}`}
-                                onClick={() => updateCartQuantity(product, Number(cart[product.id] || 0) - 1)}
-                              >
-                                -
-                              </Button>
-                              <span>{cart[product.id] || 0}</span>
-                              <Button
-                                type="button"
-                                onClick={() => {
-                                  updateCartQuantity(product, Number(cart[product.id] || 0) + 1);
-                                  onTrackAction?.({
-                                    eventType: 'link_click',
-                                    targetType: 'cart_add',
-                                    targetLabel: product.name,
-                                    sectionType: 'catalog',
-                                  });
-                                }}
-                              >
-                                Adicionar
-                              </Button>
-                            </>
-                          )}
+              <div className="catalog-grid">
+                {group.items.map((product) => {
+                  const imageUrl = resolveMediaUrl(product.image, {
+                    width: 720,
+                    height: 720,
+                    fit: 'fill',
+                  });
+
+                  return (
+                    <article key={product.id} className="catalog-card">
+                      {imageUrl ? (
+                        <div className="catalog-card__media">
+                          <img src={imageUrl} alt={product.name} width="720" height="720" loading="lazy" decoding="async" />
                         </div>
                       ) : null}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </div>
+                      <div className="catalog-card__content">
+                        <div className="catalog-card__header">
+                          <h3>{product.name}</h3>
+                          <strong>
+                            {formatCurrency(product.price)} / {getMeasurementUnitLabel(product.measurementUnit)}
+                          </strong>
+                        </div>
+                        <span className="admin-section-chip admin-section-chip--muted">{group.category}</span>
+                        {product.description ? <p>{product.description}</p> : null}
+                        {modules.cart || modules.orders ? (
+                          <div className="catalog-card__actions">
+                            {isFractionalMeasurementUnit(product.measurementUnit) ? (
+                              <div className="catalog-card__fractional">
+                                <label className="admin-field">
+                                  <span>{getFractionInputConfig(product.measurementUnit).label}</span>
+                                  <input
+                                    type="number"
+                                    min={getFractionInputConfig(product.measurementUnit).min}
+                                    step={getFractionInputConfig(product.measurementUnit).step}
+                                    value={getFractionInputValue(product)}
+                                    onChange={(event) => setFractionInput(product.id, event.target.value)}
+                                  />
+                                </label>
+                                {getFractionInputConfig(product.measurementUnit).quickOptions.length ? (
+                                  <div className="catalog-card__quick-actions">
+                                    {getFractionInputConfig(product.measurementUnit).quickOptions.map((quickValue) => (
+                                      <Button
+                                        key={`${product.id}-${quickValue}`}
+                                        type="button"
+                                        variant="secondary"
+                                        onClick={() => setFractionInput(product.id, String(quickValue))}
+                                      >
+                                        {product.measurementUnit === 'kg' && quickValue >= 1000
+                                          ? `${quickValue / 1000}kg`
+                                          : `${quickValue}${getFractionInputConfig(product.measurementUnit).suffix}`}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                ) : null}
+                                <div className="catalog-card__fractional-footer">
+                                  <span>
+                                    No carrinho: {buildMeasurementDisplayQuantity(cart[product.id] || 0, product.measurementUnit) || '0'}
+                                  </span>
+                                  <Button type="button" onClick={() => addFractionalProductToCart(product)}>
+                                    Adicionar
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  aria-label={`Diminuir quantidade de ${product.name}`}
+                                  onClick={() => updateCartQuantity(product, Number(cart[product.id] || 0) - 1)}
+                                >
+                                  -
+                                </Button>
+                                <span>{cart[product.id] || 0}</span>
+                                <Button
+                                  type="button"
+                                  onClick={() => {
+                                    updateCartQuantity(product, Number(cart[product.id] || 0) + 1);
+                                    onTrackAction?.({
+                                      eventType: 'link_click',
+                                      targetType: 'cart_add',
+                                      targetLabel: product.name,
+                                      sectionType: 'catalog',
+                                    });
+                                  }}
+                                >
+                                  Adicionar
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="catalog-search-empty">
+          <strong>Nenhum produto encontrado</strong>
+          <p>Tente buscar por outro nome, categoria ou descricao.</p>
+        </div>
+      )}
       </Card>
     </>
   );

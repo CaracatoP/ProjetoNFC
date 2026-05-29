@@ -3539,6 +3539,10 @@ img {
   gap: 1rem;
 }
 
+.dashboard-shell .admin-product-search-field {
+  max-width: 32rem;
+}
+
 .dashboard-shell .admin-product-management--client .admin-repeater-list {
   gap: 0.95rem;
 }
@@ -3632,6 +3636,18 @@ img {
 }
 
 @media (max-width: 640px) {
+  .catalog-page-back-button {
+    top: max(0.85rem, calc(env(safe-area-inset-top) + 0.65rem));
+    left: 0.85rem;
+    min-width: 3rem;
+    min-height: 3rem;
+  }
+
+  .catalog-search-field,
+  .dashboard-shell .admin-product-search-field {
+    max-width: none;
+  }
+
   .dashboard-shell .admin-product-create-card,
   .dashboard-shell .admin-repeater-card--product-compact {
     gap: 0.8rem;
@@ -4229,8 +4245,77 @@ img {
   gap: 1.25rem;
 }
 
+.catalog-page-back-button {
+  position: fixed;
+  top: max(1rem, calc(env(safe-area-inset-top) + 0.75rem));
+  left: max(1rem, calc((100vw - var(--layout-max-width)) / 2 + 1.25rem));
+  z-index: 26;
+  min-width: 3.25rem;
+  min-height: 3.25rem;
+  padding: 0;
+  border-radius: 999px;
+  box-shadow:
+    0 18px 34px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  font-size: 1.2rem;
+}
+
+.catalog-page-shell {
+  overflow: hidden;
+}
+
+.catalog-page-header {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.catalog-page-header__content {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.catalog-page-header__content h1 {
+  margin: 0;
+  font-family: var(--font-heading);
+}
+
+.catalog-page-header__content p {
+  margin: 0;
+  max-width: 58ch;
+  color: var(--theme-text-muted);
+  line-height: 1.6;
+}
+
 .catalog-section {
   position: relative;
+}
+
+.catalog-toolbar {
+  display: grid;
+  gap: 0.85rem;
+  margin-bottom: 1.1rem;
+}
+
+.catalog-search-field {
+  max-width: 32rem;
+}
+
+.catalog-search-empty {
+  display: grid;
+  gap: 0.4rem;
+  padding: 1.15rem 0.1rem 0.25rem;
+}
+
+.catalog-search-empty strong {
+  font-family: var(--font-heading);
+  font-size: 1.02rem;
+}
+
+.catalog-search-empty p {
+  margin: 0;
+  color: var(--theme-text-muted);
+  line-height: 1.55;
 }
 
 .catalog-category-group {

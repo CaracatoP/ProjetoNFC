@@ -121,7 +121,7 @@ describe('PublicCatalogPage', () => {
     );
 
     expect(await screen.findByText('Catalogo indisponivel no momento')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Voltar para a pagina principal/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Voltar para a pagina inicial/i })).toHaveClass('catalog-page-back-button');
   });
 
   it('shows a friendly empty state when there are no products yet', async () => {
@@ -162,7 +162,10 @@ describe('PublicCatalogPage', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'Acougue Central' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Voltar para a pagina principal/i }));
+    expect(screen.queryByText(/Voltar para a pagina principal/i)).not.toBeInTheDocument();
+    const backButton = screen.getByRole('button', { name: /Voltar para a pagina inicial/i });
+    expect(backButton).toHaveClass('catalog-page-back-button');
+    await user.click(backButton);
     expect(await screen.findByText('Landing limpa')).toBeInTheDocument();
   });
 });
