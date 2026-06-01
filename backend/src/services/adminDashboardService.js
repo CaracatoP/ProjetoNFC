@@ -1,5 +1,7 @@
+import { canManageBilling } from '../../../shared/utils/access.js';
 import { env } from '../config/env.js';
-import { getDashboardOverviewSummary } from '../repositories/adminRepository.js';
+import { getDashboardOverviewSummary, resetAnalyticsBaselineForAllBusinesses } from '../repositories/adminRepository.js';
+import { AppError } from '../utils/appError.js';
 import {
   buildDailyTimeline,
   buildEventTypeBreakdown,
@@ -49,6 +51,10 @@ export async function getAdminDashboardOverview() {
     topBusinesses: topTenants,
     recentEvents,
     analytics: {
+      baselineAt: summary.analyticsBaseline?.latestBaselineAt
+        ? new Date(summary.analyticsBaseline.latestBaselineAt).toISOString()
+        : null,
+      baselineCoverage: summary.analyticsBaseline?.configuredBusinesses || 0,
       highlights: {
         totalEvents,
         last7DaysEvents: summary.eventTotals.last7DaysEvents || 0,
@@ -72,5 +78,19 @@ export async function getAdminDashboardOverview() {
       maxFileSizeMb: env.maxUploadMb,
       acceptedMimeTypes: getAcceptedImageMimeTypes(),
     },
+  };
+}
+
+export async function resetAdminDashboardAnalytics(adminUser) {
+  if (!canManageBilling(adminUser)) {
+    throw new AppError('Apenas o nivel 0 pode resetar o baseline de analytics.', 403, 'analytics_reset_forbidden');
+  }
+
+  const baseline = await resetAnalyticsBaselineForAllBusinesses(new Date());
+
+  return {
+    scope: 'global',
+    baselineAt: baseline.baselineAt.toISOString(),
+    updatedBusinesses: baseline.updatedBusinesses,
   };
 }

@@ -1,8 +1,12 @@
 import { trackEvent } from '@/services/analyticsService.js';
 
 export function useAnalytics(site) {
+  function shouldSkipAnalytics() {
+    return Boolean(site?.previewContext?.authorized);
+  }
+
   function trackPageView() {
-    if (!site?.business?.slug) {
+    if (!site?.business?.slug || shouldSkipAnalytics()) {
       return;
     }
 
@@ -16,7 +20,7 @@ export function useAnalytics(site) {
   }
 
   function trackAction(event) {
-    if (!site?.business?.slug) {
+    if (!site?.business?.slug || shouldSkipAnalytics()) {
       return;
     }
 

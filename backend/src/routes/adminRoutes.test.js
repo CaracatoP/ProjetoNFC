@@ -7,6 +7,7 @@ let app;
 let connectDatabase;
 let disconnectDatabase;
 let seedDemoData;
+let AnalyticsEvent;
 let Subscription;
 let User;
 let Business;
@@ -48,6 +49,7 @@ describe('Admin routes', () => {
 
     ({ connectDatabase, disconnectDatabase } = await import('../config/database.js'));
     ({ seedDemoData } = await import('../utils/seedDemoData.js'));
+    ({ AnalyticsEvent } = await import('../models/AnalyticsEvent.js'));
     ({ Subscription } = await import('../models/Subscription.js'));
     ({ User } = await import('../models/User.js'));
     ({ Business } = await import('../models/Business.js'));
@@ -104,6 +106,24 @@ describe('Admin routes', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.user.username).toBe('admin@nfc.local');
+  });
+
+  it('issues a short-lived preview token for a tenant selected in the admin workspace', async () => {
+    const targetBusiness = await Business.findOne({ slug: 'barbearia-estilo-vivo' }).lean();
+
+    const response = await request(app)
+      .post(`/api/admin/businesses/${targetBusiness._id.toString()}/preview-token`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual(
+      expect.objectContaining({
+        token: expect.any(String),
+        expiresAt: expect.any(String),
+        businessId: targetBusiness._id.toString(),
+        slug: 'barbearia-estilo-vivo',
+      }),
+    );
   });
 
   it('protects admin routes when the bearer token is missing', async () => {
@@ -1366,6 +1386,57 @@ describe('Admin routes', () => {
     expect(uploadResponse.body.data.url).toContain('res.cloudinary.com');
     expect(uploadResponse.body.data.publicId).toBe('taplink/barbearia-estilo-vivo/banner-demo');
     expect(uploadResponse.headers['x-powered-by']).toBeUndefined();
+  });
+
+  it('resets analytics by baseline for level 0 without deleting historical events', async () => {
+    const historicalCountBefore = await AnalyticsEvent.countDocuments();
+
+    await request(app).post('/api/public/analytics/events').send({
+      slug: 'barbearia-estilo-vivo',
+      eventType: 'page_view',
+      targetType: 'page',
+      targetLabel: 'Historico antigo',
+      occurredAt: '2026-05-01T10:00:00.000Z',
+    });
+
+    const storedBeforeReset = await AnalyticsEvent.countDocuments();
+    expect(storedBeforeReset).toBe(historicalCountBefore + 1);
+
+    const resetResponse = await request(app)
+      .post('/api/admin/dashboard/analytics/reset')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(resetResponse.status).toBe(200);
+    expect(resetResponse.body.data.scope).toBe('global');
+    expect(resetResponse.body.data.baselineAt).toEqual(expect.any(String));
+    expect(resetResponse.body.data.updatedBusinesses).toBeGreaterThan(0);
+    expect(await AnalyticsEvent.countDocuments()).toBe(storedBeforeReset);
+
+    await request(app).post('/api/public/analytics/events').send({
+      slug: 'barbearia-estilo-vivo',
+      eventType: 'page_view',
+      targetType: 'page',
+      targetLabel: 'Evento apos reset',
+    });
+
+    const overviewResponse = await request(app)
+      .get('/api/admin/dashboard/overview')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(overviewResponse.status).toBe(200);
+    expect(overviewResponse.body.data.analytics.highlights.pageViews).toBe(1);
+    expect(overviewResponse.body.data.analytics.highlights.totalEvents).toBe(1);
+  });
+
+  it('blocks analytics baseline reset for level 1 admins', async () => {
+    const levelOneToken = await createInternalAdminWithoutLegacyRoles();
+
+    const response = await request(app)
+      .post('/api/admin/dashboard/analytics/reset')
+      .set('Authorization', `Bearer ${levelOneToken}`);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('analytics_reset_forbidden');
   });
 
   it('rejects non-image files on the admin upload route', async () => {

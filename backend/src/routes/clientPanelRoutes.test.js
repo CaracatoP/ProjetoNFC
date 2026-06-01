@@ -370,6 +370,57 @@ describe('Client panel routes', () => {
     expect(listOrdersResponse.body.data.some((item) => item.id === createdOrder.id)).toBe(false);
   });
 
+  it('fills order lifecycle timestamps on first status transition without overwriting prior marks', async () => {
+    const operatorToken = await login('operator@cliente.local', 'operator123456');
+    const createdOrder = await createOrderForPrimaryBusiness();
+
+    expect(createdOrder.createdAt).toBeTruthy();
+    expect(createdOrder.receivedAt).toBeTruthy();
+    expect(createdOrder.preparingAt).toBeFalsy();
+    expect(createdOrder.readyAt).toBeFalsy();
+    expect(createdOrder.deliveredAt).toBeFalsy();
+    expect(createdOrder.cancelledAt).toBeFalsy();
+
+    const preparingResponse = await request(app)
+      .patch(`/api/panel/orders/${createdOrder.id}/status`)
+      .set('Authorization', `Bearer ${operatorToken}`)
+      .send({ status: 'preparing' });
+
+    expect(preparingResponse.status).toBe(200);
+    expect(preparingResponse.body.data.status).toBe('preparing');
+    expect(preparingResponse.body.data.preparingAt).toBeTruthy();
+
+    const readyResponse = await request(app)
+      .patch(`/api/panel/orders/${createdOrder.id}/status`)
+      .set('Authorization', `Bearer ${operatorToken}`)
+      .send({ status: 'ready' });
+
+    expect(readyResponse.status).toBe(200);
+    expect(readyResponse.body.data.readyAt).toBeTruthy();
+
+    const deliveredResponse = await request(app)
+      .patch(`/api/panel/orders/${createdOrder.id}/status`)
+      .set('Authorization', `Bearer ${operatorToken}`)
+      .send({ status: 'delivered' });
+
+    expect(deliveredResponse.status).toBe(200);
+    expect(deliveredResponse.body.data.deliveredAt).toBeTruthy();
+
+    const deliveredAt = deliveredResponse.body.data.deliveredAt;
+    const preparingAt = deliveredResponse.body.data.preparingAt;
+    const readyAt = deliveredResponse.body.data.readyAt;
+
+    const deliveredAgainResponse = await request(app)
+      .patch(`/api/panel/orders/${createdOrder.id}/status`)
+      .set('Authorization', `Bearer ${operatorToken}`)
+      .send({ status: 'delivered' });
+
+    expect(deliveredAgainResponse.status).toBe(200);
+    expect(deliveredAgainResponse.body.data.deliveredAt).toBe(deliveredAt);
+    expect(deliveredAgainResponse.body.data.preparingAt).toBe(preparingAt);
+    expect(deliveredAgainResponse.body.data.readyAt).toBe(readyAt);
+  });
+
   it('blocks cross-tenant order archive attempts from the client panel', async () => {
     const managerToken = await login('manager@cliente.local', 'manager123456');
     const foreignOrder = await Order.create({
@@ -625,6 +676,37 @@ describe('Client panel routes', () => {
 
     expect(viewerResponse.status).toBe(403);
     expect(viewerResponse.body.error.code).toBe('panel_analytics_forbidden');
+  });
+
+  it('ignores analytics events that happened before analyticsBaselineAt on the client panel', async () => {
+    const ownerToken = await login('owner@cliente.local', 'owner123456');
+    const baselineAt = new Date('2026-06-01T10:00:00.000Z');
+
+    await Business.findByIdAndUpdate(primaryBusiness._id, { analyticsBaselineAt: baselineAt });
+
+    await request(app).post('/api/public/analytics/events').send({
+      slug: 'barbearia-estilo-vivo',
+      eventType: 'page_view',
+      targetType: 'page',
+      targetLabel: 'Antes do baseline',
+      occurredAt: '2026-05-31T23:00:00.000Z',
+    });
+
+    await request(app).post('/api/public/analytics/events').send({
+      slug: 'barbearia-estilo-vivo',
+      eventType: 'page_view',
+      targetType: 'page',
+      targetLabel: 'Depois do baseline',
+      occurredAt: '2026-06-01T10:30:00.000Z',
+    });
+
+    const response = await request(app)
+      .get('/api/panel/analytics')
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.totals.totalEvents).toBe(1);
+    expect(response.body.data.totals.pageViews).toBe(1);
   });
 
   it('rejects invalid measurement units on client panel product mutations', async () => {

@@ -1,5 +1,6 @@
 import { successResponse } from '../utils/apiResponse.js';
 import {
+  createAdminBusinessPreviewToken,
   createAdminBusiness,
   deleteAdminBusiness,
   getAdminBusinessEditor,
@@ -22,6 +23,16 @@ export async function getAdminBusinessController(req, res, next) {
     const businessId = req.validated?.params?.businessId || req.params.businessId;
     const editor = await getAdminBusinessEditor(businessId);
     return successResponse(res, editor);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function createAdminBusinessPreviewTokenController(req, res, next) {
+  try {
+    const businessId = req.validated?.params?.businessId || req.params.businessId;
+    const previewToken = await createAdminBusinessPreviewToken(req.adminUser, businessId);
+    return successResponse(res, previewToken);
   } catch (error) {
     return next(error);
   }

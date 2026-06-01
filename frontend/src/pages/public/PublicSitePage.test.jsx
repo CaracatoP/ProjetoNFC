@@ -334,6 +334,36 @@ describe('PublicSitePage', () => {
     expect(document.querySelector("meta[name='theme-color']")?.getAttribute('content')).toBe('#140d09');
   });
 
+  it('does not track analytics in authorized preview mode and preserves preview params in the catalog CTA', async () => {
+    publicSiteService.getPublicSiteBySlug.mockResolvedValueOnce({
+      ...siteFixture,
+      previewContext: {
+        requested: true,
+        authorized: true,
+      },
+    });
+
+    render(
+      <TenantProvider>
+        <MemoryRouter initialEntries={['/site/barbearia-estilo-vivo?preview=1&t=1700000000000&previewToken=preview-token-1']}>
+          <Routes>
+            <Route path="/site/:slug" element={<PublicSitePage />} />
+          </Routes>
+        </MemoryRouter>
+      </TenantProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Barbearia Estilo Vivo' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(publicSiteService.getPublicSiteBySlug).toHaveBeenCalledTimes(1);
+    });
+    expect(analyticsService.trackEvent).not.toHaveBeenCalled();
+    expect(screen.getByRole('link', { name: /Ver catalogo|Fazer pedido/i })).toHaveAttribute(
+      'href',
+      '/site/barbearia-estilo-vivo/catalog?preview=1&t=1700000000000&previewToken=preview-token-1',
+    );
+  });
+
   it('submits appointment requests from the landing page and orders from the dedicated catalog page', async () => {
     const user = userEvent.setup();
 

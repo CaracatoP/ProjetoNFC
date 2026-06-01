@@ -12,6 +12,10 @@ export function useBusinessSite(slug, options = {}) {
   const deferredSlug = useDeferredValue(slug);
   const [state, setState] = useState(initialState);
   const [reloadState, setReloadState] = useState({ key: 0, options: {} });
+  const preview = Boolean(options?.preview);
+  const cacheBust = String(options?.cacheBust || '');
+  const bypassCache = Boolean(options?.bypassCache);
+  const previewToken = String(options?.previewToken || '');
 
   const reload = useCallback((reloadOptions = {}) => {
     setReloadState((current) => ({
@@ -90,7 +94,7 @@ export function useBusinessSite(slug, options = {}) {
     return () => {
       cancelled = true;
     };
-  }, [deferredSlug, options, reloadState]);
+  }, [deferredSlug, preview, cacheBust, bypassCache, previewToken, reloadState]);
 
   return {
     ...state,

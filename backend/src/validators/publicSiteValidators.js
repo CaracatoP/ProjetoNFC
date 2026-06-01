@@ -14,12 +14,19 @@ const optionalHostSchema = z.preprocess(
   z.string(),
 );
 
+const publicPreviewQuerySchema = z.object({
+  preview: optionalStringSchema.optional(),
+  t: optionalStringSchema.optional(),
+  previewToken: optionalStringSchema.optional(),
+});
+
 export const publicSiteValidators = {
   siteBySlug: {
     params: slugParamsSchema,
+    query: publicPreviewQuerySchema,
   },
   siteByHost: {
-    query: z.object({
+    query: publicPreviewQuerySchema.extend({
       host: z.preprocess(
         (value) => normalizeHost(value),
         z.string().regex(hostPattern, 'Informe um host valido para resolver o tenant'),

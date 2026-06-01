@@ -369,12 +369,12 @@ function hydrateSection(section, business, links) {
   }
 }
 
-async function getPublicSiteByBusiness(business) {
+async function getPublicSiteByBusiness(business, options = {}) {
   if (!business) {
     throw new AppError('Negocio nao encontrado', 404, 'business_not_found');
   }
 
-  if (!isPubliclyAccessibleStatus(business.status)) {
+  if (!options.allowInactive && !isPubliclyAccessibleStatus(business.status)) {
     throw new AppError(
       'Este site esta temporariamente indisponivel.',
       423,
@@ -490,14 +490,14 @@ async function getPublicSiteByBusiness(business) {
   };
 }
 
-export async function getPublicSiteBySlug(slug) {
+export async function getPublicSiteBySlug(slug, options = {}) {
   const business = await findPublicBusinessBySlugStrict(slug);
-  return getPublicSiteByBusiness(business);
+  return getPublicSiteByBusiness(business, options);
 }
 
-export async function getPublicSiteByHost(host) {
+export async function getPublicSiteByHost(host, options = {}) {
   const business = await findPublicBusinessByHost(host);
-  return getPublicSiteByBusiness(business);
+  return getPublicSiteByBusiness(business, options);
 }
 
 export async function resolveTagToSite(tagCode) {

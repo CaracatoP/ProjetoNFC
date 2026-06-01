@@ -433,6 +433,104 @@ describe('TenantModuleManagementSection', () => {
     });
   });
 
+  it('filters and sorts client orders by customer, phone, item, and timestamps', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <TenantModuleManagementSection
+        draft={buildDraft({
+          modulesData: {
+            professionals: [],
+            appointmentServices: [],
+            appointmentRequests: [],
+            products: [],
+            orders: [
+              {
+                id: 'order-1',
+                customerName: 'Carlos',
+                customerPhone: '5511999999999',
+                deliveryType: 'pickup',
+                total: 79.8,
+                status: 'received',
+                createdAt: '2026-06-01T09:00:00.000Z',
+                receivedAt: '2026-06-01T09:00:00.000Z',
+                items: [{ name: 'Pomada', quantity: 2, unitPrice: 39.9, measurementUnit: 'unit', itemTotal: 79.8 }],
+                notes: '',
+              },
+              {
+                id: 'order-2',
+                customerName: 'Marina',
+                customerPhone: '5511988887777',
+                deliveryType: 'delivery',
+                total: 29.9,
+                status: 'ready',
+                createdAt: '2026-06-01T10:30:00.000Z',
+                receivedAt: '2026-06-01T10:32:00.000Z',
+                readyAt: '2026-06-01T10:50:00.000Z',
+                items: [{ name: 'Escova', quantity: 1, unitPrice: 29.9, measurementUnit: 'unit', itemTotal: 29.9 }],
+                notes: 'Entregar na recepcao',
+              },
+              {
+                id: 'order-3',
+                customerName: 'Beatriz',
+                customerPhone: '5511977776666',
+                deliveryType: 'pickup',
+                total: 45,
+                status: 'received',
+                createdAt: '2026-06-01T11:00:00.000Z',
+                receivedAt: '2026-06-01T11:01:00.000Z',
+                items: [{ name: 'Carvao Premium', quantity: 1, unitPrice: 45, measurementUnit: 'unit', itemTotal: 45 }],
+                notes: '',
+              },
+            ],
+          },
+        })}
+        onDraftChange={vi.fn()}
+        moduleActions={{}}
+        mode="client"
+        permissions={{
+          canViewOrders: true,
+          canManageOrders: true,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Pedidos' }));
+
+    expect(screen.getAllByText('Recebido').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Criado em:/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Recebido em:/i).length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole('button', { name: /Expandir grupo Prontos/i }));
+    expect(screen.getByText('Pronto/Retirado')).toBeInTheDocument();
+    expect(screen.getByText(/Pronto em:/i)).toBeInTheDocument();
+
+    const searchInput = screen.getByPlaceholderText(/Buscar por cliente, telefone ou item/i);
+    await user.type(searchInput, 'carvao');
+
+    expect(screen.getByText('Beatriz')).toBeInTheDocument();
+    expect(screen.queryByText('Carlos')).not.toBeInTheDocument();
+    expect(screen.queryByText('Marina')).not.toBeInTheDocument();
+
+    await user.clear(searchInput);
+    await user.type(searchInput, '8888');
+    expect(screen.getByText('Marina')).toBeInTheDocument();
+    expect(screen.queryByText('Carlos')).not.toBeInTheDocument();
+
+    await user.clear(searchInput);
+    await user.selectOptions(screen.getByLabelText('Ordenar pedidos'), 'oldest');
+
+    const receivedCards = screen.getAllByTestId('order-card-received');
+    expect(within(receivedCards[0]).getByText('Carlos')).toBeInTheDocument();
+    expect(within(receivedCards[1]).getByText('Beatriz')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Ordenar pedidos'), 'recent');
+
+    const recentCards = screen.getAllByTestId('order-card-received');
+    expect(within(recentCards[0]).getByText('Beatriz')).toBeInTheDocument();
+    expect(within(recentCards[1]).getByText('Carlos')).toBeInTheDocument();
+  });
+
   it('keeps the main admin mode behavior expanded without client-only collapse controls', async () => {
     const user = userEvent.setup();
 

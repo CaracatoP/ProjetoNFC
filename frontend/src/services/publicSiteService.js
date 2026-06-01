@@ -34,11 +34,15 @@ function buildPublicSiteRequestQuery(options = {}) {
     params.set('t', String(options.cacheBust));
   }
 
+  if (options.previewToken) {
+    params.set('previewToken', String(options.previewToken));
+  }
+
   return params.toString();
 }
 
 function shouldBypassPublicCache(options = {}) {
-  return Boolean(options.preview || options.bypassCache);
+  return Boolean(options.bypassCache || (options.preview && options.previewToken));
 }
 
 function isFreshCacheEntry(entry, ttlMs) {
@@ -72,18 +76,26 @@ async function requestPublicSite(url, cacheKey, options = {}) {
       }
     : {};
 
-  const requestPromise = apiRequest(url, requestOptions, publicSiteResponseSchema)
+  const requestPromise = apiRequest(url, requestOptions)
     .then((response) => {
-      const normalizedPayload = normalizePublicSiteMedia(response.data);
+      const parsedResponse = publicSiteResponseSchema.parse(response);
+      const normalizedPayload = normalizePublicSiteMedia(parsedResponse.data);
+      const payloadWithPreviewContext = {
+        ...normalizedPayload,
+        previewContext: {
+          requested: Boolean(options.preview),
+          authorized: Boolean(parsedResponse.meta?.previewAuthorized),
+        },
+      };
 
       if (!bypassCache && getPublicSiteCacheVersion(cacheKey) === requestVersion) {
         publicSiteCache.set(cacheKey, {
-          data: normalizedPayload,
+          data: payloadWithPreviewContext,
           timestamp: Date.now(),
         });
       }
 
-      return normalizedPayload;
+      return payloadWithPreviewContext;
     })
     .finally(() => {
       if (!bypassCache) {

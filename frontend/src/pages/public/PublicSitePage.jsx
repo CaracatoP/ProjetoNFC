@@ -94,6 +94,10 @@ function buildCatalogHref(slug, previewQuery) {
     params.set('t', String(previewQuery.cacheBust));
   }
 
+  if (previewQuery?.previewToken) {
+    params.set('previewToken', String(previewQuery.previewToken));
+  }
+
   const queryString = params.toString();
 
   return `/site/${slug}/catalog${queryString ? `?${queryString}` : ''}`;
@@ -109,6 +113,7 @@ export function PublicSitePage() {
     return {
       preview: params.get('preview') === '1',
       cacheBust: params.get('t') || '',
+      previewToken: params.get('previewToken') || '',
     };
   }, [location.search]);
   const { status, data: site, error, reload } = useBusinessSite(slug, previewQuery);
@@ -242,8 +247,14 @@ export function PublicSitePage() {
           previousDomains: payload?.previousDomains,
         });
 
+        if (previewQuery.preview) {
+          return;
+        }
+
         if (payload?.slug && payload.slug !== slug) {
-          const previewSearch = previewQuery.preview ? `?preview=1&t=${Date.now()}` : '';
+          const previewSearch = previewQuery.preview
+            ? `?preview=1&t=${Date.now()}${previewQuery.previewToken ? `&previewToken=${encodeURIComponent(previewQuery.previewToken)}` : ''}`
+            : '';
           navigate(`/site/${payload.slug}${previewSearch}`, { replace: true });
           return;
         }
@@ -252,10 +263,11 @@ export function PublicSitePage() {
           preview: previewQuery.preview,
           bypassCache: true,
           cacheBust: String(Date.now()),
+          previewToken: previewQuery.previewToken,
         });
       },
     });
-  }, [navigate, previewQuery.preview, reload, site?.business?.id, slug]);
+  }, [navigate, previewQuery.preview, previewQuery.previewToken, reload, site?.business?.id, slug]);
 
   function scrollToSection(sectionKey) {
     const element = document.getElementById(getSectionAnchor(sectionKey));

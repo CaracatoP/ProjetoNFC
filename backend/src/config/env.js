@@ -17,6 +17,14 @@ const parseList = (value, fallback = []) =>
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 const isProduction = nodeEnv === 'production';
+const adminTokenSecret = getDevelopmentFallback(
+  process.env.ADMIN_TOKEN_SECRET || process.env.JWT_SECRET,
+  'dev-admin-token-secret',
+);
+const previewTokenSecret = getDevelopmentFallback(
+  process.env.PREVIEW_TOKEN_SECRET || process.env.ADMIN_PREVIEW_TOKEN_SECRET,
+  adminTokenSecret,
+);
 
 function getDevelopmentFallback(value, fallback = '') {
   if (String(value || '').trim()) {
@@ -74,7 +82,9 @@ export const env = {
   adminBootstrapPassword: process.env.ADMIN_BOOTSTRAP_PASSWORD || process.env.ADMIN_PASSWORD || '',
   adminBootstrapName: process.env.ADMIN_BOOTSTRAP_NAME || process.env.ADMIN_DISPLAY_NAME || 'Operacao TapLink',
   adminBootstrapRole: (process.env.ADMIN_BOOTSTRAP_ROLE || 'superadmin').trim().toLowerCase(),
-  adminTokenSecret: getDevelopmentFallback(process.env.ADMIN_TOKEN_SECRET || process.env.JWT_SECRET, 'dev-admin-token-secret'),
+  adminTokenSecret,
+  previewTokenSecret,
+  previewTokenTtlMinutes: Number(process.env.PREVIEW_TOKEN_TTL_MINUTES || 10),
   adminSessionTtlHours: Number(process.env.ADMIN_SESSION_TTL_HOURS || 12),
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB || 5),
   authLoginRateLimitWindowMs: Number(process.env.AUTH_LOGIN_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),

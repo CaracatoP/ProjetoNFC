@@ -162,25 +162,37 @@ describe('publicSiteService', () => {
             description: 'Pagina publica',
           },
         },
+        meta: {
+          previewAuthorized: true,
+        },
       }),
     });
 
     vi.stubGlobal('fetch', fetchMock);
 
     await getPublicSiteBySlug('barbearia-estilo-vivo');
-    await getPublicSiteBySlug('barbearia-estilo-vivo', {
+    const previewSite = await getPublicSiteBySlug('barbearia-estilo-vivo', {
       preview: true,
       bypassCache: true,
       cacheBust: '1700000000000',
+      previewToken: 'preview-token-1',
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[1][0]).toContain('/public/site/barbearia-estilo-vivo?preview=1&t=1700000000000');
+    expect(fetchMock.mock.calls[1][0]).toContain(
+      '/public/site/barbearia-estilo-vivo?preview=1&t=1700000000000&previewToken=preview-token-1',
+    );
     expect(fetchMock.mock.calls[1][1]).toMatchObject({
       headers: expect.objectContaining({
         'Cache-Control': 'no-store',
       }),
     });
+    expect(previewSite.previewContext).toEqual(
+      expect.objectContaining({
+        requested: true,
+        authorized: true,
+      }),
+    );
   });
 
   it('does not repopulate the cache with a stale in-flight payload after invalidation', async () => {

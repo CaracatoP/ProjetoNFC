@@ -111,6 +111,7 @@ function assertCapability(allowed, message, code) {
 function buildAnalyticsPayload(analyticsSummary, scope) {
   const basePayload = {
     scope,
+    baselineAt: analyticsSummary.baselineAt ? new Date(analyticsSummary.baselineAt).toISOString() : null,
     totals: analyticsSummary.totals || {},
   };
 

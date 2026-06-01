@@ -168,4 +168,28 @@ describe('PublicCatalogPage', () => {
     await user.click(backButton);
     expect(await screen.findByText('Landing limpa')).toBeInTheDocument();
   });
+
+  it('does not track analytics in authorized preview mode on the catalog page', async () => {
+    publicSiteService.getPublicSiteBySlug.mockResolvedValue({
+      ...baseFixture,
+      previewContext: {
+        requested: true,
+        authorized: true,
+      },
+    });
+
+    render(
+      <TenantProvider>
+        <MemoryRouter initialEntries={['/site/acougue-central/catalog?preview=1&t=1700000000000&previewToken=preview-token-1']}>
+          <Routes>
+            <Route path="/site/:slug/catalog" element={<PublicCatalogPage />} />
+          </Routes>
+        </MemoryRouter>
+      </TenantProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Acougue Central' })).toBeInTheDocument();
+    await screen.findByRole('button', { name: /Voltar para a pagina inicial/i });
+    expect(analyticsService.trackEvent).not.toHaveBeenCalled();
+  });
 });

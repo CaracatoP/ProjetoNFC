@@ -21,6 +21,7 @@ const businessSchema = new mongoose.Schema(
     badge: { type: String, trim: true },
     status: { type: String, enum: BUSINESS_STATUS_VALUES, default: 'draft', index: true },
     rating: { type: String, trim: true },
+    analyticsBaselineAt: { type: Date },
     segment: { type: String, enum: BUSINESS_SEGMENT_VALUES, default: defaultSegmentState.segment, index: true },
     modules: {
       type: mongoose.Schema.Types.Mixed,

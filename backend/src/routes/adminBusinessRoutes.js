@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { ADMIN_ROLES } from '../../../shared/constants/index.js';
 import {
+  createAdminBusinessPreviewTokenController,
   createAdminBusinessController,
   deleteAdminBusinessController,
   getAdminBusinessController,
@@ -29,6 +30,11 @@ router.patch(
   updateAdminBusinessStatusController,
 );
 router.get('/:businessId', validateRequest({ params: adminBusinessParamsSchema }), getAdminBusinessController);
+router.post(
+  '/:businessId/preview-token',
+  validateRequest({ params: adminBusinessParamsSchema }),
+  createAdminBusinessPreviewTokenController,
+);
 router.post('/', validateRequest({ body: adminBusinessCreateBodySchema }), createAdminBusinessController);
 router.put(
   '/:businessId',

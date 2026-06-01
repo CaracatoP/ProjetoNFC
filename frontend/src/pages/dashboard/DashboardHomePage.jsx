@@ -12,6 +12,7 @@ import { TenantPreviewPanel } from '@/components/business/TenantPreviewPanel.jsx
 import { useAuth } from '@/context/AuthContext.jsx';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue.js';
 import {
+  createAdminPreviewToken,
   createTenantAppointmentService,
   createAdminBusiness,
   createTenantProduct,
@@ -23,6 +24,7 @@ import {
   fetchAdminOverview,
   getAdminBusiness,
   listAdminBusinesses,
+  resetAdminAnalytics,
   updateTenantAppointmentRequestStatus,
   updateTenantAppointmentService,
   updateAdminBusiness,
@@ -197,18 +199,36 @@ export function DashboardHomePage() {
   const [deleting, setDeleting] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [moduleBusyKey, setModuleBusyKey] = useState('');
+  const [resettingAnalytics, setResettingAnalytics] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [tenantSearchInput, setTenantSearchInput] = useState('');
   const [tenantSort, setTenantSort] = useState('newest');
   const [tenantStatusFilter, setTenantStatusFilter] = useState('all');
   const [previewRefreshKey, setPreviewRefreshKey] = useState(() => Date.now());
+  const [previewToken, setPreviewToken] = useState('');
   const [activeView, setActiveView] = useState('workspace');
   const debouncedTenantSearch = useDebouncedValue(tenantSearchInput, 300);
 
-  const refreshPreview = useCallback(() => {
-    setPreviewRefreshKey((current) => Math.max(Date.now(), current + 1));
-  }, []);
+  const refreshPreview = useCallback(
+    async (targetBusinessId = selectedBusinessId) => {
+      if (!token || !targetBusinessId) {
+        setPreviewToken('');
+        setPreviewRefreshKey((current) => Math.max(Date.now(), current + 1));
+        return;
+      }
+
+      try {
+        const previewAccess = await createAdminPreviewToken(token, targetBusinessId);
+        setPreviewToken(String(previewAccess?.token || ''));
+        setPreviewRefreshKey((current) => Math.max(Date.now(), current + 1));
+      } catch (previewError) {
+        setPreviewToken('');
+        setError(getErrorMessage(previewError));
+      }
+    },
+    [selectedBusinessId, token],
+  );
 
   const applyEditorSnapshot = useCallback((nextEditor) => {
     if (!nextEditor?.business?.id) {
@@ -311,6 +331,37 @@ export function DashboardHomePage() {
       active = false;
     };
   }, [applyEditorSnapshot, selectedBusinessId, token]);
+
+  useEffect(() => {
+    if (!selectedBusinessId || !token) {
+      setPreviewToken('');
+      return;
+    }
+
+    let active = true;
+
+    Promise.resolve()
+      .then(() => createAdminPreviewToken(token, selectedBusinessId))
+      .then((previewAccess) => {
+        if (!active) {
+          return;
+        }
+
+        setPreviewToken(String(previewAccess?.token || ''));
+        setPreviewRefreshKey((current) => Math.max(Date.now(), current + 1));
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+
+        setPreviewToken('');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedBusinessId, token]);
 
   const refreshCollections = useCallback(async (preferredBusinessId = '', preferredEditor = null) => {
     const [nextOverview, nextBusinesses] = await Promise.all([
@@ -574,6 +625,33 @@ export function DashboardHomePage() {
     }
   }
 
+  async function handleResetAnalytics() {
+    if (!token || !access?.capabilities?.canManageBilling) {
+      return;
+    }
+
+    if (!window.confirm('Deseja resetar o baseline global de analytics a partir de agora? Os eventos antigos serao preservados, mas os dashboards passarao a considerar apenas dados novos.')) {
+      return;
+    }
+
+    setResettingAnalytics(true);
+    setMessage('');
+    setError('');
+
+    try {
+      const result = await resetAdminAnalytics(token);
+      await Promise.all([
+        refreshCollections(selectedBusinessId),
+        refreshEditorSnapshot(selectedBusinessId),
+      ]);
+      setMessage(`Analytics resetado com sucesso. Novo baseline global: ${new Date(result.baselineAt).toLocaleString('pt-BR')}.`);
+    } catch (resetError) {
+      setError(getErrorMessage(resetError));
+    } finally {
+      setResettingAnalytics(false);
+    }
+  }
+
   const filteredBusinesses = useMemo(() => {
     const searchTerm = debouncedTenantSearch.trim().toLowerCase();
     const nextBusinesses = businesses.filter((business) => {
@@ -621,9 +699,11 @@ export function DashboardHomePage() {
     return buildBusinessSummaryFromEditor(editor, currentSummary);
   }, [businesses, editor, selectedBusinessId]);
   const previewUrl =
-    selectedSummary?.slug && typeof window !== 'undefined'
-      ? `${window.location.origin}/site/${selectedSummary.slug}?preview=1&t=${previewRefreshKey}`
-      : selectedSummary?.publicUrl || '';
+    selectedSummary?.slug && previewToken && typeof window !== 'undefined'
+      ? `${window.location.origin}/site/${selectedSummary.slug}?preview=1&t=${previewRefreshKey}&previewToken=${encodeURIComponent(previewToken)}`
+      : selectedSummary?.slug
+        ? ''
+        : selectedSummary?.publicUrl || '';
 
   return (
     <AppShell
@@ -801,6 +881,9 @@ export function DashboardHomePage() {
                   selectedBusinessId={selectedBusinessId}
                   onSelectBusiness={setSelectedBusinessId}
                   onOpenWorkspace={() => setActiveView('workspace')}
+                  onResetAnalytics={handleResetAnalytics}
+                  canResetAnalytics={Boolean(access?.capabilities?.canManageBilling)}
+                  resettingAnalytics={resettingAnalytics}
                   loadingEditor={loadingEditor}
                 />
               </Suspense>

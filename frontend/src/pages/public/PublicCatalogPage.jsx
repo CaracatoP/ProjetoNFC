@@ -72,6 +72,7 @@ export function PublicCatalogPage() {
     return {
       preview: params.get('preview') === '1',
       cacheBust: params.get('t') || '',
+      previewToken: params.get('previewToken') || '',
     };
   }, [location.search]);
   const { status, data: site, error } = useBusinessSite(slug, previewQuery);

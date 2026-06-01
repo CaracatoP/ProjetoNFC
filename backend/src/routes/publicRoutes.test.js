@@ -14,6 +14,7 @@ let AppointmentService;
 let Product;
 let subscribeToTenantUpdates;
 let mongoServer;
+let adminToken;
 
 describe('Public routes', () => {
   beforeAll(async () => {
@@ -22,6 +23,10 @@ describe('Public routes', () => {
     process.env.ENABLE_DEMO_SEED = 'true';
     process.env.FRONTEND_ORIGIN = 'http://localhost:5173';
     process.env.PUBLIC_SITE_BASE_URL = 'http://localhost:5173';
+    process.env.ADMIN_USERNAME = 'admin@nfc.local';
+    process.env.ADMIN_PASSWORD = 'admin123456';
+    process.env.ADMIN_TOKEN_SECRET = 'test-admin-secret';
+    process.env.AUTH_LOGIN_RATE_LIMIT_MAX = '100';
 
     ({ connectDatabase, disconnectDatabase } = await import('../config/database.js'));
     ({ seedDemoData } = await import('../utils/seedDemoData.js'));
@@ -40,6 +45,11 @@ describe('Public routes', () => {
   beforeEach(async () => {
     await seedDemoData({ reset: true });
     await AnalyticsEvent.deleteMany({});
+    const loginResponse = await request(app).post('/api/admin/auth/login').send({
+      username: 'admin@nfc.local',
+      password: 'admin123456',
+    });
+    adminToken = loginResponse.body.data.token;
   });
 
   afterAll(async () => {
@@ -59,13 +69,31 @@ describe('Public routes', () => {
     expect(response.body.data.sections.some((section) => section.type === 'pix')).toBe(true);
   });
 
-  it('returns no-store cache headers for preview public requests by slug', async () => {
-    const response = await request(app)
+  it('requires a valid preview token before bypassing cache for preview public requests by slug', async () => {
+    const previewRequestedResponse = await request(app)
       .get('/api/public/site/barbearia-estilo-vivo')
       .query({ preview: '1', t: '1700000000000' });
 
-    expect(response.status).toBe(200);
-    expect(response.headers['cache-control']).toBe('no-store');
+    expect(previewRequestedResponse.status).toBe(200);
+    expect(previewRequestedResponse.headers['cache-control']).toBe('public, max-age=30, stale-while-revalidate=120');
+    expect(previewRequestedResponse.body.meta.previewAuthorized).toBe(false);
+
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' }).lean();
+    const previewTokenResponse = await request(app)
+      .post(`/api/admin/businesses/${business._id.toString()}/preview-token`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const previewResponse = await request(app)
+      .get('/api/public/site/barbearia-estilo-vivo')
+      .query({
+        preview: '1',
+        t: '1700000000000',
+        previewToken: previewTokenResponse.body.data.token,
+      });
+
+    expect(previewResponse.status).toBe(200);
+    expect(previewResponse.headers['cache-control']).toBe('no-store');
+    expect(previewResponse.body.meta.previewAuthorized).toBe(true);
   });
 
   it('normalizes the public section copy for legacy seeded tenants', async () => {
@@ -480,18 +508,37 @@ describe('Public routes', () => {
     expect(response.body.meta.resolvedBy).toBe('host');
   });
 
-  it('returns no-store cache headers for preview public requests by host', async () => {
+  it('requires a valid preview token before bypassing cache for preview public requests by host', async () => {
     await Business.findOneAndUpdate(
       { slug: 'barbearia-estilo-vivo' },
       { domains: { subdomain: 'estilo-vivo', customDomain: '' } },
     );
 
-    const response = await request(app)
+    const previewRequestedResponse = await request(app)
       .get('/api/public/site')
       .query({ host: 'estilo-vivo.tenant.local', preview: '1', t: '1700000000000' });
 
-    expect(response.status).toBe(200);
-    expect(response.headers['cache-control']).toBe('no-store');
+    expect(previewRequestedResponse.status).toBe(200);
+    expect(previewRequestedResponse.headers['cache-control']).toBe('public, max-age=30, stale-while-revalidate=120');
+    expect(previewRequestedResponse.body.meta.previewAuthorized).toBe(false);
+
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' }).lean();
+    const previewTokenResponse = await request(app)
+      .post(`/api/admin/businesses/${business._id.toString()}/preview-token`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const previewResponse = await request(app)
+      .get('/api/public/site')
+      .query({
+        host: 'estilo-vivo.tenant.local',
+        preview: '1',
+        t: '1700000000000',
+        previewToken: previewTokenResponse.body.data.token,
+      });
+
+    expect(previewResponse.status).toBe(200);
+    expect(previewResponse.headers['cache-control']).toBe('no-store');
+    expect(previewResponse.body.meta.previewAuthorized).toBe(true);
   });
 
   it('resolves the tenant by configured custom domain host', async () => {
@@ -544,6 +591,26 @@ describe('Public routes', () => {
     expect(response.status).toBe(201);
     expect(response.body.data.recorded).toBe(true);
     expect(await AnalyticsEvent.countDocuments()).toBe(1);
+  });
+
+  it('ignores analytics events sent from an authorized preview session', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' }).lean();
+    const previewTokenResponse = await request(app)
+      .post(`/api/admin/businesses/${business._id.toString()}/preview-token`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const response = await request(app).post('/api/public/analytics/events').send({
+      slug: 'barbearia-estilo-vivo',
+      eventType: 'page_view',
+      targetType: 'page',
+      preview: true,
+      previewToken: previewTokenResponse.body.data.token,
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.recorded).toBe(false);
+    expect(response.body.data.ignoredReason).toBe('authorized_preview');
+    expect(await AnalyticsEvent.countDocuments()).toBe(0);
   });
 
   it('rejects invalid analytics payloads', async () => {

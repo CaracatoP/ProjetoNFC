@@ -17,6 +17,7 @@ const ADMIN_BUSINESS_LIST_PROJECTION = {
   name: 1,
   slug: 1,
   status: 1,
+  analyticsBaselineAt: 1,
   segment: 1,
   modules: 1,
   logoUrl: 1,
@@ -25,6 +26,45 @@ const ADMIN_BUSINESS_LIST_PROJECTION = {
   createdAt: 1,
   updatedAt: 1,
 };
+
+const ANALYTICS_BASELINE_FALLBACK = new Date(0);
+
+function buildAnalyticsBusinessLookupStages(options = {}) {
+  return [
+    {
+      $lookup: {
+        from: 'businesses',
+        localField: options.localField || 'businessId',
+        foreignField: '_id',
+        as: options.as || 'business',
+      },
+    },
+    {
+      $unwind: {
+        path: `$${options.as || 'business'}`,
+        preserveNullAndEmptyArrays: Boolean(options.preserveNullAndEmptyArrays),
+      },
+    },
+  ];
+}
+
+function buildAnalyticsBaselineMatchStage(fieldPath = '$business.analyticsBaselineAt') {
+  return {
+    $match: {
+      $expr: {
+        $gte: ['$occurredAt', { $ifNull: [fieldPath, ANALYTICS_BASELINE_FALLBACK] }],
+      },
+    },
+  };
+}
+
+function resolveOccurredAtFloor(baselineAt, comparisonDate = null) {
+  if (baselineAt && comparisonDate) {
+    return baselineAt > comparisonDate ? baselineAt : comparisonDate;
+  }
+
+  return baselineAt || comparisonDate || null;
+}
 
 export async function listBusinessesForAdmin() {
   return Business.find({}, ADMIN_BUSINESS_LIST_PROJECTION).sort({ createdAt: -1 }).lean();
@@ -149,6 +189,16 @@ export async function deleteBusinessGraphRecords(businessId) {
   ]);
 }
 
+export async function resetAnalyticsBaselineForAllBusinesses(baselineAt = new Date()) {
+  const normalizedBaseline = baselineAt instanceof Date ? baselineAt : new Date(baselineAt);
+  const updateResult = await Business.updateMany({}, { $set: { analyticsBaselineAt: normalizedBaseline } });
+
+  return {
+    baselineAt: normalizedBaseline,
+    updatedBusinesses: updateResult.modifiedCount ?? updateResult.matchedCount ?? 0,
+  };
+}
+
 export async function getAnalyticsCountsByBusinessIds(businessIds) {
   if (!businessIds.length) {
     return [];
@@ -156,6 +206,8 @@ export async function getAnalyticsCountsByBusinessIds(businessIds) {
 
   return AnalyticsEvent.aggregate([
     { $match: { businessId: { $in: businessIds.map((id) => new mongoose.Types.ObjectId(id)) } } },
+    ...buildAnalyticsBusinessLookupStages(),
+    buildAnalyticsBaselineMatchStage(),
     {
       $group: {
         _id: '$businessId',
@@ -178,12 +230,16 @@ export async function getAnalyticsCountsByBusinessIds(businessIds) {
 
 export async function getBusinessAnalyticsSummary(businessId) {
   const businessObjectId = new mongoose.Types.ObjectId(businessId);
+  const business = await Business.findById(businessId, { analyticsBaselineAt: 1 }).lean();
+  const baselineAt = business?.analyticsBaselineAt || null;
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const baselineMatch = baselineAt ? { occurredAt: { $gte: baselineAt } } : {};
+  const fourteenDayWindowStart = resolveOccurredAtFloor(baselineAt, fourteenDaysAgo);
 
   const [totals, recentEvents, byEventType, dailyEvents, topTargets, uniqueVisitors, userAgents] = await Promise.all([
     AnalyticsEvent.aggregate([
-      { $match: { businessId: businessObjectId } },
+      { $match: { businessId: businessObjectId, ...baselineMatch } },
       {
         $group: {
           _id: '$businessId',
@@ -227,7 +283,7 @@ export async function getBusinessAnalyticsSummary(businessId) {
       },
     ]),
     AnalyticsEvent.find(
-      { businessId },
+      { businessId, ...baselineMatch },
       {
         eventType: 1,
         sectionType: 1,
@@ -240,7 +296,7 @@ export async function getBusinessAnalyticsSummary(businessId) {
       .limit(12)
       .lean(),
     AnalyticsEvent.aggregate([
-      { $match: { businessId: businessObjectId } },
+      { $match: { businessId: businessObjectId, ...baselineMatch } },
       {
         $group: {
           _id: '$eventType',
@@ -253,7 +309,7 @@ export async function getBusinessAnalyticsSummary(businessId) {
       {
         $match: {
           businessId: businessObjectId,
-          occurredAt: { $gte: fourteenDaysAgo },
+          occurredAt: { $gte: fourteenDayWindowStart || fourteenDaysAgo },
         },
       },
       {
@@ -271,6 +327,7 @@ export async function getBusinessAnalyticsSummary(businessId) {
       {
         $match: {
           businessId: businessObjectId,
+          ...baselineMatch,
           eventType: { $in: ['link_click', 'cta_click', 'copy_action'] },
         },
       },
@@ -291,6 +348,7 @@ export async function getBusinessAnalyticsSummary(businessId) {
       {
         $match: {
           businessId: businessObjectId,
+          ...baselineMatch,
           visitorHash: { $nin: ['', null] },
         },
       },
@@ -305,6 +363,7 @@ export async function getBusinessAnalyticsSummary(businessId) {
       {
         $match: {
           businessId: businessObjectId,
+          ...baselineMatch,
           userAgent: { $nin: ['', null] },
         },
       },
@@ -320,6 +379,7 @@ export async function getBusinessAnalyticsSummary(businessId) {
   ]);
 
   return {
+    baselineAt,
     totals: totals[0] || {
       totalEvents: 0,
       last7DaysEvents: 0,
@@ -343,7 +403,7 @@ export async function getDashboardOverviewSummary() {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
 
-  const [businessCounts, eventTotals, topBusinesses, recentEvents, byEventType, dailyEvents, topTargets, uniqueVisitors, userAgents] = await Promise.all([
+  const [businessCounts, analyticsBaseline, eventTotals, topBusinesses, recentEvents, byEventType, dailyEvents, topTargets, uniqueVisitors, userAgents] = await Promise.all([
     Business.aggregate([
       {
         $group: {
@@ -352,7 +412,23 @@ export async function getDashboardOverviewSummary() {
         },
       },
     ]),
+    Business.aggregate([
+      {
+        $group: {
+          _id: null,
+          earliestBaselineAt: { $min: '$analyticsBaselineAt' },
+          latestBaselineAt: { $max: '$analyticsBaselineAt' },
+          configuredBusinesses: {
+            $sum: {
+              $cond: [{ $ifNull: ['$analyticsBaselineAt', false] }, 1, 0],
+            },
+          },
+        },
+      },
+    ]),
     AnalyticsEvent.aggregate([
+      ...buildAnalyticsBusinessLookupStages(),
+      buildAnalyticsBaselineMatchStage(),
       {
         $group: {
           _id: null,
@@ -396,24 +472,24 @@ export async function getDashboardOverviewSummary() {
       },
     ]),
     AnalyticsEvent.aggregate([
+      ...buildAnalyticsBusinessLookupStages(),
+      buildAnalyticsBaselineMatchStage(),
       {
         $group: {
           _id: '$businessId',
           eventCount: { $sum: 1 },
           lastEventAt: { $max: '$occurredAt' },
+          business: {
+            $first: {
+              name: '$business.name',
+              slug: '$business.slug',
+              status: '$business.status',
+            },
+          },
         },
       },
       { $sort: { eventCount: -1, lastEventAt: -1 } },
       { $limit: 5 },
-      {
-        $lookup: {
-          from: 'businesses',
-          localField: '_id',
-          foreignField: '_id',
-          as: 'business',
-        },
-      },
-      { $unwind: '$business' },
       {
         $project: {
           _id: 1,
@@ -426,22 +502,10 @@ export async function getDashboardOverviewSummary() {
       },
     ]),
     AnalyticsEvent.aggregate([
+      ...buildAnalyticsBusinessLookupStages({ preserveNullAndEmptyArrays: true }),
+      buildAnalyticsBaselineMatchStage(),
       { $sort: { occurredAt: -1 } },
       { $limit: 12 },
-      {
-        $lookup: {
-          from: 'businesses',
-          localField: 'businessId',
-          foreignField: '_id',
-          as: 'business',
-        },
-      },
-      {
-        $unwind: {
-          path: '$business',
-          preserveNullAndEmptyArrays: true,
-        },
-      },
       {
         $project: {
           eventType: 1,
@@ -454,6 +518,8 @@ export async function getDashboardOverviewSummary() {
       },
     ]),
     AnalyticsEvent.aggregate([
+      ...buildAnalyticsBusinessLookupStages(),
+      buildAnalyticsBaselineMatchStage(),
       {
         $group: {
           _id: '$eventType',
@@ -463,6 +529,8 @@ export async function getDashboardOverviewSummary() {
       { $sort: { count: -1, _id: 1 } },
     ]),
     AnalyticsEvent.aggregate([
+      ...buildAnalyticsBusinessLookupStages(),
+      buildAnalyticsBaselineMatchStage(),
       {
         $match: {
           occurredAt: { $gte: fourteenDaysAgo },
@@ -480,6 +548,8 @@ export async function getDashboardOverviewSummary() {
       { $sort: { '_id.day': 1 } },
     ]),
     AnalyticsEvent.aggregate([
+      ...buildAnalyticsBusinessLookupStages({ preserveNullAndEmptyArrays: true }),
+      buildAnalyticsBaselineMatchStage(),
       {
         $match: {
           eventType: { $in: ['link_click', 'cta_click', 'copy_action'] },
@@ -494,24 +564,16 @@ export async function getDashboardOverviewSummary() {
           },
           count: { $sum: 1 },
           lastEventAt: { $max: '$occurredAt' },
+          business: {
+            $first: {
+              name: '$business.name',
+              slug: '$business.slug',
+            },
+          },
         },
       },
       { $sort: { count: -1, lastEventAt: -1 } },
       { $limit: 30 },
-      {
-        $lookup: {
-          from: 'businesses',
-          localField: '_id.businessId',
-          foreignField: '_id',
-          as: 'business',
-        },
-      },
-      {
-        $unwind: {
-          path: '$business',
-          preserveNullAndEmptyArrays: true,
-        },
-      },
       {
         $project: {
           _id: 1,
@@ -523,6 +585,8 @@ export async function getDashboardOverviewSummary() {
       },
     ]),
     AnalyticsEvent.aggregate([
+      ...buildAnalyticsBusinessLookupStages(),
+      buildAnalyticsBaselineMatchStage(),
       {
         $match: {
           visitorHash: { $nin: ['', null] },
@@ -536,6 +600,8 @@ export async function getDashboardOverviewSummary() {
       { $count: 'count' },
     ]),
     AnalyticsEvent.aggregate([
+      ...buildAnalyticsBusinessLookupStages(),
+      buildAnalyticsBaselineMatchStage(),
       {
         $match: {
           userAgent: { $nin: ['', null] },
@@ -554,6 +620,11 @@ export async function getDashboardOverviewSummary() {
 
   return {
     businessCounts,
+    analyticsBaseline: analyticsBaseline[0] || {
+      earliestBaselineAt: null,
+      latestBaselineAt: null,
+      configuredBusinesses: 0,
+    },
     eventTotals: eventTotals[0] || {
       totalEvents: 0,
       last7DaysEvents: 0,

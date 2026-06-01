@@ -4,6 +4,7 @@ import {
   BILLING_ACCESS_LABELS,
   ROLE_LEVEL_LABELS,
 } from '@shared/constants/access.js';
+import { PLAN_CAPABILITY_DEFINITIONS, PLAN_TYPES } from '@shared/constants/plans.js';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 import { EmptyState } from '@/components/common/EmptyState.jsx';
@@ -40,6 +41,8 @@ import {
   updateClientPanelProfessional,
   uploadClientPanelImage,
 } from '@/services/clientPanelService.js';
+
+const ACCESS_REFRESH_EVENT_KINDS = new Set(['plan_updated', 'billing_updated', 'client_access_updated']);
 
 const BASIC_ERROR_PREFIXES = [
   'business.name',
@@ -125,6 +128,294 @@ function AnalyticsMetric({ label, value, description }) {
       <strong>{value}</strong>
       <small>{description}</small>
     </div>
+  );
+}
+
+function formatMetricValue(value) {
+  return new Intl.NumberFormat('pt-BR').format(Number(value || 0));
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return '';
+  }
+
+  return new Date(value).toLocaleString('pt-BR');
+}
+
+function buildClientDailySeries(dailyEvents = []) {
+  const aggregated = new Map();
+
+  (dailyEvents || []).forEach((item) => {
+    const date = item?._id?.day;
+
+    if (!date) {
+      return;
+    }
+
+    const current = aggregated.get(date) || {
+      date,
+      totalEvents: 0,
+      pageViews: 0,
+      interactions: 0,
+    };
+
+    current.totalEvents += Number(item?.count || 0);
+
+    if (item?._id?.eventType === 'page_view') {
+      current.pageViews += Number(item?.count || 0);
+    } else {
+      current.interactions += Number(item?.count || 0);
+    }
+
+    aggregated.set(date, current);
+  });
+
+  return [...aggregated.values()]
+    .sort((first, second) => first.date.localeCompare(second.date))
+    .slice(-7);
+}
+
+function ClientAnalyticsMetricCard({ label, value, description, accent = 'default' }) {
+  return (
+    <div className={`analytics-metric-card analytics-metric-card--${accent}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{description}</small>
+    </div>
+  );
+}
+
+function ClientAnalyticsBarList({ title, description, items = [], emptyText = 'Sem dados suficientes ainda.' }) {
+  const maxValue = Math.max(1, ...items.map((item) => Number(item?.count || 0)));
+
+  return (
+    <div className="admin-subpanel analytics-panel">
+      <div className="admin-panel-card__header admin-panel-card__header--compact">
+        <div>
+          <h2>{title}</h2>
+          <p>{description}</p>
+        </div>
+      </div>
+
+      {items.length ? (
+        <div className="analytics-bar-list">
+          {items.map((item) => (
+            <div key={item.key || item.label || item.eventType} className="analytics-bar-list__item">
+              <div className="analytics-bar-list__copy">
+                <strong>{item.label}</strong>
+                {item.subtitle ? <span>{item.subtitle}</span> : null}
+              </div>
+              <div className="analytics-bar-list__meta">
+                <b>{formatMetricValue(item.count)}</b>
+                <div className="analytics-bar-list__track" aria-hidden="true">
+                  <span style={{ width: `${Math.max(10, ((item.count || 0) / maxValue) * 100)}%` }} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="analytics-empty-state analytics-empty-state--compact">
+          <strong>{emptyText}</strong>
+          <span>Assim que o tenant ganhar mais uso real, este bloco sera preenchido automaticamente.</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClientAnalyticsTrend({ series = [] }) {
+  const maxTotal = Math.max(1, ...series.map((point) => point.totalEvents || 0));
+  const maxViews = Math.max(1, ...series.map((point) => point.pageViews || 0));
+  const maxInteractions = Math.max(1, ...series.map((point) => point.interactions || 0));
+  const hasData = series.some((point) => point.totalEvents > 0 || point.pageViews > 0 || point.interactions > 0);
+
+  return (
+    <div className="admin-subpanel analytics-panel">
+      <div className="admin-panel-card__header admin-panel-card__header--compact">
+        <div>
+          <h2>Ritmo recente</h2>
+          <p>Leitura simples dos ultimos dias para acompanhar tracao do tenant.</p>
+        </div>
+      </div>
+
+      {hasData ? (
+        <div className="analytics-trend-chart analytics-trend-chart--compact">
+          {series.map((point) => (
+            <div key={point.date} className="analytics-trend-chart__day">
+              <div className="analytics-trend-chart__bars" aria-hidden="true">
+                <span
+                  className="analytics-trend-chart__bar analytics-trend-chart__bar--events"
+                  style={{ height: `${Math.max(8, (point.totalEvents / maxTotal) * 100)}%` }}
+                />
+                <span
+                  className="analytics-trend-chart__bar analytics-trend-chart__bar--views"
+                  style={{ height: `${Math.max(8, (point.pageViews / maxViews) * 100)}%` }}
+                />
+                <span
+                  className="analytics-trend-chart__bar analytics-trend-chart__bar--actions"
+                  style={{ height: `${Math.max(8, (point.interactions / maxInteractions) * 100)}%` }}
+                />
+              </div>
+              <div className="analytics-trend-chart__label">
+                <strong>{point.totalEvents}</strong>
+                <span>{new Date(`${point.date}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="analytics-empty-state analytics-empty-state--compact">
+          <strong>Sem volume suficiente ainda</strong>
+          <span>Assim que o tenant receber visitas e cliques reais, o ritmo aparece aqui.</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClientAnalyticsRecentEvents({ events = [] }) {
+  return (
+    <div className="admin-subpanel analytics-panel">
+      <div className="admin-panel-card__header admin-panel-card__header--compact">
+        <div>
+          <h2>Eventos recentes</h2>
+          <p>Ultimas interacoes publicas consideradas no baseline atual.</p>
+        </div>
+      </div>
+
+      {events.length ? (
+        <div className="admin-event-list admin-event-list--scroll analytics-recent-events">
+          {events.map((event) => (
+            <div key={event.id || `${event.eventType}-${event.occurredAt}`} className="admin-event-item admin-event-item--analytics">
+              <div>
+                <strong>{event.targetLabel || event.targetType || event.eventType}</strong>
+                <span>{event.eventType}</span>
+              </div>
+              <time dateTime={event.occurredAt}>{formatDateTime(event.occurredAt)}</time>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="analytics-empty-state analytics-empty-state--compact">
+          <strong>Sem eventos recentes</strong>
+          <span>Os ultimos acessos e interacoes do tenant aparecerao aqui.</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClientAnalyticsUpgradePanel({ planCode = PLAN_TYPES.STARTER }) {
+  const currentPlan = PLAN_CAPABILITY_DEFINITIONS[planCode] || PLAN_CAPABILITY_DEFINITIONS[PLAN_TYPES.STARTER];
+
+  return (
+    <div className="admin-subpanel client-analytics-upgrade">
+      <span className="section-eyebrow">Upgrade</span>
+      <h3>Analytics indisponivel no plano atual</h3>
+      <p>
+        O plano <strong>{currentPlan.label}</strong> ainda nao libera a leitura de desempenho deste tenant. Faça upgrade para acompanhar visitas, pedidos, agendamentos e interacoes reais.
+      </p>
+      <div className="admin-module-badges">
+        <span className="admin-section-chip admin-section-chip--accent">Pro: analytics basico</span>
+        <span className="admin-section-chip admin-section-chip--warning">Premium: analytics avancado</span>
+        <span className="admin-section-chip">Enterprise: visao completa</span>
+      </div>
+    </div>
+  );
+}
+
+function ClientAnalyticsPanel({ analytics, analyticsLoading, analyticsError, scope, planCode }) {
+  const timeline = useMemo(() => buildClientDailySeries(analytics?.dailyEvents), [analytics?.dailyEvents]);
+  const canShowBreakdowns = scope === 'basic' || scope === 'advanced' || scope === 'full';
+  const canShowAdvanced = scope === 'advanced' || scope === 'full';
+
+  return (
+    <Card className="admin-panel-card client-analytics-card">
+      <div className="admin-panel-card__header">
+        <div>
+          <SectionEyebrow>Analytics</SectionEyebrow>
+          <h2>Visao do tenant</h2>
+          <p>Resumo liberado pelo seu plano e pelo seu nivel de acesso atual.</p>
+        </div>
+        <div className="client-analytics-card__scope">
+          <span className={`admin-section-chip admin-section-chip--${scope === 'none' ? 'muted' : scope === 'summary' ? 'accent' : scope === 'basic' ? 'info' : scope === 'advanced' ? 'warning' : 'success'}`}>
+            {ANALYTICS_SCOPE_LABELS[scope] || scope}
+          </span>
+        </div>
+      </div>
+
+      {scope === 'none' ? <ClientAnalyticsUpgradePanel planCode={planCode} /> : null}
+
+      {scope !== 'none' ? (
+        <>
+          {analytics?.baselineAt ? (
+            <div className="analytics-baseline-banner analytics-baseline-banner--inline">
+              <div>
+                <strong>Contando desde {formatDateTime(analytics.baselineAt)}</strong>
+                <span>O dashboard do tenant esta considerando apenas eventos posteriores ao baseline atual.</span>
+              </div>
+            </div>
+          ) : null}
+
+          {analyticsLoading ? <p className="admin-muted-copy">Carregando analytics do tenant...</p> : null}
+          {analyticsError ? <p className="admin-status-banner admin-status-banner--error">{analyticsError}</p> : null}
+
+          {analytics ? (
+            <div className="client-analytics-stack">
+              <div className="analytics-metric-grid analytics-metric-grid--tenant">
+                <ClientAnalyticsMetricCard label="Eventos" value={formatMetricValue(analytics.totals?.totalEvents)} description="Tudo que o tenant registrou ate agora." accent="default" />
+                <ClientAnalyticsMetricCard label="Ultimos 7 dias" value={formatMetricValue(analytics.totals?.last7DaysEvents)} description="Atividade recente da pagina publica." accent="warning" />
+                <ClientAnalyticsMetricCard label="Visitas" value={formatMetricValue(analytics.totals?.pageViews)} description="Page views contabilizadas no periodo." accent="info" />
+                <ClientAnalyticsMetricCard label="Cliques" value={formatMetricValue((analytics.totals?.linkClicks || 0) + (analytics.totals?.ctaClicks || 0) + (analytics.totals?.copyActions || 0))} description="Links, CTAs e copias registradas." accent="accent" />
+                {canShowAdvanced ? (
+                  <ClientAnalyticsMetricCard label="Visitantes unicos" value={formatMetricValue(analytics.uniqueVisitors)} description="Base anonima estimada de visitantes reais." accent="success" />
+                ) : null}
+                <ClientAnalyticsMetricCard label="Escopo liberado" value={ANALYTICS_SCOPE_LABELS[scope] || scope} description="Resultado final entre plano e nivel de acesso." accent="success" />
+              </div>
+
+              {scope === 'summary' ? (
+                <div className="analytics-baseline-banner analytics-baseline-banner--inline">
+                  <div>
+                    <strong>Resumo liberado</strong>
+                    <span>Seu acesso atual permite uma leitura enxuta. Para ver rankings e historico mais detalhado, evolua o plano ou o nivel liberado.</span>
+                  </div>
+                </div>
+              ) : null}
+
+              {canShowBreakdowns ? (
+                <div className="analytics-layout-grid analytics-layout-grid--client">
+                  <ClientAnalyticsTrend series={timeline} />
+                  <ClientAnalyticsBarList
+                    title="Mix de eventos"
+                    description="Quais interacoes aparecem com mais frequencia no tenant."
+                    items={(analytics.byEventType || []).map((item) => ({
+                      key: item.eventType,
+                      label: item.label,
+                      count: item.count,
+                    }))}
+                    emptyText="Nenhum tipo de evento registrado ainda."
+                  />
+                  <ClientAnalyticsBarList
+                    title="Alvos mais acionados"
+                    description="Atalhos, links e CTAs com maior conversao no tenant."
+                    items={(analytics.topTargets || []).map((item) => ({
+                      key: `${item.targetType}-${item.targetLabel}`,
+                      label: item.label,
+                      subtitle: item.targetType,
+                      count: item.count,
+                    }))}
+                    emptyText="Nenhum atalho ou link acionado ainda."
+                  />
+                  {canShowAdvanced ? <ClientAnalyticsRecentEvents events={analytics.recentEvents || []} /> : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </Card>
   );
 }
 
@@ -523,6 +814,7 @@ export function ClientPanelPage() {
     subscription,
     access,
     logout,
+    refreshSession,
     isSuspendedClientAccess,
   } = useAuth();
   const [editor, setEditor] = useState(null);
@@ -537,8 +829,12 @@ export function ClientPanelPage() {
   const [analyticsError, setAnalyticsError] = useState('');
   const editorRef = useRef(null);
   const draftRef = useRef(null);
+  const skipNextAnalyticsEffectRef = useRef(false);
 
   const capabilities = access?.capabilities || {};
+  const analyticsScope = access?.analyticsScope || 'none';
+  const planCode = subscription?.plan?.code || PLAN_TYPES.STARTER;
+  const canSeeAnalyticsSection = (user?.roleLevel ?? 5) <= 4;
   const validationErrors = useMemo(
     () => (draft ? extractBasicValidationErrors(buildValidationErrors(draft)) : {}),
     [draft],
@@ -559,8 +855,10 @@ export function ClientPanelPage() {
     return nextEditor;
   }, [token]);
 
-  const loadAnalytics = useCallback(async () => {
-    if (!token || !capabilities.canViewAnalytics) {
+  const loadAnalytics = useCallback(async (accessOverride = null) => {
+    const nextAccess = accessOverride || access;
+
+    if (!token || !nextAccess?.capabilities?.canViewAnalytics) {
       setAnalytics(null);
       return;
     }
@@ -575,7 +873,7 @@ export function ClientPanelPage() {
     } finally {
       setAnalyticsLoading(false);
     }
-  }, [capabilities.canViewAnalytics, token]);
+  }, [access, token]);
 
   useEffect(() => {
     let active = true;
@@ -619,6 +917,11 @@ export function ClientPanelPage() {
   }, [isSuspendedClientAccess, token]);
 
   useEffect(() => {
+    if (skipNextAnalyticsEffectRef.current) {
+      skipNextAnalyticsEffectRef.current = false;
+      return;
+    }
+
     loadAnalytics();
   }, [loadAnalytics]);
 
@@ -643,12 +946,32 @@ export function ClientPanelPage() {
         slug: editor.business.slug,
       },
       {
-        async onTenantUpdated() {
+        async onTenantUpdated(event = {}) {
           if (!active) {
             return;
           }
 
           try {
+            if (ACCESS_REFRESH_EVENT_KINDS.has(event.kind) && typeof refreshSession === 'function') {
+              const nextSession = await refreshSession();
+
+              if (!active) {
+                return;
+              }
+
+              const nextAccess = nextSession?.access || access;
+              const nextBillingStatus = nextAccess?.billingStatus || '';
+
+              if (nextBillingStatus === 'suspended' || nextBillingStatus === 'cancelled') {
+                setAnalytics(null);
+                return;
+              }
+
+              skipNextAnalyticsEffectRef.current = true;
+              await Promise.all([loadBusiness(), loadAnalytics(nextAccess)]);
+              return;
+            }
+
             await Promise.all([loadBusiness(), loadAnalytics()]);
           } catch (refreshError) {
             if (!active) {
@@ -665,7 +988,7 @@ export function ClientPanelPage() {
       active = false;
       unsubscribe?.();
     };
-  }, [editor?.business?.id, editor?.business?.slug, isSuspendedClientAccess, loadAnalytics, loadBusiness, token]);
+  }, [access, editor?.business?.id, editor?.business?.slug, isSuspendedClientAccess, loadAnalytics, loadBusiness, refreshSession, token]);
 
   const refreshAfterModuleAction = useCallback(
     async (busyKey, action, successMessage) => {
@@ -861,28 +1184,14 @@ export function ClientPanelPage() {
             />
           </Card>
 
-          {capabilities.canViewAnalytics ? (
-            <Card className="admin-panel-card">
-              <div className="admin-panel-card__header">
-                <div>
-                  <SectionEyebrow>Analytics</SectionEyebrow>
-                  <h2>Visao do tenant</h2>
-                  <p>Resumo liberado pelo seu plano e pelo seu nivel de acesso atual.</p>
-                </div>
-              </div>
-
-              {analyticsLoading ? <p className="admin-muted-copy">Carregando analytics do tenant...</p> : null}
-              {analyticsError ? <p className="admin-status-banner admin-status-banner--error">{analyticsError}</p> : null}
-
-              {analytics ? (
-                <div className="admin-mini-stats">
-                  <AnalyticsMetric label="Eventos" value={analytics.totals?.totalEvents ?? 0} description="Tudo que o tenant registrou ate agora." />
-                  <AnalyticsMetric label="Ultimos 7 dias" value={analytics.totals?.last7DaysEvents ?? 0} description="Atividade recente da pagina publica." />
-                  <AnalyticsMetric label="Visitas" value={analytics.totals?.pageViews ?? 0} description="Page views registradas no tenant." />
-                  <AnalyticsMetric label="Escopo" value={ANALYTICS_SCOPE_LABELS[analytics.scope] || analytics.scope} description="Nivel de analytics liberado neste painel." />
-                </div>
-              ) : null}
-            </Card>
+          {canSeeAnalyticsSection ? (
+            <ClientAnalyticsPanel
+              analytics={analytics}
+              analyticsLoading={analyticsLoading}
+              analyticsError={analyticsError}
+              scope={analytics?.scope || analyticsScope}
+              planCode={planCode}
+            />
           ) : null}
         </div>
       ) : (

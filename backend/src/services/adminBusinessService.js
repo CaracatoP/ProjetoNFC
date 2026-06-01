@@ -54,6 +54,7 @@ import {
   normalizeProductMeasurement,
 } from '../../../shared/utils/productMeasurement.js';
 import { TENANT_REALTIME_KINDS } from '../../../shared/constants/tenantRealtime.js';
+import { createPreviewToken } from '../utils/previewToken.js';
 
 function normalizeCoordinate(value) {
   if (value === '' || value === null || value === undefined) {
@@ -757,6 +758,16 @@ export async function listAdminBusinesses() {
 
 export async function getAdminBusinessEditor(businessId) {
   return hydrateEditorResponse(businessId);
+}
+
+export async function createAdminBusinessPreviewToken(adminUser, businessId) {
+  const graph = await findBusinessGraphForAdmin(businessId);
+
+  if (!graph.business) {
+    throw new AppError('Negocio nao encontrado', 404, 'business_not_found');
+  }
+
+  return createPreviewToken(adminUser, graph.business);
 }
 
 export async function createAdminBusiness(input) {

@@ -32,6 +32,26 @@ const ORDER_STATUS_LABELS = {
   delivered: 'Entregues',
   cancelled: 'Cancelados',
 };
+const ORDER_STATUS_BADGE_LABELS = {
+  received: 'Recebido',
+  preparing: 'Em preparo',
+  ready: 'Pronto/Retirado',
+  delivered: 'Entregue',
+  cancelled: 'Cancelado',
+};
+const ORDER_STATUS_TIMESTAMP_LABELS = {
+  createdAt: 'Criado em',
+  receivedAt: 'Recebido em',
+  preparingAt: 'Em preparo em',
+  readyAt: 'Pronto em',
+  deliveredAt: 'Entregue em',
+  cancelledAt: 'Cancelado em',
+};
+const ORDER_SORT_OPTIONS = {
+  arrival: 'arrival',
+  recent: 'recent',
+  oldest: 'oldest',
+};
 
 const APPOINTMENT_STATUS_ORDER = ['pending', 'confirmed', 'cancelled'];
 const APPOINTMENT_STATUS_LABELS = {
@@ -123,6 +143,14 @@ function normalizeProductSearchTerm(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function normalizeSearchTerm(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
 function matchesProductSearch(product, searchTerm) {
   if (!searchTerm) {
     return true;
@@ -149,6 +177,116 @@ function filterAndGroupByStatus(items = [], filterValue, statusOrder, labels) {
       items: visibleItems.filter((item) => item.status === status),
     }))
     .filter((group) => group.items.length);
+}
+
+function matchesOrderSearch(order, searchTerm) {
+  if (!searchTerm) {
+    return true;
+  }
+
+  const haystack = [
+    order?.customerName,
+    order?.customerPhone,
+    ...(order?.items || []).map((item) => item?.name),
+  ]
+    .map((value) => normalizeSearchTerm(value))
+    .join(' ');
+
+  return haystack.includes(searchTerm);
+}
+
+function getOrderSortTimestamp(order, sortMode) {
+  if (sortMode === ORDER_SORT_OPTIONS.arrival) {
+    return new Date(order?.receivedAt || order?.createdAt || 0).getTime();
+  }
+
+  return new Date(order?.createdAt || order?.receivedAt || 0).getTime();
+}
+
+function sortOrders(items = [], sortMode) {
+  return [...items].sort((first, second) => {
+    const firstTimestamp = getOrderSortTimestamp(first, sortMode);
+    const secondTimestamp = getOrderSortTimestamp(second, sortMode);
+
+    if (sortMode === ORDER_SORT_OPTIONS.oldest || sortMode === ORDER_SORT_OPTIONS.arrival) {
+      return firstTimestamp - secondTimestamp;
+    }
+
+    return secondTimestamp - firstTimestamp;
+  });
+}
+
+function filterAndGroupOrders(items = [], { filterValue = 'all', searchValue = '', sortMode = ORDER_SORT_OPTIONS.recent } = {}) {
+  const normalizedSearchTerm = normalizeSearchTerm(searchValue);
+  const visibleItems = items
+    .filter((item) => (filterValue === 'all' ? true : item.status === filterValue))
+    .filter((item) => matchesOrderSearch(item, normalizedSearchTerm));
+
+  return ORDER_STATUS_ORDER.map((status) => ({
+    status,
+    label: ORDER_STATUS_LABELS[status] || status,
+    items: sortOrders(
+      visibleItems.filter((item) => item.status === status),
+      sortMode,
+    ),
+  })).filter((group) => group.items.length);
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatRelativeTime(value) {
+  if (!value) {
+    return '';
+  }
+
+  const timestamp = new Date(value).getTime();
+
+  if (!Number.isFinite(timestamp)) {
+    return '';
+  }
+
+  const minutesDiff = Math.max(0, Math.round((Date.now() - timestamp) / 60000));
+
+  if (minutesDiff < 60) {
+    return `Ha ${minutesDiff} min`;
+  }
+
+  const hoursDiff = Math.round(minutesDiff / 60);
+
+  if (hoursDiff < 24) {
+    return `Ha ${hoursDiff} h`;
+  }
+
+  const daysDiff = Math.round(hoursDiff / 24);
+  return `Ha ${daysDiff} dia(s)`;
+}
+
+function buildOrderTimeline(order) {
+  return [
+    ['createdAt', order?.createdAt],
+    ['receivedAt', order?.receivedAt || order?.createdAt],
+    ['preparingAt', order?.preparingAt],
+    ['readyAt', order?.readyAt],
+    ['deliveredAt', order?.deliveredAt],
+    ['cancelledAt', order?.cancelledAt],
+  ].filter(([, value]) => Boolean(value));
 }
 
 function getBusyMessage(busyKey) {
@@ -197,7 +335,9 @@ export function TenantModuleManagementSection({
   const [editingAppointmentServices, setEditingAppointmentServices] = useState([]);
   const [editingProducts, setEditingProducts] = useState([]);
   const [productSearchValue, setProductSearchValue] = useState('');
+  const [orderSearchValue, setOrderSearchValue] = useState('');
   const [orderFilter, setOrderFilter] = useState('all');
+  const [orderSort, setOrderSort] = useState(ORDER_SORT_OPTIONS.recent);
   const [appointmentFilter, setAppointmentFilter] = useState('all');
   const [uploadingAssetKey, setUploadingAssetKey] = useState('');
   const [catalogProductsCollapsed, setCatalogProductsCollapsed] = useState(false);
@@ -263,8 +403,13 @@ export function TenantModuleManagementSection({
   );
 
   const orderGroups = useMemo(
-    () => filterAndGroupByStatus(modulesData.orders || [], orderFilter, ORDER_STATUS_ORDER, ORDER_STATUS_LABELS),
-    [modulesData.orders, orderFilter],
+    () =>
+      filterAndGroupOrders(modulesData.orders || [], {
+        filterValue: orderFilter,
+        searchValue: orderSearchValue,
+        sortMode: orderSort,
+      }),
+    [modulesData.orders, orderFilter, orderSearchValue, orderSort],
   );
 
   const appointmentGroups = useMemo(
@@ -1033,6 +1178,13 @@ export function TenantModuleManagementSection({
       {activeTab === 'orders' ? (
         <div className="admin-card-stack">
           <div className="admin-form-grid">
+            <AdminField label="Buscar pedidos">
+              <input
+                value={orderSearchValue}
+                onChange={(event) => setOrderSearchValue(event.target.value)}
+                placeholder="Buscar por cliente, telefone ou item"
+              />
+            </AdminField>
             <AdminField label="Filtrar pedidos por status">
               <select value={orderFilter} onChange={(event) => setOrderFilter(event.target.value)} disabled={ordersBusy}>
                 <option value="all">Todos</option>
@@ -1041,6 +1193,13 @@ export function TenantModuleManagementSection({
                     {ORDER_STATUS_LABELS[status]}
                   </option>
                 ))}
+              </select>
+            </AdminField>
+            <AdminField label="Ordenar pedidos">
+              <select value={orderSort} onChange={(event) => setOrderSort(event.target.value)} disabled={ordersBusy}>
+                <option value={ORDER_SORT_OPTIONS.arrival}>Ordem de chegada</option>
+                <option value={ORDER_SORT_OPTIONS.recent}>Mais recente primeiro</option>
+                <option value={ORDER_SORT_OPTIONS.oldest}>Mais antigo primeiro</option>
               </select>
             </AdminField>
           </div>
@@ -1066,10 +1225,30 @@ export function TenantModuleManagementSection({
                 {!isOrderGroupCollapsed(group.status) ? (
                 <div className="admin-repeater-list">
                   {group.items.map((order) => (
-                    <div key={order.id} className="admin-repeater-card">
-                      <strong>{order.customerName}</strong>
-                      <span>{order.customerPhone} - {order.deliveryType === 'delivery' ? 'Entrega' : 'Retirada'}</span>
-                      <strong>{formatCurrencyValue(order.total)}</strong>
+                    <div key={order.id} className="admin-repeater-card admin-order-card" data-testid={`order-card-${group.status}`}>
+                      <div className="admin-order-card__header">
+                        <div className="admin-order-card__identity">
+                          <strong>{order.customerName}</strong>
+                          <span>{order.customerPhone} - {order.deliveryType === 'delivery' ? 'Entrega' : 'Retirada'}</span>
+                        </div>
+                        <div className={`admin-order-status-badge admin-order-status-badge--${order.status || 'received'}`}>
+                          <i aria-hidden="true" />
+                          <span>{ORDER_STATUS_BADGE_LABELS[order.status] || order.status || 'Recebido'}</span>
+                        </div>
+                      </div>
+                      <div className="admin-order-card__meta">
+                        <strong>{formatCurrencyValue(order.total)}</strong>
+                        {order.createdAt ? (
+                          <span className="admin-order-card__elapsed">{formatRelativeTime(order.createdAt)}</span>
+                        ) : null}
+                      </div>
+                      <div className="admin-order-card__timeline">
+                        {buildOrderTimeline(order).map(([field, value]) => (
+                          <span key={`${order.id}-${field}`}>
+                            <strong>{ORDER_STATUS_TIMESTAMP_LABELS[field]}:</strong> {formatDateTime(value)}
+                          </span>
+                        ))}
+                      </div>
                       <ul className="admin-module-item-list">
                         {(order.items || []).map((item, index) => (
                           <li key={`${order.id}-item-${index}`}>
@@ -1138,7 +1317,9 @@ export function TenantModuleManagementSection({
               </section>
             ))
           ) : (
-            <p className="admin-muted-copy">Nenhum pedido recebido</p>
+            <p className="admin-muted-copy">
+              {orderSearchValue ? 'Nenhum pedido encontrado com essa busca.' : 'Nenhum pedido recebido'}
+            </p>
           )}
         </div>
       ) : null}

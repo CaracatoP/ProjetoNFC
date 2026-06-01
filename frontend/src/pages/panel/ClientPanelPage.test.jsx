@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -291,6 +292,154 @@ describe('ClientPanelPage', () => {
     expect(await screen.findByText(/pode visualizar o catalogo, mas nao editar produtos/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Profissionais/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Servicos/i })).not.toBeInTheDocument();
+  });
+
+  it('shows an upgrade message when the tenant plan does not include analytics yet', async () => {
+    useAuth.mockReturnValue({
+      token: 'client-token',
+      user: { displayName: 'Cliente Dono', roleLevel: 2 },
+      subscription: { plan: { name: 'Starter', code: 'starter' } },
+      access: {
+        billingStatus: 'paid',
+        analyticsScope: 'none',
+        capabilities: {
+          canEditTenantBasics: true,
+          canUploadMedia: true,
+          canViewCatalog: true,
+          canEditCatalog: true,
+          canViewOrders: true,
+          canManageOrders: true,
+          canViewAppointments: true,
+          canManageAppointments: true,
+          canViewProfessionals: true,
+          canEditProfessionals: true,
+          canViewServices: true,
+          canEditServices: true,
+          canViewAnalytics: false,
+        },
+      },
+      isSuspendedClientAccess: false,
+      logout: vi.fn(),
+    });
+
+    render(
+      <MemoryRouter>
+        <ClientPanelPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Operacao do tenant')).toBeInTheDocument();
+    expect(await screen.findByText('Analytics indisponivel no plano atual')).toBeInTheDocument();
+    expect(screen.getAllByText(/Starter/).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Eventos recentes')).not.toBeInTheDocument();
+  });
+
+  it('refreshes the session after plan updates and reloads analytics with the new scope', async () => {
+    let forceAuthRerender = () => {};
+    const authState = {
+      token: 'client-token',
+      user: { displayName: 'Cliente Dono', roleLevel: 2 },
+      subscription: { plan: { name: 'Starter' } },
+      access: {
+        billingStatus: 'paid',
+        analyticsScope: 'none',
+        capabilities: {
+          canEditTenantBasics: true,
+          canUploadMedia: true,
+          canViewCatalog: true,
+          canEditCatalog: true,
+          canViewOrders: true,
+          canManageOrders: true,
+          canViewAppointments: true,
+          canManageAppointments: true,
+          canViewProfessionals: true,
+          canEditProfessionals: true,
+          canViewServices: true,
+          canEditServices: true,
+          canViewAnalytics: false,
+        },
+      },
+      isSuspendedClientAccess: false,
+      logout: vi.fn(),
+      refreshSession: vi.fn(async () => {
+        authState.subscription = { plan: { name: 'Premium' } };
+        authState.access = {
+          billingStatus: 'paid',
+          analyticsScope: 'advanced',
+          capabilities: {
+            ...authState.access.capabilities,
+            canViewAnalytics: true,
+          },
+        };
+        forceAuthRerender();
+        return {
+          user: authState.user,
+          subscription: authState.subscription,
+          access: authState.access,
+        };
+      }),
+    };
+
+    useAuth.mockImplementation(() => authState);
+    clientPanelService.fetchClientPanelAnalytics.mockResolvedValue({
+      scope: 'advanced',
+      totals: {
+        totalEvents: 42,
+        last7DaysEvents: 11,
+        pageViews: 27,
+      },
+    });
+
+    function AuthRerenderHarness() {
+      const [, setVersion] = useState(0);
+
+      useEffect(() => {
+        forceAuthRerender = () => setVersion((current) => current + 1);
+        return () => {
+          forceAuthRerender = () => {};
+        };
+      }, []);
+
+      return <ClientPanelPage />;
+    }
+
+    render(
+      <MemoryRouter>
+        <AuthRerenderHarness />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Operacao do tenant')).toBeInTheDocument();
+    expect(screen.getAllByText('Sem analytics').length).toBeGreaterThan(0);
+    expect(screen.getByText('Analytics indisponivel no plano atual')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(tenantRealtimeService.subscribeToTenantUpdates).toHaveBeenCalledWith(
+        {
+          businessId: 'business-1',
+          slug: 'barbearia-estilo-vivo',
+        },
+        expect.objectContaining({
+          onTenantUpdated: expect.any(Function),
+        }),
+      );
+    });
+
+    await act(async () => {
+      await realtimeCallbacks.onTenantUpdated?.({
+        businessId: 'business-1',
+        kind: 'plan_updated',
+        emittedAt: new Date().toISOString(),
+      });
+    });
+
+    await waitFor(() => {
+      expect(authState.refreshSession).toHaveBeenCalledTimes(1);
+      expect(clientPanelService.fetchClientPanelBusiness).toHaveBeenCalledTimes(2);
+      expect(clientPanelService.fetchClientPanelAnalytics).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Visao do tenant')).toBeInTheDocument();
+      expect(screen.getAllByText('Avancado').length).toBeGreaterThan(0);
+    });
   });
 
   it('refetches the tenant after realtime updates without discarding unsaved basic edits and cleans up on unmount', async () => {

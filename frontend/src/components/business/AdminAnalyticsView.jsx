@@ -11,6 +11,14 @@ function formatPercent(value) {
   return `${Number(value || 0).toFixed(1)}%`;
 }
 
+function formatDateTime(value) {
+  if (!value) {
+    return '';
+  }
+
+  return new Date(value).toLocaleString('pt-BR');
+}
+
 function formatDayLabel(date) {
   if (!date) {
     return '';
@@ -32,6 +40,30 @@ function AnalyticsMetricCard({ label, value, description, accent = 'default' }) 
       <span>{label}</span>
       <strong>{value}</strong>
       {description ? <small>{description}</small> : null}
+    </div>
+  );
+}
+
+function AnalyticsScopeBanner({ baselineAt, baselineCoverage, canResetAnalytics, resettingAnalytics, onResetAnalytics }) {
+  if (!baselineAt && !canResetAnalytics) {
+    return null;
+  }
+
+  return (
+    <div className="analytics-baseline-banner">
+      <div>
+        <strong>{baselineAt ? `Contando desde ${formatDateTime(baselineAt)}` : 'Baseline de analytics disponivel'}</strong>
+        <span>
+          {baselineAt
+            ? `Os dashboards estao considerando apenas eventos posteriores ao reset atual. Cobertura aplicada em ${baselineCoverage || 0} tenant(s).`
+            : 'Use o reset global apenas quando quiser iniciar uma nova leitura sem apagar eventos brutos.'}
+        </span>
+      </div>
+      {canResetAnalytics ? (
+        <Button variant="secondary" onClick={onResetAnalytics} disabled={resettingAnalytics}>
+          {resettingAnalytics ? 'Resetando analytics...' : 'Resetar baseline'}
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -264,6 +296,9 @@ export function AdminAnalyticsView({
   selectedBusinessId,
   onSelectBusiness,
   onOpenWorkspace,
+  onResetAnalytics,
+  canResetAnalytics = false,
+  resettingAnalytics = false,
   loadingEditor,
 }) {
   if (!overview) {
@@ -298,11 +333,19 @@ export function AdminAnalyticsView({
           </div>
         </div>
 
+        <AnalyticsScopeBanner
+          baselineAt={analytics.baselineAt}
+          baselineCoverage={analytics.baselineCoverage}
+          canResetAnalytics={canResetAnalytics}
+          resettingAnalytics={resettingAnalytics}
+          onResetAnalytics={onResetAnalytics}
+        />
+
         <div className="analytics-metric-grid">
-          <AnalyticsMetricCard label="Eventos totais" value={formatMetric(highlights.totalEvents)} description="Soma de visitas e interacoes do workspace." />
+          <AnalyticsMetricCard label="Eventos totais" value={formatMetric(highlights.totalEvents)} description="Soma de visitas e interacoes do workspace." accent="default" />
           <AnalyticsMetricCard label="Visitas" value={formatMetric(highlights.pageViews)} description="Page views coletados no site publico." accent="info" />
           <AnalyticsMetricCard label="Cliques em links" value={formatMetric(highlights.linkClicks)} description="Cliques em links e acoes externas." accent="accent" />
-          <AnalyticsMetricCard label="Atalhos usados" value={formatMetric(highlights.shortcutClicks)} description="WhatsApp, telefone, Wi-Fi, PIX e similares." accent="accent" />
+          <AnalyticsMetricCard label="Atalhos usados" value={formatMetric(highlights.shortcutClicks)} description="WhatsApp, telefone, Wi-Fi, PIX e similares." accent="warning" />
           <AnalyticsMetricCard label="Visitantes unicos" value={formatMetric(highlights.uniqueVisitors)} description="Baseado em hash anonimo do visitante." accent="success" />
           <AnalyticsMetricCard label="Taxa de interacao" value={formatPercent(highlights.actionRate)} description="Interacoes totais por page view." accent="success" />
         </div>

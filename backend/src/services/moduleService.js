@@ -163,7 +163,35 @@ function serializeOrderRecord(item) {
     deliveryType: record.deliveryType || 'pickup',
     address: record.address || '',
     status: record.status || 'received',
+    createdAt: record.createdAt || null,
+    updatedAt: record.updatedAt || null,
+    receivedAt: record.receivedAt || record.createdAt || null,
+    preparingAt: record.preparingAt || null,
+    readyAt: record.readyAt || null,
+    deliveredAt: record.deliveredAt || null,
+    cancelledAt: record.cancelledAt || null,
     notes: record.notes || '',
+  };
+}
+
+const ORDER_STATUS_TIMESTAMP_FIELDS = {
+  received: 'receivedAt',
+  preparing: 'preparingAt',
+  ready: 'readyAt',
+  delivered: 'deliveredAt',
+  cancelled: 'cancelledAt',
+};
+
+function buildOrderStatusTimestampPatch(existingOrder, status, occurredAt = new Date()) {
+  const timestampField = ORDER_STATUS_TIMESTAMP_FIELDS[status];
+
+  if (!timestampField) {
+    return { status };
+  }
+
+  return {
+    status,
+    ...(existingOrder?.[timestampField] ? {} : { [timestampField]: occurredAt }),
   };
 }
 
@@ -362,6 +390,7 @@ export async function createPublicOrder(slug, payload) {
   const business = await assertPublicBusinessBySlug(slug);
   const orderItems = await buildOrderItemsSnapshot(business._id, payload.items || []);
   const total = calculateOrderTotal(orderItems);
+  const receivedAt = new Date();
 
   const created = await createOrderRecord({
     ...payload,
@@ -369,6 +398,7 @@ export async function createPublicOrder(slug, payload) {
     items: orderItems,
     total,
     status: 'received',
+    receivedAt,
   });
 
   publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_CREATED, 'created');
@@ -384,12 +414,16 @@ export async function updateTenantOrderStatus(businessId, id, status) {
   const business = await assertBusinessExists(businessId);
   const existing = await findOrderById(id);
   assertTenantScope(existing, businessId, 'Pedido');
-  const updated = await updateOrderRecordByBusinessId(businessId, id, { status });
+  const updated = await updateOrderRecordByBusinessId(
+    businessId,
+    id,
+    buildOrderStatusTimestampPatch(existing, status),
+  );
   if (!updated) {
     throw new AppError('Pedido nao encontrado', 404, 'module_resource_not_found');
   }
   publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_STATUS_UPDATED);
-  return toPlainRecord(updated);
+  return serializeOrderRecord(updated);
 }
 
 export async function archiveTenantOrder(businessId, id) {

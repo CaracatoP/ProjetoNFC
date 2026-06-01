@@ -13,9 +13,11 @@ vi.mock('@/context/AuthContext.jsx', () => ({
 
 vi.mock('@/services/adminService.js', () => ({
   fetchAdminOverview: vi.fn(),
+  resetAdminAnalytics: vi.fn(),
   listAdminBusinesses: vi.fn(),
   listAdminClients: vi.fn(),
   getAdminBusiness: vi.fn(),
+  createAdminPreviewToken: vi.fn(),
   createAdminBusiness: vi.fn(),
   createAdminClientAccount: vi.fn(),
   updateAdminBusiness: vi.fn(),
@@ -76,6 +78,8 @@ const overviewFixture = {
     acceptedMimeTypes: ['image/jpeg', 'image/png'],
   },
   analytics: {
+    baselineAt: '2026-06-01T10:00:00.000Z',
+    baselineCoverage: 3,
     highlights: {
       totalEvents: 24,
       last7DaysEvents: 10,
@@ -366,6 +370,11 @@ describe('DashboardHomePage', () => {
     });
 
     adminService.fetchAdminOverview.mockResolvedValue(overviewFixture);
+    adminService.resetAdminAnalytics.mockResolvedValue({
+      scope: 'global',
+      baselineAt: '2026-06-01T10:05:00.000Z',
+      updatedBusinesses: 3,
+    });
     adminService.listAdminBusinesses.mockResolvedValue([businessFixture]);
     adminService.listAdminClients.mockResolvedValue([
       {
@@ -393,6 +402,19 @@ describe('DashboardHomePage', () => {
       },
     ]);
     adminService.getAdminBusiness.mockResolvedValue(editorFixture);
+    adminService.createAdminPreviewToken
+      .mockResolvedValueOnce({
+        token: 'preview-token-1',
+        expiresAt: '2026-06-01T12:00:00.000Z',
+      })
+      .mockResolvedValueOnce({
+        token: 'preview-token-2',
+        expiresAt: '2026-06-01T12:05:00.000Z',
+      })
+      .mockResolvedValue({
+        token: 'preview-token-default',
+        expiresAt: '2026-06-01T12:10:00.000Z',
+      });
     adminService.createAdminBusiness.mockResolvedValue({
       ...editorFixture,
       business: {
@@ -962,16 +984,20 @@ describe('DashboardHomePage', () => {
 
     expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
 
-    const iframe = screen.getByTitle('Preview Barbearia Estilo Vivo');
+    const iframe = await screen.findByTitle('Preview Barbearia Estilo Vivo');
     const firstPreviewUrl = iframe.getAttribute('src') || '';
 
     expect(firstPreviewUrl).toContain('/site/barbearia-estilo-vivo?preview=1&t=');
+    expect(firstPreviewUrl).toContain('previewToken=');
+    const initialPreviewTokenCalls = adminService.createAdminPreviewToken.mock.calls.length;
 
     await user.click(screen.getByRole('button', { name: /Atualizar preview/i }));
 
     await waitFor(() => {
+      expect(adminService.createAdminPreviewToken.mock.calls.length).toBeGreaterThan(initialPreviewTokenCalls);
       const refreshedPreviewUrl = screen.getByTitle('Preview Barbearia Estilo Vivo').getAttribute('src') || '';
       expect(refreshedPreviewUrl).toContain('/site/barbearia-estilo-vivo?preview=1&t=');
+      expect(refreshedPreviewUrl).toContain('previewToken=');
       expect(refreshedPreviewUrl).not.toBe(firstPreviewUrl);
     });
   });
@@ -1013,7 +1039,31 @@ describe('DashboardHomePage', () => {
     expect(await screen.findByText('Centro de analytics')).toBeInTheDocument();
     expect(screen.getByText('Visitas ao longo do tempo')).toBeInTheDocument();
     expect(screen.getByText('Atalhos mais usados')).toBeInTheDocument();
+    expect(screen.getByText(/Contando desde/)).toBeInTheDocument();
     expect(screen.queryByText('Novo comercio')).not.toBeInTheDocument();
+  });
+
+  it('lets level 0 reset the analytics baseline from the admin analytics view', async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Analises/i }));
+
+    await user.click(await screen.findByRole('button', { name: /Resetar baseline/i }));
+
+    await waitFor(() => {
+      expect(adminService.resetAdminAnalytics).toHaveBeenCalledWith('admin-token');
+    });
+
+    expect(await screen.findByText(/Analytics resetado com sucesso/)).toBeInTheDocument();
+    confirmSpy.mockRestore();
   });
 
   it('opens the clients area and allows the super admin to create a tenant-linked access', async () => {

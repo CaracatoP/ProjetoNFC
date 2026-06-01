@@ -12,6 +12,15 @@ export async function fetchAdminOverview(token) {
   return response.data;
 }
 
+export async function resetAdminAnalytics(token) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/dashboard/analytics/reset`, {
+    method: 'POST',
+    headers: buildAdminAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
 function buildQueryString(filters = {}) {
   const params = new URLSearchParams();
 
@@ -44,6 +53,15 @@ export async function getAdminBusiness(token, businessId) {
   });
 
   return normalizeEditorPayload(response.data);
+}
+
+export async function createAdminPreviewToken(token, businessId) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/businesses/${businessId}/preview-token`, {
+    method: 'POST',
+    headers: buildAdminAuthHeaders(token),
+  });
+
+  return response.data;
 }
 
 export async function createAdminBusiness(token, payload) {

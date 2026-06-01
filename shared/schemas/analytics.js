@@ -6,6 +6,8 @@ export const analyticsEventSchema = z
     slug: z.string().optional(),
     businessId: z.string().optional(),
     eventType: z.enum(ANALYTICS_EVENT_TYPE_VALUES),
+    preview: z.boolean().optional(),
+    previewToken: z.string().optional(),
     sectionType: z.enum(SECTION_TYPE_VALUES).optional(),
     targetType: z.string().optional(),
     targetId: z.string().optional(),
@@ -17,4 +19,3 @@ export const analyticsEventSchema = z
     message: 'slug ou businessId são obrigatórios',
     path: ['slug'],
   });
-
