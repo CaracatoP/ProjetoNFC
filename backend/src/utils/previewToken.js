@@ -25,7 +25,13 @@ function normalizeSlug(value) {
 }
 
 function verifyPreviewToken(token) {
-  assertPreviewTokenSecret();
+  if (!String(token || '').trim()) {
+    return null;
+  }
+
+  if (!String(env.previewTokenSecret || '').trim()) {
+    return null;
+  }
 
   try {
     return jwt.verify(String(token || ''), env.previewTokenSecret, {

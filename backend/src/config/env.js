@@ -21,8 +21,12 @@ const adminTokenSecret = getDevelopmentFallback(
   process.env.ADMIN_TOKEN_SECRET || process.env.JWT_SECRET,
   'dev-admin-token-secret',
 );
+const previewTokenSecretSource =
+  process.env.PREVIEW_TOKEN_SECRET ||
+  process.env.ADMIN_PREVIEW_TOKEN_SECRET ||
+  adminTokenSecret;
 const previewTokenSecret = getDevelopmentFallback(
-  process.env.PREVIEW_TOKEN_SECRET || process.env.ADMIN_PREVIEW_TOKEN_SECRET,
+  previewTokenSecretSource,
   adminTokenSecret,
 );
 

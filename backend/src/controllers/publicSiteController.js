@@ -40,9 +40,11 @@ function applyPublicSiteCacheHeaders(res, previewMeta) {
 
 export async function getSiteBySlug(req, res) {
   const slug = req.validated.params.slug;
+  const previewRequested = isPreviewRequest(req);
+  const previewToken = getPreviewToken(req);
   const previewMeta = {
-    previewRequested: isPreviewRequest(req),
-    previewAuthorized: isPreviewTokenValidForSlug(getPreviewToken(req), slug),
+    previewRequested,
+    previewAuthorized: previewRequested && previewToken ? isPreviewTokenValidForSlug(previewToken, slug) : false,
   };
   const payload = await getPublicSiteBySlug(slug, {
     allowInactive: previewMeta.previewAuthorized,

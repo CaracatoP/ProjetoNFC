@@ -13,6 +13,7 @@ let Professional;
 let AppointmentService;
 let Product;
 let subscribeToTenantUpdates;
+let env;
 let mongoServer;
 let adminToken;
 
@@ -37,6 +38,7 @@ describe('Public routes', () => {
     ({ AppointmentService } = await import('../models/AppointmentService.js'));
     ({ Product } = await import('../models/Product.js'));
     ({ subscribeToTenantUpdates } = await import('../services/tenantRealtimeService.js'));
+    ({ env } = await import('../config/env.js'));
     ({ default: app } = await import('../app.js'));
 
     await connectDatabase();
@@ -67,6 +69,21 @@ describe('Public routes', () => {
     expect(response.body.data.business.slug).toBe('barbearia-estilo-vivo');
     expect(response.body.data.sections[0].type).toBe('hero');
     expect(response.body.data.sections.some((section) => section.type === 'pix')).toBe(true);
+  });
+
+  it('keeps the public site route working when preview tokens are not configured', async () => {
+    const previousPreviewTokenSecret = env.previewTokenSecret;
+    env.previewTokenSecret = '';
+
+    try {
+      const response = await request(app).get('/api/public/site/barbearia-estilo-vivo');
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.business.slug).toBe('barbearia-estilo-vivo');
+    } finally {
+      env.previewTokenSecret = previousPreviewTokenSecret;
+    }
   });
 
   it('requires a valid preview token before bypassing cache for preview public requests by slug', async () => {
