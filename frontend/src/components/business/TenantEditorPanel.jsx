@@ -703,6 +703,107 @@ export function TenantEditorPanel({
           <div className="admin-split-grid admin-split-grid--payments">
             <div className="admin-subpanel admin-subpanel--payment">
               <h3>PIX</h3>
+              <div className="admin-card-stack">
+                <label className="admin-module-card admin-module-card--compact">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(draft.business.paymentSettings?.enabled)}
+                    onChange={(event) => setDraft((current) => ({
+                      ...current,
+                      business: {
+                        ...current.business,
+                        paymentSettings: {
+                          ...(current.business.paymentSettings || {}),
+                          enabled: event.target.checked,
+                        },
+                      },
+                    }))}
+                  />
+                  <div>
+                    <strong>Checkout com pagamento</strong>
+                    <span>Controla se o catalogo mostra formas de pagamento no fechamento do pedido.</span>
+                  </div>
+                </label>
+
+                <div className="admin-module-grid admin-module-grid--payments">
+                  <label className="admin-module-card admin-module-card--compact">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(draft.business.paymentSettings?.methods?.pix)}
+                      onChange={(event) => setDraft((current) => ({
+                        ...current,
+                        business: {
+                          ...current.business,
+                          paymentSettings: {
+                            ...(current.business.paymentSettings || {}),
+                            methods: {
+                              ...(current.business.paymentSettings?.methods || {}),
+                              pix: event.target.checked,
+                            },
+                          },
+                        },
+                      }))}
+                    />
+                    <div>
+                      <strong>Pix</strong>
+                      <span>Mostra QR Code e codigo copia e cola apos criar o pedido.</span>
+                    </div>
+                  </label>
+
+                  <label className="admin-module-card admin-module-card--compact">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(draft.business.paymentSettings?.methods?.cashOnPickup)}
+                      onChange={(event) => setDraft((current) => ({
+                        ...current,
+                        business: {
+                          ...current.business,
+                          paymentSettings: {
+                            ...(current.business.paymentSettings || {}),
+                            methods: {
+                              ...(current.business.paymentSettings?.methods || {}),
+                              cashOnPickup: event.target.checked,
+                            },
+                          },
+                        },
+                      }))}
+                    />
+                    <div>
+                      <strong>Pagamento na retirada</strong>
+                      <span>Pedido criado agora, pagamento confirmado no momento da retirada.</span>
+                    </div>
+                  </label>
+
+                  <label className="admin-module-card admin-module-card--compact">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(draft.business.paymentSettings?.methods?.cashOnDelivery)}
+                      onChange={(event) => setDraft((current) => ({
+                        ...current,
+                        business: {
+                          ...current.business,
+                          paymentSettings: {
+                            ...(current.business.paymentSettings || {}),
+                            methods: {
+                              ...(current.business.paymentSettings?.methods || {}),
+                              cashOnDelivery: event.target.checked,
+                            },
+                          },
+                        },
+                      }))}
+                    />
+                    <div>
+                      <strong>Pagamento na entrega</strong>
+                      <span>Pedido criado agora, pagamento confirmado na entrega.</span>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="admin-inline-note admin-inline-note--preview">
+                  <strong>Cartoes preparados para depois</strong>
+                  <span>Credito e debito so serao exibidos no checkout quando houver gateway seguro configurado.</span>
+                </div>
+              </div>
               <div className="admin-form-grid">
                 <AdminField label="Tipo de chave">
                   <select
@@ -728,7 +829,7 @@ export function TenantEditorPanel({
                 </AdminField>
                 <SensitiveInput
                   label="Chave PIX"
-                  value={draft.business.contact?.pix?.key || ''}
+                  value={draft.business.paymentSettings?.pix?.key || ''}
                   onChange={(event) => setDraft((current) => ({
                     ...current,
                     business: {
@@ -737,13 +838,20 @@ export function TenantEditorPanel({
                         ...current.business.contact,
                         pix: { ...(current.business.contact?.pix || {}), key: event.target.value },
                       },
+                      paymentSettings: {
+                        ...(current.business.paymentSettings || {}),
+                        pix: {
+                          ...(current.business.paymentSettings?.pix || {}),
+                          key: event.target.value,
+                        },
+                      },
                     },
                   }))}
                   placeholder="Chave PIX do recebedor"
                 />
                 <AdminField label="Recebedor">
                   <input
-                    value={draft.business.contact?.pix?.receiverName || ''}
+                    value={draft.business.paymentSettings?.pix?.merchantName || ''}
                     onChange={(event) => setDraft((current) => ({
                       ...current,
                       business: {
@@ -751,6 +859,35 @@ export function TenantEditorPanel({
                         contact: {
                           ...current.business.contact,
                           pix: { ...(current.business.contact?.pix || {}), receiverName: event.target.value },
+                        },
+                        paymentSettings: {
+                          ...(current.business.paymentSettings || {}),
+                          pix: {
+                            ...(current.business.paymentSettings?.pix || {}),
+                            merchantName: event.target.value,
+                          },
+                        },
+                      },
+                    }))}
+                  />
+                </AdminField>
+                <AdminField label="Cidade do Pix">
+                  <input
+                    value={draft.business.paymentSettings?.pix?.merchantCity || ''}
+                    onChange={(event) => setDraft((current) => ({
+                      ...current,
+                      business: {
+                        ...current.business,
+                        contact: {
+                          ...current.business.contact,
+                          pix: { ...(current.business.contact?.pix || {}), city: event.target.value },
+                        },
+                        paymentSettings: {
+                          ...(current.business.paymentSettings || {}),
+                          pix: {
+                            ...(current.business.paymentSettings?.pix || {}),
+                            merchantCity: event.target.value,
+                          },
                         },
                       },
                     }))}

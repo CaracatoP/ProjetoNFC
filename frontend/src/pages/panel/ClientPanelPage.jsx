@@ -4,6 +4,11 @@ import {
   BILLING_ACCESS_LABELS,
   ROLE_LEVEL_LABELS,
 } from '@shared/constants/access.js';
+import {
+  PAYMENT_METHOD_LABELS,
+  PAYMENT_STATUS,
+  PAYMENT_STATUS_LABELS,
+} from '@shared/constants/index.js';
 import { PLAN_CAPABILITY_DEFINITIONS, PLAN_TYPES } from '@shared/constants/plans.js';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
@@ -33,6 +38,7 @@ import {
   deleteClientPanelProfessional,
   fetchClientPanelAnalytics,
   fetchClientPanelBusiness,
+  updateClientPanelOrderPaymentStatus,
   updateClientPanelAppointmentRequestStatus,
   updateClientPanelAppointmentService,
   updateClientPanelBusinessBasics,
@@ -81,6 +87,7 @@ function buildBasicBusinessPayload(draft) {
       address: draft.business?.address || {},
       hours: draft.business?.hours || [],
       contact: draft.business?.contact || {},
+      paymentSettings: draft.business?.paymentSettings || {},
       seo: draft.business?.seo || {},
     },
   };
@@ -697,6 +704,247 @@ function BasicSettingsCard({
           </AdminField>
         </div>
 
+        <section className="admin-form-block admin-form-block--soft">
+          <div className="admin-panel-card__header admin-panel-card__header--compact">
+            <div>
+              <h2>Pagamentos do checkout</h2>
+              <p>Ative os metodos aceitos no catalogo publico. O Pix manual gera QR Code e copia e cola no pedido.</p>
+            </div>
+          </div>
+
+          <div className="admin-card-stack">
+            <label className="admin-module-card admin-module-card--compact">
+              <input
+                type="checkbox"
+                checked={Boolean(draft.business?.paymentSettings?.enabled)}
+                disabled={!canEdit}
+                onChange={(event) =>
+                  onChange((current) => ({
+                    ...current,
+                    business: {
+                      ...current.business,
+                      paymentSettings: {
+                        ...(current.business?.paymentSettings || {}),
+                        enabled: event.target.checked,
+                      },
+                    },
+                  }))
+                }
+              />
+              <div>
+                <strong>Checkout com pagamento</strong>
+                <span>Controla se o catalogo publico mostra formas de pagamento no fechamento do pedido.</span>
+              </div>
+            </label>
+
+            <div className="admin-module-grid admin-module-grid--payments">
+              <label className="admin-module-card admin-module-card--compact">
+                <input
+                  type="checkbox"
+                  checked={Boolean(draft.business?.paymentSettings?.methods?.pix)}
+                  disabled={!canEdit}
+                  onChange={(event) =>
+                    onChange((current) => ({
+                      ...current,
+                      business: {
+                        ...current.business,
+                        paymentSettings: {
+                          ...(current.business?.paymentSettings || {}),
+                          methods: {
+                            ...(current.business?.paymentSettings?.methods || {}),
+                            pix: event.target.checked,
+                          },
+                        },
+                      },
+                    }))
+                  }
+                />
+                <div>
+                  <strong>Pix</strong>
+                  <span>Mostra QR Code e codigo copia e cola apos criar o pedido.</span>
+                </div>
+              </label>
+
+              <label className="admin-module-card admin-module-card--compact">
+                <input
+                  type="checkbox"
+                  checked={Boolean(draft.business?.paymentSettings?.methods?.cashOnPickup)}
+                  disabled={!canEdit}
+                  onChange={(event) =>
+                    onChange((current) => ({
+                      ...current,
+                      business: {
+                        ...current.business,
+                        paymentSettings: {
+                          ...(current.business?.paymentSettings || {}),
+                          methods: {
+                            ...(current.business?.paymentSettings?.methods || {}),
+                            cashOnPickup: event.target.checked,
+                          },
+                        },
+                      },
+                    }))
+                  }
+                />
+                <div>
+                  <strong>Pagamento na retirada</strong>
+                  <span>Cliente finaliza agora e paga ao retirar o pedido.</span>
+                </div>
+              </label>
+
+              <label className="admin-module-card admin-module-card--compact">
+                <input
+                  type="checkbox"
+                  checked={Boolean(draft.business?.paymentSettings?.methods?.cashOnDelivery)}
+                  disabled={!canEdit}
+                  onChange={(event) =>
+                    onChange((current) => ({
+                      ...current,
+                      business: {
+                        ...current.business,
+                        paymentSettings: {
+                          ...(current.business?.paymentSettings || {}),
+                          methods: {
+                            ...(current.business?.paymentSettings?.methods || {}),
+                            cashOnDelivery: event.target.checked,
+                          },
+                        },
+                      },
+                    }))
+                  }
+                />
+                <div>
+                  <strong>Pagamento na entrega</strong>
+                  <span>Cliente finaliza agora e paga no momento em que receber o pedido.</span>
+                </div>
+              </label>
+            </div>
+
+            <div className="admin-inline-note admin-inline-note--preview">
+              <strong>Cartoes preparados para depois</strong>
+              <span>Credito e debito ficam reservados para o momento em que houver Stripe, Mercado Pago ou outro gateway seguro.</span>
+            </div>
+
+            <div className="admin-form-grid">
+              <AdminField label="Tipo de chave Pix">
+                <select
+                  disabled={!canEdit}
+                  value={draft.business?.contact?.pix?.keyType || ''}
+                  onChange={(event) =>
+                    onChange((current) => ({
+                      ...current,
+                      business: {
+                        ...current.business,
+                        contact: {
+                          ...(current.business?.contact || {}),
+                          pix: {
+                            ...(current.business?.contact?.pix || {}),
+                            keyType: event.target.value,
+                          },
+                        },
+                      },
+                    }))
+                  }
+                >
+                  <option value="">Selecione</option>
+                  <option value="cpf">CPF</option>
+                  <option value="cnpj">CNPJ</option>
+                  <option value="email">E-mail</option>
+                  <option value="telefone">Telefone</option>
+                  <option value="aleatoria">Aleatoria</option>
+                </select>
+              </AdminField>
+
+              <AdminField label="Chave Pix">
+                <input
+                  disabled={!canEdit}
+                  value={draft.business?.paymentSettings?.pix?.key || ''}
+                  onChange={(event) =>
+                    onChange((current) => ({
+                      ...current,
+                      business: {
+                        ...current.business,
+                        contact: {
+                          ...(current.business?.contact || {}),
+                          pix: {
+                            ...(current.business?.contact?.pix || {}),
+                            key: event.target.value,
+                          },
+                        },
+                        paymentSettings: {
+                          ...(current.business?.paymentSettings || {}),
+                          pix: {
+                            ...(current.business?.paymentSettings?.pix || {}),
+                            key: event.target.value,
+                          },
+                        },
+                      },
+                    }))
+                  }
+                />
+              </AdminField>
+
+              <AdminField label="Recebedor Pix">
+                <input
+                  disabled={!canEdit}
+                  value={draft.business?.paymentSettings?.pix?.merchantName || ''}
+                  onChange={(event) =>
+                    onChange((current) => ({
+                      ...current,
+                      business: {
+                        ...current.business,
+                        contact: {
+                          ...(current.business?.contact || {}),
+                          pix: {
+                            ...(current.business?.contact?.pix || {}),
+                            receiverName: event.target.value,
+                          },
+                        },
+                        paymentSettings: {
+                          ...(current.business?.paymentSettings || {}),
+                          pix: {
+                            ...(current.business?.paymentSettings?.pix || {}),
+                            merchantName: event.target.value,
+                          },
+                        },
+                      },
+                    }))
+                  }
+                />
+              </AdminField>
+
+              <AdminField label="Cidade do Pix">
+                <input
+                  disabled={!canEdit}
+                  value={draft.business?.paymentSettings?.pix?.merchantCity || ''}
+                  onChange={(event) =>
+                    onChange((current) => ({
+                      ...current,
+                      business: {
+                        ...current.business,
+                        contact: {
+                          ...(current.business?.contact || {}),
+                          pix: {
+                            ...(current.business?.contact?.pix || {}),
+                            city: event.target.value,
+                          },
+                        },
+                        paymentSettings: {
+                          ...(current.business?.paymentSettings || {}),
+                          pix: {
+                            ...(current.business?.paymentSettings?.pix || {}),
+                            merchantCity: event.target.value,
+                          },
+                        },
+                      },
+                    }))
+                  }
+                />
+              </AdminField>
+            </div>
+          </div>
+        </section>
+
         <AdminField label="Endereco">
           <input
             disabled={!canEdit}
@@ -1034,6 +1282,8 @@ export function ClientPanelPage() {
         refreshAfterModuleAction('delete-appointment-service', () => deleteClientPanelAppointmentService(token, serviceId), 'Servico removido com sucesso.'),
       updateOrderStatus: (orderId, status) =>
         refreshAfterModuleAction('update-order-status', () => updateClientPanelOrderStatus(token, orderId, status), 'Status do pedido atualizado com sucesso.'),
+      updateOrderPaymentStatus: (orderId, status) =>
+        refreshAfterModuleAction('update-order-payment-status', () => updateClientPanelOrderPaymentStatus(token, orderId, status), 'Status do pagamento atualizado com sucesso.'),
       deleteOrder: (orderId) =>
         refreshAfterModuleAction('delete-order', () => deleteClientPanelOrder(token, orderId), 'Pedido arquivado com sucesso.'),
       updateAppointmentRequestStatus: (requestId, status) =>

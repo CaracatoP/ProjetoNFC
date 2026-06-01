@@ -18,6 +18,7 @@ import {
   updateClientPanelAppointmentRequestStatus,
   updateClientPanelAppointmentService,
   updateClientPanelBusinessBasics,
+  updateClientPanelOrderPaymentStatus,
   updateClientPanelOrderStatus,
   updateClientPanelProduct,
   updateClientPanelProfessional,
@@ -194,6 +195,17 @@ export async function updateClientPanelOrderStatusController(req, res, next) {
     return successResponse(
       res,
       await updateClientPanelOrderStatus(req.sessionUser, getParams(req).id, getBody(req).status),
+    );
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function updateClientPanelOrderPaymentStatusController(req, res, next) {
+  try {
+    return successResponse(
+      res,
+      await updateClientPanelOrderPaymentStatus(req.sessionUser, getParams(req).id, getBody(req).status),
     );
   } catch (error) {
     return next(error);

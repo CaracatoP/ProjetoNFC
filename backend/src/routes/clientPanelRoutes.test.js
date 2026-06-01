@@ -370,6 +370,63 @@ describe('Client panel routes', () => {
     expect(listOrdersResponse.body.data.some((item) => item.id === createdOrder.id)).toBe(false);
   });
 
+  it('allows authorized client operators to mark manual tenant payments as paid', async () => {
+    const ownerToken = await login('owner@cliente.local', 'owner123456');
+
+    const product = await Product.findOne({ businessId: primaryBusiness._id }).lean();
+    expect(product).toBeTruthy();
+
+    await Business.updateOne(
+      { _id: primaryBusiness._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: false,
+            debitCard: false,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'manual',
+        },
+      },
+    );
+
+    const createOrderResponse = await request(app).post('/api/public/site/barbearia-estilo-vivo/orders').send({
+      customerName: 'Cliente Pix',
+      customerPhone: '11988887777',
+      items: [
+        {
+          productId: String(product._id),
+          name: product.name,
+          quantity: 1,
+          unitPrice: Number(product.price || 49.9),
+        },
+      ],
+      payment: {
+        method: 'pix',
+      },
+    });
+
+    expect(createOrderResponse.status).toBe(201);
+
+    const response = await request(app)
+      .patch(`/api/panel/orders/${createOrderResponse.body.data.id}/payment-status`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ status: 'paid' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.payment).toEqual(
+      expect.objectContaining({
+        method: 'pix',
+        status: 'paid',
+        provider: 'manual',
+      }),
+    );
+    expect(response.body.data.payment.paidAt).toEqual(expect.any(String));
+  });
+
   it('fills order lifecycle timestamps on first status transition without overwriting prior marks', async () => {
     const operatorToken = await login('operator@cliente.local', 'operator123456');
     const createdOrder = await createOrderForPrimaryBusiness();
@@ -493,6 +550,14 @@ describe('Client panel routes', () => {
     expect(archiveOrderResponse.status).toBe(403);
     expect(archiveOrderResponse.body.error.code).toBe('panel_orders_forbidden');
 
+    const updatePaymentResponse = await request(app)
+      .patch(`/api/panel/orders/${createdOrder.id}/payment-status`)
+      .set('Authorization', `Bearer ${viewerToken}`)
+      .send({ status: 'paid' });
+
+    expect(updatePaymentResponse.status).toBe(403);
+    expect(updatePaymentResponse.body.error.code).toBe('panel_orders_forbidden');
+
     const listProfessionalsResponse = await request(app)
       .get('/api/panel/professionals')
       .set('Authorization', `Bearer ${viewerToken}`);
@@ -533,6 +598,44 @@ describe('Client panel routes', () => {
         measurementUnit: 'unit',
         active: true,
       });
+
+    expect(response.status).toBe(404);
+    expect(response.body.error.code).toBe('module_resource_not_found');
+  });
+
+  it('blocks cross-tenant payment status mutations from the client panel', async () => {
+    const managerToken = await login('manager@cliente.local', 'manager123456');
+    const foreignOrder = await Order.create({
+      businessId: secondaryBusiness._id,
+      customerName: 'Pedido estrangeiro',
+      customerPhone: '11911111111',
+      items: [
+        {
+          name: 'Produto do outro tenant',
+          quantity: 1,
+          unitPrice: 10,
+          measurementUnit: 'unit',
+          displayQuantity: '1 unidade',
+          itemTotal: 10,
+          notes: '',
+        },
+      ],
+      total: 10,
+      deliveryType: 'pickup',
+      status: 'received',
+      payment: {
+        method: 'cash_on_pickup',
+        status: 'manual',
+        provider: 'manual',
+        amount: 10,
+      },
+      notes: '',
+    });
+
+    const response = await request(app)
+      .patch(`/api/panel/orders/${String(foreignOrder._id)}/payment-status`)
+      .set('Authorization', `Bearer ${managerToken}`)
+      .send({ status: 'paid' });
 
     expect(response.status).toBe(404);
     expect(response.body.error.code).toBe('module_resource_not_found');

@@ -1,6 +1,11 @@
 import mongoose from 'mongoose';
 import {
   DEFAULT_PRODUCT_MEASUREMENT_UNIT,
+  DEFAULT_PAYMENT_PROVIDER,
+  DEFAULT_PAYMENT_STATUS,
+  PAYMENT_METHOD_VALUES,
+  PAYMENT_PROVIDER_VALUES,
+  PAYMENT_STATUS_VALUES,
   PRODUCT_MEASUREMENT_UNIT_VALUES,
 } from '../../../shared/constants/index.js';
 import {
@@ -9,6 +14,7 @@ import {
   isValidMeasurementQuantity,
   normalizeMeasurementUnit,
 } from '../../../shared/utils/productMeasurement.js';
+import { normalizeOrderPayment } from '../../../shared/utils/businessPayment.js';
 import { baseSchemaOptions } from '../utils/mongoose.js';
 
 const ORDER_STATUS_VALUES = ['received', 'preparing', 'ready', 'delivered', 'cancelled'];
@@ -66,6 +72,37 @@ const orderItemSchema = new mongoose.Schema(
   },
 );
 
+const orderPaymentSchema = new mongoose.Schema(
+  {
+    method: {
+      type: String,
+      enum: PAYMENT_METHOD_VALUES,
+      default: 'cash_on_pickup',
+      trim: true,
+    },
+    status: {
+      type: String,
+      enum: PAYMENT_STATUS_VALUES,
+      default: DEFAULT_PAYMENT_STATUS,
+      trim: true,
+    },
+    provider: {
+      type: String,
+      enum: PAYMENT_PROVIDER_VALUES,
+      default: DEFAULT_PAYMENT_PROVIDER,
+      trim: true,
+    },
+    amount: { type: Number, required: true, min: 0, default: 0 },
+    pixCopyPaste: { type: String, trim: true, default: '' },
+    pixQrCodeUrl: { type: String, trim: true, default: '' },
+    providerPaymentId: { type: String, trim: true, default: '' },
+    paidAt: { type: Date, default: null },
+  },
+  {
+    _id: false,
+  },
+);
+
 const orderSchema = new mongoose.Schema(
   {
     businessId: { type: mongoose.Schema.Types.ObjectId, ref: 'Business', required: true, index: true },
@@ -82,6 +119,7 @@ const orderSchema = new mongoose.Schema(
     deliveredAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
     notes: { type: String, trim: true },
+    payment: { type: orderPaymentSchema, default: undefined },
     archivedAt: { type: Date, default: null, index: true },
   },
   {
@@ -92,6 +130,7 @@ const orderSchema = new mongoose.Schema(
         const transformed = baseToJSONTransform ? baseToJSONTransform(doc, ret) : ret;
         transformed.items = normalizeOrderItems(transformed.items);
         transformed.total = Number(Number(transformed.total || 0).toFixed(2));
+        transformed.payment = normalizeOrderPayment(transformed.payment || {}, transformed.total);
         return transformed;
       },
     },
@@ -101,6 +140,7 @@ const orderSchema = new mongoose.Schema(
         const transformed = baseToObjectTransform ? baseToObjectTransform(doc, ret) : ret;
         transformed.items = normalizeOrderItems(transformed.items);
         transformed.total = Number(Number(transformed.total || 0).toFixed(2));
+        transformed.payment = normalizeOrderPayment(transformed.payment || {}, transformed.total);
         return transformed;
       },
     },

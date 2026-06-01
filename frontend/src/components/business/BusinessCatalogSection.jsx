@@ -1,4 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import QRCode from 'react-qr-code';
+import {
+  PAYMENT_METHOD_LABELS,
+  PAYMENT_METHODS,
+  PAYMENT_METHOD_VALUES,
+} from '@shared/constants/index.js';
+import {
+  isBusinessPaymentMethodEnabled,
+  normalizeBusinessPaymentSettings,
+} from '@shared/utils/businessPayment.js';
 import {
   buildMeasurementDisplayQuantity,
   calculateMeasuredItemTotal,
@@ -21,6 +31,7 @@ function defaultCheckoutState() {
     deliveryType: 'pickup',
     address: '',
     notes: '',
+    paymentMethod: '',
   };
 }
 
@@ -114,6 +125,34 @@ function matchesProductSearch(product, searchTerm) {
 
 function normalizePhoneDigits(value) {
   return String(value || '').replace(/\D+/g, '');
+}
+
+function getPaymentMethodDescription(method) {
+  switch (method) {
+    case PAYMENT_METHODS.PIX:
+      return 'Pague pelo QR Code ou copie o codigo Pix. O estabelecimento confirma manualmente depois.';
+    case PAYMENT_METHODS.CASH_ON_PICKUP:
+      return 'Voce pagara no momento da retirada do pedido.';
+    case PAYMENT_METHODS.CASH_ON_DELIVERY:
+      return 'Voce pagara no momento da entrega do pedido.';
+    case PAYMENT_METHODS.CREDIT_CARD:
+    case PAYMENT_METHODS.DEBIT_CARD:
+      return 'Pagamento com cartao so sera liberado quando houver gateway seguro configurado.';
+    default:
+      return '';
+  }
+}
+
+function getPaymentSuccessMessage(method) {
+  switch (method) {
+    case PAYMENT_METHODS.PIX:
+      return 'Pedido enviado com sucesso. Apos o pagamento, o estabelecimento confirmara seu pedido.';
+    case PAYMENT_METHODS.CASH_ON_DELIVERY:
+      return 'Pedido enviado com sucesso. O pagamento sera feito na entrega.';
+    case PAYMENT_METHODS.CASH_ON_PICKUP:
+    default:
+      return 'Pedido enviado com sucesso. O pagamento sera feito na retirada.';
+  }
 }
 
 function defaultFractionInputValue(measurementUnit) {
@@ -260,6 +299,7 @@ function getCartEditorConfigForUnit(measurementUnit) {
 }
 
 export function BusinessCatalogSection({
+  business = {},
   tenantSlug = '',
   modules,
   segmentConfig,
@@ -274,16 +314,30 @@ export function BusinessCatalogSection({
   const [feedback, setFeedback] = useState('');
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
+  const [checkoutResult, setCheckoutResult] = useState(null);
+  const [pixCopyFeedback, setPixCopyFeedback] = useState('');
   const hydratedSlugRef = useRef('');
   const normalizedProducts = useMemo(
     () => (products || []).map((product) => normalizeProductMeasurement(product)),
     [products],
   );
   const normalizedSearch = useMemo(() => normalizeSearchTerm(searchValue), [searchValue]);
+  const paymentSettings = useMemo(
+    () => normalizeBusinessPaymentSettings(business?.paymentSettings || {}, business?.contact?.pix || {}),
+    [business],
+  );
+  const availablePaymentMethods = useMemo(
+    () =>
+      PAYMENT_METHOD_VALUES.filter((method) => isBusinessPaymentMethodEnabled(paymentSettings, method)),
+    [paymentSettings],
+  );
 
   useEffect(() => {
     setCart(readStoredCart(tenantSlug));
     hydratedSlugRef.current = tenantSlug;
+    setCheckout(defaultCheckoutState());
+    setCheckoutResult(null);
+    setPixCopyFeedback('');
   }, [tenantSlug]);
 
   useEffect(() => {
@@ -355,11 +409,30 @@ export function BusinessCatalogSection({
     [cartItems],
   );
 
+  useEffect(() => {
+    setCheckout((current) => {
+      const nextPaymentMethod = availablePaymentMethods.includes(current.paymentMethod)
+        ? current.paymentMethod
+        : availablePaymentMethods[0] || '';
+
+      if (nextPaymentMethod === current.paymentMethod) {
+        return current;
+      }
+
+      return {
+        ...current,
+        paymentMethod: nextPaymentMethod,
+      };
+    });
+  }, [availablePaymentMethods]);
+
   if (!normalizedProducts.length) {
     return null;
   }
 
   function updateCartQuantity(product, quantity) {
+    setCheckoutResult(null);
+    setPixCopyFeedback('');
     setCart((current) => {
       const nextQuantity = normalizeCartQuantityForProduct(product, quantity);
 
@@ -418,6 +491,8 @@ export function BusinessCatalogSection({
       return;
     }
 
+    setCheckoutResult(null);
+    setPixCopyFeedback('');
     setFeedback('');
     updateCartQuantity(product, Number(cart[product.id] || 0) + quantityToAdd);
     onTrackAction?.({
@@ -455,17 +530,30 @@ export function BusinessCatalogSection({
       return;
     }
 
+    if (!availablePaymentMethods.length) {
+      setFeedback('Nenhuma forma de pagamento esta disponivel no momento.');
+      return;
+    }
+
+    if (!checkout.paymentMethod || !availablePaymentMethods.includes(checkout.paymentMethod)) {
+      setFeedback('Escolha uma forma de pagamento para finalizar o pedido.');
+      return;
+    }
+
     setSubmitting(true);
     setFeedback('');
 
     try {
-      await onSubmitOrder?.({
+      const createdOrder = await onSubmitOrder?.({
         customerName,
         customerPhone,
         items: cartItems,
         deliveryType: checkout.deliveryType,
         address: checkout.deliveryType === 'delivery' ? checkout.address.trim() : '',
         notes: checkout.notes.trim(),
+        payment: {
+          method: checkout.paymentMethod,
+        },
       });
       onTrackAction?.({
         eventType: 'cta_click',
@@ -475,13 +563,30 @@ export function BusinessCatalogSection({
       });
       setCart({});
       setCheckout(defaultCheckoutState());
+      setCheckoutResult(createdOrder || null);
       persistStoredCart(tenantSlug, {});
-      setFeedback('Pedido enviado com sucesso. Aguarde a confirmacao do tenant.');
+      setFeedback(getPaymentSuccessMessage(createdOrder?.payment?.method || checkout.paymentMethod));
       setIsCartOpen(true);
     } catch (error) {
       setFeedback(error?.message || 'Nao foi possivel enviar o pedido agora.');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleCopyPixCode() {
+    const pixCode = checkoutResult?.payment?.pixCopyPaste || '';
+
+    if (!pixCode || !navigator?.clipboard?.writeText) {
+      setPixCopyFeedback('Nao foi possivel copiar o codigo Pix neste dispositivo.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(pixCode);
+      setPixCopyFeedback('Codigo Pix copiado.');
+    } catch {
+      setPixCopyFeedback('Nao foi possivel copiar o codigo Pix neste dispositivo.');
     }
   }
 
@@ -534,7 +639,56 @@ export function BusinessCatalogSection({
                     <div className="catalog-cart-panel__body" data-testid="catalog-cart-body">
                       {feedback ? <p className="site-inline-feedback catalog-checkout__feedback">{feedback}</p> : null}
 
-                      {cartItems.length ? (
+                      {checkoutResult && !cartItems.length ? (
+                        <div className="catalog-checkout__success" data-testid="catalog-checkout-success">
+                          <div className="catalog-checkout__success-copy">
+                            <strong>Pedido enviado com sucesso</strong>
+                            <p>{getPaymentSuccessMessage(checkoutResult?.payment?.method)}</p>
+                          </div>
+
+                          <div className="catalog-checkout__summary catalog-checkout__summary--success">
+                            <div>
+                              <span>Total do pedido</span>
+                              <strong>{formatCurrency(checkoutResult?.payment?.amount || checkoutResult?.total || 0)}</strong>
+                            </div>
+                            <div>
+                              <span>Forma de pagamento</span>
+                              <strong>{PAYMENT_METHOD_LABELS[checkoutResult?.payment?.method] || 'Pagamento manual'}</strong>
+                            </div>
+                          </div>
+
+                          {checkoutResult?.payment?.method === PAYMENT_METHODS.PIX && checkoutResult?.payment?.pixCopyPaste ? (
+                            <div className="catalog-checkout__pix-panel">
+                              <div className="catalog-checkout__pix-qr" aria-hidden="true">
+                                <QRCode value={checkoutResult.payment.pixCopyPaste} size={180} />
+                              </div>
+                              <div className="catalog-checkout__pix-copy">
+                                <label className="admin-field">
+                                  <span>Codigo Pix</span>
+                                  <textarea readOnly rows="4" value={checkoutResult.payment.pixCopyPaste} />
+                                </label>
+                                <Button type="button" onClick={handleCopyPixCode}>
+                                  Copiar codigo Pix
+                                </Button>
+                                {pixCopyFeedback ? <p className="admin-muted-copy">{pixCopyFeedback}</p> : null}
+                                <p className="admin-muted-copy">Apos o pagamento, o estabelecimento confirmara seu pedido.</p>
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {checkoutResult?.payment?.method === PAYMENT_METHODS.CASH_ON_PICKUP ? (
+                            <p className="admin-muted-copy">Voce pagara no momento da retirada do pedido.</p>
+                          ) : null}
+
+                          {checkoutResult?.payment?.method === PAYMENT_METHODS.CASH_ON_DELIVERY ? (
+                            <p className="admin-muted-copy">Voce pagara no momento da entrega do pedido.</p>
+                          ) : null}
+
+                          <Button type="button" variant="secondary" onClick={() => setCheckoutResult(null)}>
+                            Adicionar novos produtos
+                          </Button>
+                        </div>
+                      ) : cartItems.length ? (
                         <>
                           <ul className="catalog-checkout__list">
                             {cartItems.map((item) => {
@@ -651,6 +805,30 @@ export function BusinessCatalogSection({
                             ) : null}
                           </div>
 
+                          <fieldset className="catalog-checkout__payment-methods">
+                            <legend>Forma de pagamento</legend>
+                            {availablePaymentMethods.map((method) => (
+                              <label key={method} className="catalog-checkout__payment-option">
+                                <input
+                                  type="radio"
+                                  name="checkout-payment-method"
+                                  value={method}
+                                  checked={checkout.paymentMethod === method}
+                                  onChange={(event) =>
+                                    setCheckout((current) => ({
+                                      ...current,
+                                      paymentMethod: event.target.value,
+                                    }))
+                                  }
+                                />
+                                <div>
+                                  <strong>{PAYMENT_METHOD_LABELS[method]}</strong>
+                                  <span>{getPaymentMethodDescription(method)}</span>
+                                </div>
+                              </label>
+                            ))}
+                          </fieldset>
+
                           <label className="admin-field catalog-checkout__notes">
                             <span>Observacoes</span>
                             <textarea rows="3" value={checkout.notes} onChange={(event) => setCheckout((current) => ({ ...current, notes: event.target.value }))} />
@@ -673,11 +851,17 @@ export function BusinessCatalogSection({
                     <div className="catalog-cart-panel__footer" data-testid="catalog-cart-footer">
                       <div className="catalog-cart-panel__total">
                         <span>Total do pedido</span>
-                        <strong>{formatCurrency(cartTotal)}</strong>
+                        <strong>{formatCurrency(checkoutResult?.payment?.amount || checkoutResult?.total || cartTotal)}</strong>
                       </div>
-                      <Button type="submit" disabled={!cartItems.length || submitting} className="catalog-cart-panel__submit">
-                        {submitting ? 'Enviando...' : 'Finalizar pedido'}
-                      </Button>
+                      {checkoutResult && !cartItems.length ? (
+                        <Button type="button" className="catalog-cart-panel__submit" onClick={() => setIsCartOpen(false)}>
+                          Fechar carrinho
+                        </Button>
+                      ) : (
+                        <Button type="submit" disabled={!cartItems.length || submitting || !availablePaymentMethods.length} className="catalog-cart-panel__submit">
+                          {submitting ? 'Enviando...' : 'Finalizar pedido'}
+                        </Button>
+                      )}
                     </div>
                   </form>
                 </div>

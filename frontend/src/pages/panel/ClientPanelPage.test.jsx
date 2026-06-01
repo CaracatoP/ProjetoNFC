@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ClientPanelPage } from './ClientPanelPage.jsx';
 import { useAuth } from '@/context/AuthContext.jsx';
@@ -26,6 +26,7 @@ vi.mock('@/services/clientPanelService.js', () => ({
   updateClientPanelAppointmentService: vi.fn(),
   deleteClientPanelAppointmentService: vi.fn(),
   updateClientPanelOrderStatus: vi.fn(),
+  updateClientPanelOrderPaymentStatus: vi.fn(),
   deleteClientPanelOrder: vi.fn(),
   updateClientPanelAppointmentRequestStatus: vi.fn(),
 }));
@@ -77,6 +78,28 @@ const editorFixture = {
       whatsapp: '5511999999999',
       phone: '1130000000',
       email: 'contato@example.com',
+      pix: {
+        keyType: 'email',
+        key: 'pix@cliente.local',
+        receiverName: 'Barbearia Estilo Vivo',
+        city: 'Sao Paulo',
+      },
+    },
+    paymentSettings: {
+      enabled: true,
+      methods: {
+        pix: true,
+        creditCard: false,
+        debitCard: false,
+        cashOnPickup: true,
+        cashOnDelivery: true,
+      },
+      pix: {
+        key: 'pix@cliente.local',
+        merchantName: 'Barbearia Estilo Vivo',
+        merchantCity: 'Sao Paulo',
+      },
+      provider: 'manual',
     },
     seo: {
       title: 'Barbearia Estilo Vivo',
@@ -196,8 +219,130 @@ describe('ClientPanelPage', () => {
         expect.objectContaining({
           business: expect.objectContaining({
             name: 'Barbearia Cliente',
+            paymentSettings: expect.objectContaining({
+              enabled: true,
+            }),
           }),
         }),
+      );
+    });
+  });
+
+  it('lets the tenant owner configure manual Pix and mark manual payments as paid from the panel', async () => {
+    const user = userEvent.setup();
+    const editorWithOrders = {
+      ...editorFixture,
+      modulesData: {
+        ...editorFixture.modulesData,
+        orders: [
+          {
+            id: 'order-1',
+            customerName: 'Carlos',
+            customerPhone: '5511999999999',
+            deliveryType: 'pickup',
+            total: 79.8,
+            status: 'received',
+            payment: {
+              method: 'pix',
+              status: 'pending',
+              provider: 'manual',
+              amount: 79.8,
+              pixCopyPaste: 'pix-code',
+            },
+            items: [{ name: 'Pomada', quantity: 2, unitPrice: 39.9, measurementUnit: 'unit', itemTotal: 79.8 }],
+            notes: '',
+          },
+        ],
+      },
+    };
+
+    clientPanelService.fetchClientPanelBusiness.mockResolvedValueOnce({
+      ...editorWithOrders,
+    });
+    clientPanelService.updateClientPanelBusinessBasics.mockResolvedValue(editorWithOrders);
+    clientPanelService.updateClientPanelOrderPaymentStatus.mockResolvedValue({
+      id: 'order-1',
+      payment: {
+        method: 'pix',
+        status: 'paid',
+        provider: 'manual',
+        amount: 79.8,
+      },
+    });
+    useAuth.mockReturnValue({
+      token: 'client-token',
+      user: { displayName: 'Cliente Dono', roleLevel: 2 },
+      subscription: { plan: { name: 'Premium' } },
+      access: {
+        billingStatus: 'paid',
+        analyticsScope: 'advanced',
+        capabilities: {
+          canEditTenantBasics: true,
+          canUploadMedia: true,
+          canViewCatalog: true,
+          canEditCatalog: true,
+          canViewOrders: true,
+          canManageOrders: true,
+          canViewAppointments: true,
+          canManageAppointments: true,
+          canViewProfessionals: true,
+          canEditProfessionals: true,
+          canViewServices: true,
+          canEditServices: true,
+          canViewAnalytics: true,
+        },
+      },
+      isSuspendedClientAccess: false,
+      logout: vi.fn(),
+    });
+
+    render(
+      <MemoryRouter>
+        <ClientPanelPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Operacao do tenant')).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText('Chave Pix'));
+    await user.type(screen.getByLabelText('Chave Pix'), 'novo-pix@cliente.local');
+    await user.click(screen.getByRole('button', { name: /Salvar dados basicos/i }));
+
+    await waitFor(() => {
+      expect(clientPanelService.updateClientPanelBusinessBasics).toHaveBeenCalledWith(
+        'client-token',
+        expect.objectContaining({
+          business: expect.objectContaining({
+            paymentSettings: expect.objectContaining({
+              methods: expect.objectContaining({
+                pix: true,
+              }),
+              pix: expect.objectContaining({
+                key: 'novo-pix@cliente.local',
+              }),
+            }),
+            contact: expect.objectContaining({
+              pix: expect.objectContaining({
+                key: 'novo-pix@cliente.local',
+              }),
+            }),
+          }),
+        }),
+      );
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Pedidos' }));
+    const receivedOrderCard = await screen.findByTestId('order-card-received');
+    expect(within(receivedOrderCard).getByText('Pix')).toBeInTheDocument();
+    expect(within(receivedOrderCard).getByText('Pendente')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Marcar pagamento como pago/i }));
+
+    await waitFor(() => {
+      expect(clientPanelService.updateClientPanelOrderPaymentStatus).toHaveBeenCalledWith(
+        'client-token',
+        'order-1',
+        'paid',
       );
     });
   });

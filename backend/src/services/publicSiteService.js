@@ -26,6 +26,7 @@ import {
 } from '../../../shared/utils/tenantIdentity.js';
 import { buildBusinessSegmentState } from '../../../shared/utils/segments.js';
 import { normalizeBusinessContact } from '../../../shared/utils/businessContact.js';
+import { resolveBusinessPaymentSettings } from '../../../shared/utils/businessPayment.js';
 import { buildTenantTheme } from '../../../shared/utils/theme.js';
 import { normalizeProductMeasurement } from '../../../shared/utils/productMeasurement.js';
 
@@ -417,6 +418,7 @@ async function getPublicSiteByBusiness(business, options = {}) {
       hours: business.hours || [],
       rating: business.rating,
       contact: normalizeBusinessContact(business.contact || {}),
+      paymentSettings: resolveBusinessPaymentSettings(business),
       seo: {
         title: business.seo?.title,
         description: business.seo?.description,

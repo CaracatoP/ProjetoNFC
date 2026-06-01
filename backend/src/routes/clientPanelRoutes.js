@@ -19,6 +19,7 @@ import {
   updateClientPanelAppointmentRequestStatusController,
   updateClientPanelAppointmentServiceController,
   updateClientPanelBusinessBasicsController,
+  updateClientPanelOrderPaymentStatusController,
   updateClientPanelOrderStatusController,
   updateClientPanelProductController,
   updateClientPanelProfessionalController,
@@ -33,6 +34,7 @@ import { clientPanelBusinessBasicsBodySchema } from '../validators/clientPanelVa
 import {
   appointmentRequestStatusBodySchema,
   appointmentServiceBodySchema,
+  orderPaymentStatusBodySchema,
   orderStatusBodySchema,
   productBodySchema,
   professionalBodySchema,
@@ -81,6 +83,7 @@ router.delete('/appointment-services/:id', validateRequest({ params: resourceIdP
 
 router.get('/orders', listClientPanelOrdersController);
 router.patch('/orders/:id/status', validateRequest({ params: resourceIdParamsSchema, body: orderStatusBodySchema }), updateClientPanelOrderStatusController);
+router.patch('/orders/:id/payment-status', validateRequest({ params: resourceIdParamsSchema, body: orderPaymentStatusBodySchema }), updateClientPanelOrderPaymentStatusController);
 router.delete('/orders/:id', validateRequest({ params: resourceIdParamsSchema }), deleteClientPanelOrderController);
 
 router.get('/appointment-requests', listClientPanelAppointmentRequestsController);

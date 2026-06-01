@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
   DEFAULT_PRODUCT_MEASUREMENT_UNIT,
+  PAYMENT_METHOD_VALUES,
+  PAYMENT_STATUS_VALUES,
   PRODUCT_MEASUREMENT_UNIT_VALUES,
 } from '../../../shared/constants/index.js';
 import { requiresIntegerMeasurementQuantity } from '../../../shared/utils/productMeasurement.js';
@@ -14,6 +16,13 @@ const optionalMeasurementUnitSchema = z.preprocess(
     return normalizedValue || undefined;
   },
   z.enum(PRODUCT_MEASUREMENT_UNIT_VALUES).optional(),
+);
+const optionalPaymentMethodSchema = z.preprocess(
+  (value) => {
+    const normalizedValue = String(value || '').trim().toLowerCase();
+    return normalizedValue || undefined;
+  },
+  z.enum(PAYMENT_METHOD_VALUES).optional(),
 );
 
 export const businessIdParamsSchema = z.object({
@@ -107,8 +116,17 @@ export const orderBodySchema = z.object({
   deliveryType: z.enum(['pickup', 'delivery']).default('pickup'),
   address: optionalString,
   notes: optionalString,
+  payment: z
+    .object({
+      method: optionalPaymentMethodSchema,
+    })
+    .optional(),
 });
 
 export const orderStatusBodySchema = z.object({
   status: z.enum(['received', 'preparing', 'ready', 'delivered', 'cancelled']),
+});
+
+export const orderPaymentStatusBodySchema = z.object({
+  status: z.enum(PAYMENT_STATUS_VALUES),
 });

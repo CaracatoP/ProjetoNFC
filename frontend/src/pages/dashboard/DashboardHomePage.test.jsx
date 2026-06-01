@@ -42,6 +42,7 @@ vi.mock('@/services/adminService.js', () => ({
   deleteTenantProduct: vi.fn(),
   updateTenantAppointmentRequestStatus: vi.fn(),
   updateTenantOrderStatus: vi.fn(),
+  updateTenantOrderPaymentStatus: vi.fn(),
 }));
 
 vi.mock('@/services/tenantRealtimeService.js', () => ({
@@ -192,6 +193,22 @@ const editorFixture = {
         key: '12345678900',
         receiverName: 'Barbearia Estilo Vivo',
       },
+    },
+    paymentSettings: {
+      enabled: true,
+      methods: {
+        pix: true,
+        creditCard: false,
+        debitCard: false,
+        cashOnPickup: true,
+        cashOnDelivery: true,
+      },
+      pix: {
+        key: '12345678900',
+        merchantName: 'Barbearia Estilo Vivo',
+        merchantCity: 'Sao Paulo',
+      },
+      provider: 'manual',
     },
     seo: {
       title: 'Barbearia Estilo Vivo',
@@ -430,6 +447,15 @@ describe('DashboardHomePage', () => {
       business: {
         ...editorFixture.business,
         status: 'inactive',
+      },
+    });
+    adminService.updateTenantOrderPaymentStatus.mockResolvedValue({
+      id: 'order-1',
+      payment: {
+        method: 'pix',
+        status: 'paid',
+        provider: 'manual',
+        amount: 59.9,
       },
     });
     adminService.deleteAdminBusiness.mockResolvedValue({ deleted: true });
@@ -999,6 +1025,91 @@ describe('DashboardHomePage', () => {
       expect(refreshedPreviewUrl).toContain('/site/barbearia-estilo-vivo?preview=1&t=');
       expect(refreshedPreviewUrl).toContain('previewToken=');
       expect(refreshedPreviewUrl).not.toBe(firstPreviewUrl);
+    });
+  });
+
+  it('lets the admin update manual payment status and edit tenant payment settings in the workspace', async () => {
+    const user = userEvent.setup();
+    const editorWithOrders = {
+      ...editorFixture,
+      business: {
+        ...editorFixture.business,
+        modules: {
+          ...editorFixture.business.modules,
+          cart: true,
+          orders: true,
+        },
+      },
+      modulesData: {
+        ...editorFixture.modulesData,
+        orders: [
+          {
+            id: 'order-1',
+            customerName: 'Carlos',
+            customerPhone: '5511999999999',
+            deliveryType: 'pickup',
+            total: 59.9,
+            status: 'received',
+            payment: {
+              method: 'pix',
+              status: 'pending',
+              provider: 'manual',
+              amount: 59.9,
+              pixCopyPaste: 'pix-code',
+            },
+            items: [{ name: 'Pomada', quantity: 1, unitPrice: 59.9, measurementUnit: 'unit', itemTotal: 59.9 }],
+            notes: '',
+          },
+        ],
+      },
+    };
+    adminService.getAdminBusiness.mockResolvedValueOnce(editorWithOrders);
+    adminService.updateAdminBusiness.mockResolvedValueOnce(editorWithOrders);
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+    expect(await screen.findByText('Fluxo do editor')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Pagamentos/i }));
+    expect(await screen.findByRole('heading', { name: 'Pagamentos' })).toBeInTheDocument();
+    await user.clear(screen.getByLabelText(/Chave PIX/i));
+    await user.type(screen.getByLabelText(/Chave PIX/i), 'financeiro@taplink.local');
+    await user.click(screen.getByRole('button', { name: /Salvar alteracoes/i }));
+
+    await waitFor(() => {
+      expect(adminService.updateAdminBusiness).toHaveBeenCalledWith(
+        'admin-token',
+        'business-1',
+        expect.objectContaining({
+          business: expect.objectContaining({
+            paymentSettings: expect.objectContaining({
+              pix: expect.objectContaining({
+                key: 'financeiro@taplink.local',
+              }),
+            }),
+          }),
+        }),
+      );
+    });
+
+    await user.click(screen.getByRole('button', { name: /Modulos/i }));
+    await user.click(screen.getByRole('button', { name: 'Pedidos' }));
+    const receivedOrderCard = await screen.findByTestId('order-card-received');
+    expect(within(receivedOrderCard).getByText('Pix')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Marcar pagamento como pago/i }));
+
+    await waitFor(() => {
+      expect(adminService.updateTenantOrderPaymentStatus).toHaveBeenCalledWith(
+        'admin-token',
+        'business-1',
+        'order-1',
+        'paid',
+      );
     });
   });
 

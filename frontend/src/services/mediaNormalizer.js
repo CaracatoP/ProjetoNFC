@@ -1,5 +1,6 @@
 import { resolveMediaUrl } from '@/utils/formatters.js';
 import { normalizeBusinessContact } from '@shared/utils/businessContact.js';
+import { normalizeBusinessPaymentSettings, normalizeOrderPayment } from '@shared/utils/businessPayment.js';
 import {
   buildLegacyDisplayQuantity,
   calculateMeasuredItemTotal,
@@ -11,6 +12,7 @@ export function normalizeBusinessMedia(business = {}) {
   return {
     ...business,
     contact: normalizeBusinessContact(business.contact || {}),
+    paymentSettings: normalizeBusinessPaymentSettings(business.paymentSettings || {}, business.contact?.pix || {}),
     logoUrl: resolveMediaUrl(business.logoUrl),
     bannerUrl: resolveMediaUrl(business.bannerUrl),
     seo: business.seo
@@ -75,6 +77,7 @@ export function normalizeModulesDataMedia(modulesData = {}) {
     })),
     orders: (modulesData.orders || []).map((order) => ({
       ...order,
+      payment: normalizeOrderPayment(order.payment || {}, Number(order.total || 0)),
       items: (order.items || []).map((item) => {
         const measurementUnit = normalizeMeasurementUnit(item.measurementUnit);
         const quantity = Number(item.quantity || 0);

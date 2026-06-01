@@ -36,7 +36,19 @@ import {
   listProfessionalsByBusinessId,
   updateProfessionalRecordByBusinessId,
 } from '../repositories/professionalRepository.js';
-import { BUSINESS_STATUS } from '../../../shared/constants/index.js';
+import {
+  BUSINESS_STATUS,
+  PAYMENT_METHODS,
+  PAYMENT_PROVIDERS,
+  PAYMENT_STATUS,
+} from '../../../shared/constants/index.js';
+import {
+  isBusinessPaymentMethodEnabled,
+  normalizeOrderPayment,
+  normalizePaymentStatus,
+  resolveBusinessPaymentSettings,
+  resolveDefaultPaymentMethod,
+} from '../../../shared/utils/businessPayment.js';
 import {
   buildLegacyDisplayQuantity,
   calculateMeasuredItemTotal,
@@ -45,6 +57,7 @@ import {
   normalizeProductMeasurement,
 } from '../../../shared/utils/productMeasurement.js';
 import { TENANT_REALTIME_KINDS } from '../../../shared/constants/tenantRealtime.js';
+import { buildPixPayload } from '../../../shared/utils/pix.js';
 import { publishTenantUpdated } from './tenantRealtimeService.js';
 
 function toPlainRecord(value) {
@@ -148,18 +161,19 @@ function serializeOrderItem(item = {}) {
 function serializeOrderRecord(item) {
   const record = toPlainRecord(item);
   const items = Array.isArray(record.items) ? record.items.map(serializeOrderItem) : [];
+  const total = Number(
+    (
+      Number(record.total || 0) ||
+      items.reduce((sum, orderItem) => sum + Number(orderItem.itemTotal || 0), 0)
+    ).toFixed(2),
+  );
 
   return {
     ...record,
     customerName: record.customerName || '',
     customerPhone: record.customerPhone || '',
     items,
-    total: Number(
-      (
-        Number(record.total || 0) ||
-        items.reduce((sum, orderItem) => sum + Number(orderItem.itemTotal || 0), 0)
-      ).toFixed(2),
-    ),
+    total,
     deliveryType: record.deliveryType || 'pickup',
     address: record.address || '',
     status: record.status || 'received',
@@ -171,6 +185,7 @@ function serializeOrderRecord(item) {
     deliveredAt: record.deliveredAt || null,
     cancelledAt: record.cancelledAt || null,
     notes: record.notes || '',
+    payment: normalizeOrderPayment(record.payment || {}, total),
   };
 }
 
@@ -192,6 +207,120 @@ function buildOrderStatusTimestampPatch(existingOrder, status, occurredAt = new 
   return {
     status,
     ...(existingOrder?.[timestampField] ? {} : { [timestampField]: occurredAt }),
+  };
+}
+
+function resolveRequestedPaymentMethod(payload, paymentSettings) {
+  const requestedMethod = String(payload?.payment?.method || '').trim().toLowerCase();
+
+  if (requestedMethod) {
+    if (!isBusinessPaymentMethodEnabled(paymentSettings, requestedMethod)) {
+      throw new AppError(
+        'Esta forma de pagamento nao esta disponivel para este tenant.',
+        400,
+        'payment_method_unavailable',
+      );
+    }
+
+    return requestedMethod;
+  }
+
+  const fallbackMethod = resolveDefaultPaymentMethod(paymentSettings);
+
+  if (!fallbackMethod) {
+    throw new AppError(
+      'Nenhuma forma de pagamento esta disponivel no momento.',
+      400,
+      'payment_method_unavailable',
+    );
+  }
+
+  return fallbackMethod;
+}
+
+function buildManualPixPaymentSnapshot(paymentSettings, amount) {
+  const pixPayload = buildPixPayload(
+    {
+      keyType: 'random',
+      key: paymentSettings.pix.key,
+      receiverName: paymentSettings.pix.merchantName,
+      city: paymentSettings.pix.merchantCity,
+    },
+    amount,
+  );
+
+  if (!pixPayload) {
+    throw new AppError(
+      'O tenant ainda nao configurou uma chave Pix valida para este checkout.',
+      400,
+      'payment_method_unavailable',
+    );
+  }
+
+  return normalizeOrderPayment(
+    {
+      method: PAYMENT_METHODS.PIX,
+      status: PAYMENT_STATUS.PENDING,
+      provider: PAYMENT_PROVIDERS.MANUAL,
+      amount,
+      pixCopyPaste: pixPayload,
+      pixQrCodeUrl: '',
+      providerPaymentId: '',
+      paidAt: null,
+    },
+    amount,
+  );
+}
+
+function buildManualCashPaymentSnapshot(method, amount) {
+  return normalizeOrderPayment(
+    {
+      method,
+      status: PAYMENT_STATUS.MANUAL,
+      provider: PAYMENT_PROVIDERS.MANUAL,
+      amount,
+      pixCopyPaste: '',
+      pixQrCodeUrl: '',
+      providerPaymentId: '',
+      paidAt: null,
+    },
+    amount,
+  );
+}
+
+function buildPublicOrderPaymentSnapshot(business, payload, amount) {
+  const paymentSettings = resolveBusinessPaymentSettings(business);
+  const method = resolveRequestedPaymentMethod(payload, paymentSettings);
+
+  if ([PAYMENT_METHODS.CREDIT_CARD, PAYMENT_METHODS.DEBIT_CARD].includes(method)) {
+    throw new AppError(
+      'Pagamento online com cartao ainda nao esta disponivel para este tenant.',
+      400,
+      'payment_method_unavailable',
+    );
+  }
+
+  if (method === PAYMENT_METHODS.PIX) {
+    return buildManualPixPaymentSnapshot(paymentSettings, amount);
+  }
+
+  return buildManualCashPaymentSnapshot(method, amount);
+}
+
+function buildOrderPaymentStatusPatch(existingOrder, status, occurredAt = new Date()) {
+  const currentPayment = normalizeOrderPayment(existingOrder?.payment || {}, existingOrder?.total || 0);
+  const nextStatus = normalizePaymentStatus(status, currentPayment.status);
+
+  return {
+    payment: {
+      ...currentPayment,
+      status: nextStatus,
+      amount: Number(Number(existingOrder?.total || currentPayment.amount || 0).toFixed(2)),
+      paidAt:
+        nextStatus === PAYMENT_STATUS.PAID
+          ? currentPayment.paidAt || occurredAt
+          : currentPayment.paidAt || null,
+    },
   };
 }
 
@@ -391,6 +520,7 @@ export async function createPublicOrder(slug, payload) {
   const orderItems = await buildOrderItemsSnapshot(business._id, payload.items || []);
   const total = calculateOrderTotal(orderItems);
   const receivedAt = new Date();
+  const payment = buildPublicOrderPaymentSnapshot(business, payload, total);
 
   const created = await createOrderRecord({
     ...payload,
@@ -399,6 +529,7 @@ export async function createPublicOrder(slug, payload) {
     total,
     status: 'received',
     receivedAt,
+    payment,
   });
 
   publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_CREATED, 'created');
@@ -423,6 +554,24 @@ export async function updateTenantOrderStatus(businessId, id, status) {
     throw new AppError('Pedido nao encontrado', 404, 'module_resource_not_found');
   }
   publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_STATUS_UPDATED);
+  return serializeOrderRecord(updated);
+}
+
+export async function updateTenantOrderPaymentStatus(businessId, id, status) {
+  const business = await assertBusinessExists(businessId);
+  const existing = await findOrderById(id);
+  assertTenantScope(existing, businessId, 'Pedido');
+  const updated = await updateOrderRecordByBusinessId(
+    businessId,
+    id,
+    buildOrderPaymentStatusPatch(existing, status),
+  );
+
+  if (!updated) {
+    throw new AppError('Pedido nao encontrado', 404, 'module_resource_not_found');
+  }
+
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_PAYMENT_UPDATED);
   return serializeOrderRecord(updated);
 }
 

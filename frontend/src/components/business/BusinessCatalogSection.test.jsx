@@ -2,11 +2,34 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BusinessCatalogSection } from './BusinessCatalogSection.jsx';
+import { PAYMENT_METHODS, PAYMENT_STATUS } from '@shared/constants/index.js';
 
 const modulesFixture = {
   catalog: true,
   cart: true,
   orders: true,
+};
+
+const businessFixture = {
+  id: 'business-1',
+  slug: 'barbearia-estilo-vivo',
+  name: 'Barbearia Estilo Vivo',
+  paymentSettings: {
+    enabled: true,
+    methods: {
+      pix: true,
+      creditCard: false,
+      debitCard: false,
+      cashOnPickup: true,
+      cashOnDelivery: true,
+    },
+    pix: {
+      key: 'pix@example.com',
+      merchantName: 'Barbearia Estilo Vivo',
+      merchantCity: 'Sao Paulo',
+    },
+    provider: 'manual',
+  },
 };
 
 const productsFixture = [
@@ -55,6 +78,7 @@ describe('BusinessCatalogSection', () => {
 
     render(
       <BusinessCatalogSection
+        business={businessFixture}
         tenantSlug="barbearia-estilo-vivo"
         modules={modulesFixture}
         segmentConfig={{
@@ -109,6 +133,7 @@ describe('BusinessCatalogSection', () => {
 
     render(
       <BusinessCatalogSection
+        business={businessFixture}
         tenantSlug="barbearia-estilo-vivo"
         modules={modulesFixture}
         segmentConfig={{}}
@@ -136,6 +161,7 @@ describe('BusinessCatalogSection', () => {
 
     render(
       <BusinessCatalogSection
+        business={businessFixture}
         tenantSlug="barbearia-estilo-vivo"
         modules={modulesFixture}
         segmentConfig={{}}
@@ -162,6 +188,19 @@ describe('BusinessCatalogSection', () => {
 
     render(
       <BusinessCatalogSection
+        business={{
+          ...businessFixture,
+          slug: 'acougue-central',
+          name: 'Acougue Central',
+          paymentSettings: {
+            ...businessFixture.paymentSettings,
+            pix: {
+              key: 'pix@acougue.local',
+              merchantName: 'Acougue Central',
+              merchantCity: 'Sao Paulo',
+            },
+          },
+        }}
         tenantSlug="acougue-central"
         modules={modulesFixture}
         segmentConfig={{}}
@@ -208,6 +247,11 @@ describe('BusinessCatalogSection', () => {
 
     render(
       <BusinessCatalogSection
+        business={{
+          ...businessFixture,
+          slug: 'acougue-central',
+          name: 'Acougue Central',
+        }}
         tenantSlug="acougue-central"
         modules={modulesFixture}
         segmentConfig={{}}
@@ -231,5 +275,75 @@ describe('BusinessCatalogSection', () => {
 
     expect(screen.getByText('Nenhum produto encontrado')).toBeInTheDocument();
     expect(screen.getByText(/Tente buscar por outro nome, categoria ou descricao/i)).toBeInTheDocument();
+  });
+
+  it('shows active payment methods, submits Pix orders with the selected method, and renders the Pix QR after success', async () => {
+    const user = userEvent.setup();
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: writeTextMock,
+      },
+    });
+    const onSubmitOrder = vi.fn().mockResolvedValue({
+      id: 'order-10',
+      total: 59.9,
+      payment: {
+        method: PAYMENT_METHODS.PIX,
+        status: PAYMENT_STATUS.PENDING,
+        provider: 'manual',
+        amount: 59.9,
+        pixCopyPaste:
+          '00020126580014br.gov.bcb.pix0116pix@example.com520400005303986540559.905802BR5919Barbearia Estilo Vivo6009SAO PAULO62070503***6304ABCD',
+      },
+    });
+
+    render(
+      <BusinessCatalogSection
+        business={businessFixture}
+        tenantSlug="barbearia-estilo-vivo"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={onSubmitOrder}
+      />,
+    );
+
+    const catalogCard = screen.getByText('Pomada modeladora').closest('.catalog-card');
+    await user.click(within(catalogCard).getByRole('button', { name: 'Adicionar' }));
+    await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
+
+    expect(screen.getByText('Forma de pagamento')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Pix/i)).toBeChecked();
+    expect(screen.getByLabelText(/Pagamento na retirada/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Pagamento na entrega/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Cartao de credito')).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Nome'), 'Julia');
+    await user.type(screen.getByLabelText('Telefone'), '5511977776666');
+    await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
+
+    await waitFor(() => {
+      expect(onSubmitOrder).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payment: {
+            method: PAYMENT_METHODS.PIX,
+          },
+        }),
+      );
+    });
+
+    expect(await screen.findByText('Pedido enviado com sucesso')).toBeInTheDocument();
+    expect(screen.getAllByText(/Apos o pagamento, o estabelecimento confirmara seu pedido/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /Copiar codigo Pix/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Copiar codigo Pix/i }));
+
+    await waitFor(() => {
+      expect(writeTextMock).toHaveBeenCalledWith(
+        '00020126580014br.gov.bcb.pix0116pix@example.com520400005303986540559.905802BR5919Barbearia Estilo Vivo6009SAO PAULO62070503***6304ABCD',
+      );
+    });
   });
 });

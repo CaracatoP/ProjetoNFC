@@ -16,6 +16,7 @@ import {
   listTenantProfessionals,
   updateTenantAppointmentRequestStatus,
   updateTenantAppointmentService,
+  updateTenantOrderPaymentStatus,
   updateTenantOrderStatus,
   updateTenantProduct,
   updateTenantProfessional,
@@ -184,6 +185,15 @@ export async function updateOrderStatusController(req, res, next) {
   try {
     const { businessId, id } = getParams(req);
     return successResponse(res, await updateTenantOrderStatus(businessId, id, getBody(req).status));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function updateOrderPaymentStatusController(req, res, next) {
+  try {
+    const { businessId, id } = getParams(req);
+    return successResponse(res, await updateTenantOrderPaymentStatus(businessId, id, getBody(req).status));
   } catch (error) {
     return next(error);
   }

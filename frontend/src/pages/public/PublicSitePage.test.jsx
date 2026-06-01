@@ -253,7 +253,17 @@ describe('PublicSitePage', () => {
     publicSiteService.createPublicAppointmentRequest?.mockReset();
     publicSiteService.createPublicAppointmentRequest?.mockResolvedValue({ status: 'pending' });
     publicSiteService.createPublicOrder?.mockReset();
-    publicSiteService.createPublicOrder?.mockResolvedValue({ status: 'received' });
+    publicSiteService.createPublicOrder?.mockResolvedValue({
+      id: 'order-public-1',
+      status: 'received',
+      total: 39.9,
+      payment: {
+        method: 'cash_on_pickup',
+        status: 'manual',
+        provider: 'manual',
+        amount: 39.9,
+      },
+    });
     publicSiteService.invalidatePublicSiteCache?.mockReset();
     analyticsService.trackEvent.mockClear();
     tenantRealtimeService.subscribeToTenantUpdates.mockImplementation((_target, callbacks = {}) => {
@@ -416,6 +426,7 @@ describe('PublicSitePage', () => {
 
     await user.click(screen.getAllByRole('button', { name: /Adicionar/i })[0]);
     await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
+    await user.click(screen.getByLabelText(/Pagamento na retirada/i));
     await user.type(screen.getByLabelText('Nome'), 'Carlos');
     await user.type(screen.getByLabelText('Telefone'), '5511999999999');
     await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
@@ -426,10 +437,13 @@ describe('PublicSitePage', () => {
         expect.objectContaining({
           customerName: 'Carlos',
           customerPhone: '5511999999999',
+          payment: {
+            method: 'cash_on_pickup',
+          },
         }),
       );
     });
-    expect(screen.getByText('Pedido enviado com sucesso. Aguarde a confirmacao do tenant.')).toBeInTheDocument();
+    expect(screen.getAllByText('Pedido enviado com sucesso. O pagamento sera feito na retirada.').length).toBeGreaterThan(0);
   });
 
   it('shows a neutral message when the tenant is inactive', async () => {

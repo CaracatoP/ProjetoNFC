@@ -1,6 +1,13 @@
 import { z } from 'zod';
-import { BUSINESS_MODULE_KEY_VALUES, BUSINESS_SEGMENT_VALUES, BUSINESS_STATUS_VALUES } from '../constants/index.js';
+import {
+  BUSINESS_MODULE_KEY_VALUES,
+  BUSINESS_SEGMENT_VALUES,
+  BUSINESS_STATUS_VALUES,
+  DEFAULT_PAYMENT_PROVIDER,
+  PAYMENT_PROVIDER_VALUES,
+} from '../constants/index.js';
 import { normalizeBusinessContact, normalizeBusinessWifi } from '../utils/businessContact.js';
+import { normalizeBusinessPaymentSettings } from '../utils/businessPayment.js';
 
 export const businessHourSchema = z.object({
   id: z.string(),
@@ -48,6 +55,30 @@ export const businessContactSchema = z.preprocess(
   }),
 );
 
+export const businessPaymentSettingsSchema = z.preprocess(
+  (value) => normalizeBusinessPaymentSettings(value),
+  z.object({
+    enabled: z.boolean().default(true),
+    methods: z
+      .object({
+        pix: z.boolean().default(false),
+        creditCard: z.boolean().default(false),
+        debitCard: z.boolean().default(false),
+        cashOnPickup: z.boolean().default(true),
+        cashOnDelivery: z.boolean().default(true),
+      })
+      .default({}),
+    pix: z
+      .object({
+        key: z.string().default(''),
+        merchantName: z.string().default(''),
+        merchantCity: z.string().default(''),
+      })
+      .default({}),
+    provider: z.enum(PAYMENT_PROVIDER_VALUES).default(DEFAULT_PAYMENT_PROVIDER),
+  }),
+);
+
 export const seoSchema = z.object({
   title: z.string(),
   description: z.string(),
@@ -75,6 +106,7 @@ export const businessSchema = z.object({
   rating: z.string().optional(),
   domains: businessDomainsSchema.default({}),
   contact: businessContactSchema.default(normalizeBusinessContact()),
+  paymentSettings: businessPaymentSettingsSchema.default(normalizeBusinessPaymentSettings()),
   segment: z.enum(BUSINESS_SEGMENT_VALUES).default('other'),
   modules: z
     .object(

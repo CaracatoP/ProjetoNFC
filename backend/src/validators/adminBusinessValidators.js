@@ -4,8 +4,10 @@ import {
   BUSINESS_MODULE_KEY_VALUES,
   BUSINESS_SEGMENT_VALUES,
   BUSINESS_STATUS_VALUES,
+  DEFAULT_PAYMENT_PROVIDER,
   LINK_GROUPS,
   LINK_TYPE_VALUES,
+  PAYMENT_PROVIDER_VALUES,
   SECTION_TYPE_VALUES,
 } from '../../../shared/constants/index.js';
 import { normalizeHost, slugify } from '../../../shared/utils/tenantIdentity.js';
@@ -168,6 +170,28 @@ const businessBodySchema = z.object({
           actionDescription: optionalString,
         })
         .optional(),
+    })
+    .default({}),
+  paymentSettings: z
+    .object({
+      enabled: z.boolean().optional(),
+      methods: z
+        .object({
+          pix: z.boolean().optional(),
+          creditCard: z.boolean().optional(),
+          debitCard: z.boolean().optional(),
+          cashOnPickup: z.boolean().optional(),
+          cashOnDelivery: z.boolean().optional(),
+        })
+        .default({}),
+      pix: z
+        .object({
+          key: optionalString,
+          merchantName: optionalString,
+          merchantCity: optionalString,
+        })
+        .default({}),
+      provider: z.enum(PAYMENT_PROVIDER_VALUES).default(DEFAULT_PAYMENT_PROVIDER),
     })
     .default({}),
   seo: z.object({

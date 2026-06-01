@@ -60,6 +60,12 @@ function buildDraft(overrides = {}) {
           deliveryType: 'pickup',
           total: 79.8,
           status: 'received',
+          payment: {
+            method: 'pix',
+            status: 'pending',
+            provider: 'manual',
+            amount: 79.8,
+          },
           items: [{ name: 'Pomada', quantity: 2, unitPrice: 39.9 }],
           notes: '',
         },
@@ -70,6 +76,12 @@ function buildDraft(overrides = {}) {
           deliveryType: 'delivery',
           total: 29.9,
           status: 'ready',
+          payment: {
+            method: 'cash_on_delivery',
+            status: 'paid',
+            provider: 'manual',
+            amount: 29.9,
+          },
           items: [{ name: 'Escova', quantity: 1, unitPrice: 29.9 }],
           notes: 'Entregar na recepcao',
         },
@@ -529,6 +541,44 @@ describe('TenantModuleManagementSection', () => {
     const recentCards = screen.getAllByTestId('order-card-received');
     expect(within(recentCards[0]).getByText('Beatriz')).toBeInTheDocument();
     expect(within(recentCards[1]).getByText('Carlos')).toBeInTheDocument();
+  });
+
+  it('shows payment badges and lets authorized client operators mark manual payment as paid', async () => {
+    const user = userEvent.setup();
+    const updateOrderPaymentStatus = vi.fn().mockResolvedValue({ id: 'order-1', payment: { status: 'paid' } });
+
+    render(
+      <TenantModuleManagementSection
+        draft={buildDraft()}
+        onDraftChange={vi.fn()}
+        moduleActions={{ updateOrderPaymentStatus }}
+        mode="client"
+        permissions={{
+          canViewOrders: true,
+          canManageOrders: true,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Pedidos' }));
+
+    const receivedOrderCard = screen.getByTestId('order-card-received');
+    expect(within(receivedOrderCard).getByText('Pix')).toBeInTheDocument();
+    expect(within(receivedOrderCard).getByText('Pendente')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Expandir grupo Prontos/i }));
+    const readyOrderCard = screen.getByTestId('order-card-ready');
+    expect(within(readyOrderCard).getByText('Pago')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Filtrar pagamento'), 'pending');
+    expect(screen.getByText('Carlos')).toBeInTheDocument();
+    expect(screen.queryByText('Marina')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Marcar pagamento como pago/i }));
+
+    await waitFor(() => {
+      expect(updateOrderPaymentStatus).toHaveBeenCalledWith('order-1', 'paid');
+    });
   });
 
   it('keeps the main admin mode behavior expanded without client-only collapse controls', async () => {

@@ -1,6 +1,11 @@
 import mongoose from 'mongoose';
-import { BUSINESS_SEGMENT_VALUES, BUSINESS_STATUS_VALUES } from '../../../shared/constants/index.js';
+import {
+  BUSINESS_SEGMENT_VALUES,
+  BUSINESS_STATUS_VALUES,
+  PAYMENT_PROVIDER_VALUES,
+} from '../../../shared/constants/index.js';
 import { normalizeBusinessContact } from '../../../shared/utils/businessContact.js';
+import { normalizeBusinessPaymentSettings } from '../../../shared/utils/businessPayment.js';
 import { buildBusinessSegmentState } from '../../../shared/utils/segments.js';
 import { baseSchemaOptions } from '../utils/mongoose.js';
 
@@ -72,6 +77,22 @@ const businessSchema = new mongoose.Schema(
         actionDescription: { type: String, trim: true },
       },
     },
+    paymentSettings: {
+      enabled: { type: Boolean, default: true },
+      methods: {
+        pix: { type: Boolean, default: false },
+        creditCard: { type: Boolean, default: false },
+        debitCard: { type: Boolean, default: false },
+        cashOnPickup: { type: Boolean, default: true },
+        cashOnDelivery: { type: Boolean, default: true },
+      },
+      pix: {
+        key: { type: String, trim: true },
+        merchantName: { type: String, trim: true },
+        merchantCity: { type: String, trim: true },
+      },
+      provider: { type: String, enum: PAYMENT_PROVIDER_VALUES, default: 'manual', trim: true },
+    },
     seo: {
       title: { type: String, required: true, trim: true },
       description: { type: String, required: true, trim: true },
@@ -95,6 +116,10 @@ const businessSchema = new mongoose.Schema(
       transform: (doc, ret) => {
         const transformed = baseToJSONTransform ? baseToJSONTransform(doc, ret) : ret;
         transformed.contact = normalizeBusinessContact(transformed.contact || {});
+        transformed.paymentSettings = normalizeBusinessPaymentSettings(
+          transformed.paymentSettings || {},
+          transformed.contact?.pix || {},
+        );
         return transformed;
       },
     },
@@ -103,6 +128,10 @@ const businessSchema = new mongoose.Schema(
       transform: (doc, ret) => {
         const transformed = baseToObjectTransform ? baseToObjectTransform(doc, ret) : ret;
         transformed.contact = normalizeBusinessContact(transformed.contact || {});
+        transformed.paymentSettings = normalizeBusinessPaymentSettings(
+          transformed.paymentSettings || {},
+          transformed.contact?.pix || {},
+        );
         return transformed;
       },
     },

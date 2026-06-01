@@ -232,6 +232,16 @@ export async function updateTenantOrderStatus(token, businessId, orderId, status
   return response.data;
 }
 
+export async function updateTenantOrderPaymentStatus(token, businessId, orderId, status) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/businesses/${businessId}/orders/${orderId}/payment-status`, {
+    method: 'PATCH',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify({ status }),
+  });
+
+  return response.data;
+}
+
 export async function listAdminClients(token, filters = {}) {
   const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/clients${buildQueryString(filters)}`, {
     headers: buildAdminAuthHeaders(token),

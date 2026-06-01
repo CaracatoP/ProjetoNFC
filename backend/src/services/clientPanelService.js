@@ -35,6 +35,7 @@ import {
   archiveTenantOrder,
   updateTenantAppointmentRequestStatus,
   updateTenantAppointmentService,
+  updateTenantOrderPaymentStatus,
   updateTenantOrderStatus,
   updateTenantProduct,
   updateTenantProfessional,
@@ -183,6 +184,7 @@ function sanitizeClientBusinessForPanel(editorBusiness = {}, sessionUser, access
       : {},
     hours: canEditBasics ? (editorBusiness.hours || []) : [],
     contact: canEditBasics ? sanitizeClientContactForPanel(editorBusiness.contact) : {},
+    paymentSettings: canEditBasics ? editorBusiness.paymentSettings || {} : {},
     seo: canEditBasics
       ? {
           title: editorBusiness.seo?.title || '',
@@ -432,6 +434,18 @@ export async function updateClientPanelOrderStatus(sessionUser, orderId, status)
   );
 
   return updateTenantOrderStatus(context.businessId, orderId, status);
+}
+
+export async function updateClientPanelOrderPaymentStatus(sessionUser, orderId, status) {
+  const context = await resolveClientPanelContext(sessionUser);
+  assertBillingAllowsPanelAccess(sessionUser, context.accessContext);
+  assertCapability(
+    canManageOrders(sessionUser, context.accessContext),
+    'Voce nao pode atualizar o pagamento dos pedidos deste tenant.',
+    'panel_orders_forbidden',
+  );
+
+  return updateTenantOrderPaymentStatus(context.businessId, orderId, status);
 }
 
 export async function deleteClientPanelOrder(sessionUser, orderId) {

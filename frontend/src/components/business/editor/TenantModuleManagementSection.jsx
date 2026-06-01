@@ -3,6 +3,10 @@ import {
   BUSINESS_MODULE_KEY_VALUES,
   BUSINESS_SEGMENT_VALUES,
   DEFAULT_PRODUCT_MEASUREMENT_UNIT,
+  PAYMENT_METHOD_LABELS,
+  PAYMENT_STATUS,
+  PAYMENT_STATUS_LABELS,
+  PAYMENT_STATUS_VALUES,
   PRODUCT_MEASUREMENT_UNIT_VALUES,
 } from '@shared/constants/index.js';
 import { buildBusinessSegmentState, getSegmentPreset } from '@shared/utils/segments.js';
@@ -46,6 +50,14 @@ const ORDER_STATUS_TIMESTAMP_LABELS = {
   readyAt: 'Pronto em',
   deliveredAt: 'Entregue em',
   cancelledAt: 'Cancelado em',
+};
+const PAYMENT_STATUS_FILTER_LABELS = {
+  all: 'Todos',
+  [PAYMENT_STATUS.PENDING]: PAYMENT_STATUS_LABELS[PAYMENT_STATUS.PENDING],
+  [PAYMENT_STATUS.PAID]: PAYMENT_STATUS_LABELS[PAYMENT_STATUS.PAID],
+  [PAYMENT_STATUS.MANUAL]: PAYMENT_STATUS_LABELS[PAYMENT_STATUS.MANUAL],
+  [PAYMENT_STATUS.FAILED]: PAYMENT_STATUS_LABELS[PAYMENT_STATUS.FAILED],
+  [PAYMENT_STATUS.CANCELLED]: PAYMENT_STATUS_LABELS[PAYMENT_STATUS.CANCELLED],
 };
 const ORDER_SORT_OPTIONS = {
   arrival: 'arrival',
@@ -337,6 +349,7 @@ export function TenantModuleManagementSection({
   const [productSearchValue, setProductSearchValue] = useState('');
   const [orderSearchValue, setOrderSearchValue] = useState('');
   const [orderFilter, setOrderFilter] = useState('all');
+  const [orderPaymentFilter, setOrderPaymentFilter] = useState('all');
   const [orderSort, setOrderSort] = useState(ORDER_SORT_OPTIONS.recent);
   const [appointmentFilter, setAppointmentFilter] = useState('all');
   const [uploadingAssetKey, setUploadingAssetKey] = useState('');
@@ -402,15 +415,17 @@ export function TenantModuleManagementSection({
     [editingProducts, newProduct],
   );
 
-  const orderGroups = useMemo(
-    () =>
-      filterAndGroupOrders(modulesData.orders || [], {
-        filterValue: orderFilter,
-        searchValue: orderSearchValue,
-        sortMode: orderSort,
-      }),
-    [modulesData.orders, orderFilter, orderSearchValue, orderSort],
-  );
+  const orderGroups = useMemo(() => {
+    const paymentFilteredOrders = (modulesData.orders || []).filter((order) =>
+      orderPaymentFilter === 'all' ? true : (order?.payment?.status || PAYMENT_STATUS.MANUAL) === orderPaymentFilter,
+    );
+
+    return filterAndGroupOrders(paymentFilteredOrders, {
+      filterValue: orderFilter,
+      searchValue: orderSearchValue,
+      sortMode: orderSort,
+    });
+  }, [modulesData.orders, orderFilter, orderPaymentFilter, orderSearchValue, orderSort]);
 
   const appointmentGroups = useMemo(
     () =>
@@ -486,7 +501,7 @@ export function TenantModuleManagementSection({
   const activeModules = BUSINESS_MODULE_KEY_VALUES.filter((key) => segmentState.modules[key]);
   const preset = getSegmentPreset(segmentState.segment);
   const busyMessage = getBusyMessage(busyKey);
-  const ordersBusy = busyKey === 'update-order-status' || !capabilityState.canManageOrders;
+  const ordersBusy = (busyKey === 'update-order-status' || busyKey === 'update-order-payment-status') || !capabilityState.canManageOrders;
   const archiveOrderBusy = busyKey === 'delete-order' || !capabilityState.canManageOrders;
   const appointmentsBusy = busyKey === 'update-appointment-request-status' || !capabilityState.canManageAppointments;
   const catalogReadOnly = !capabilityState.canEditCatalog;
@@ -532,6 +547,20 @@ export function TenantModuleManagementSection({
   async function handleArchiveOrder(orderId) {
     await moduleActions?.deleteOrder?.(orderId);
     setPendingOrderArchiveId('');
+  }
+
+  function canMarkPaymentAsPaid(order) {
+    const payment = order?.payment || {};
+
+    if (!capabilityState.canManageOrders) {
+      return false;
+    }
+
+    if (payment.provider !== 'manual') {
+      return false;
+    }
+
+    return payment.status !== PAYMENT_STATUS.PAID;
   }
 
   return (
@@ -1195,6 +1224,15 @@ export function TenantModuleManagementSection({
                 ))}
               </select>
             </AdminField>
+            <AdminField label="Filtrar pagamento">
+              <select value={orderPaymentFilter} onChange={(event) => setOrderPaymentFilter(event.target.value)} disabled={ordersBusy}>
+                {['all', ...PAYMENT_STATUS_VALUES].map((status) => (
+                  <option key={status} value={status}>
+                    {PAYMENT_STATUS_FILTER_LABELS[status] || status}
+                  </option>
+                ))}
+              </select>
+            </AdminField>
             <AdminField label="Ordenar pedidos">
               <select value={orderSort} onChange={(event) => setOrderSort(event.target.value)} disabled={ordersBusy}>
                 <option value={ORDER_SORT_OPTIONS.arrival}>Ordem de chegada</option>
@@ -1242,6 +1280,28 @@ export function TenantModuleManagementSection({
                           <span className="admin-order-card__elapsed">{formatRelativeTime(order.createdAt)}</span>
                         ) : null}
                       </div>
+                      {order.payment ? (
+                        <div className="admin-order-payment">
+                          <div className="admin-order-payment__meta">
+                            <span className="admin-order-payment__method">
+                              {PAYMENT_METHOD_LABELS[order.payment.method] || 'Pagamento manual'}
+                            </span>
+                            <div className={`admin-order-payment-badge admin-order-payment-badge--${order.payment.status || PAYMENT_STATUS.MANUAL}`}>
+                              <i aria-hidden="true" />
+                              <span>{PAYMENT_STATUS_LABELS[order.payment.status] || PAYMENT_STATUS_LABELS[PAYMENT_STATUS.MANUAL]}</span>
+                            </div>
+                          </div>
+                          {canMarkPaymentAsPaid(order) ? (
+                            <Button
+                              variant="secondary"
+                              disabled={ordersBusy}
+                              onClick={() => moduleActions?.updateOrderPaymentStatus?.(order.id, PAYMENT_STATUS.PAID)}
+                            >
+                              Marcar pagamento como pago
+                            </Button>
+                          ) : null}
+                        </div>
+                      ) : null}
                       <div className="admin-order-card__timeline">
                         {buildOrderTimeline(order).map(([field, value]) => (
                           <span key={`${order.id}-${field}`}>

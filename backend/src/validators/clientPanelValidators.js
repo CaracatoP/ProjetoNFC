@@ -16,6 +16,7 @@ export const clientPanelBusinessBasicsBodySchema = z.object({
       address: true,
       hours: true,
       contact: true,
+      paymentSettings: true,
       seo: true,
     })
     .partial(),

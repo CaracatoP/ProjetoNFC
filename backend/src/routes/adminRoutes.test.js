@@ -1084,6 +1084,63 @@ describe('Admin routes', () => {
     unsubscribe();
   });
 
+  it('allows level 0 admins to mark manual tenant payments as paid from the admin workspace', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.findOne({ businessId: business._id }).lean();
+
+    expect(product).toBeTruthy();
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: false,
+            debitCard: false,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'manual',
+        },
+      },
+    );
+
+    const createOrderResponse = await request(app).post('/api/public/site/barbearia-estilo-vivo/orders').send({
+      customerName: 'Cliente Pix Admin',
+      customerPhone: '11977776666',
+      items: [
+        {
+          productId: String(product._id),
+          name: product.name,
+          quantity: 1,
+          unitPrice: Number(product.price || 49.9),
+        },
+      ],
+      payment: {
+        method: 'pix',
+      },
+    });
+
+    expect(createOrderResponse.status).toBe(201);
+
+    const response = await request(app)
+      .patch(`/api/admin/businesses/${business._id.toString()}/orders/${createOrderResponse.body.data.id}/payment-status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'paid' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.payment).toEqual(
+      expect.objectContaining({
+        method: 'pix',
+        status: 'paid',
+        provider: 'manual',
+      }),
+    );
+    expect(response.body.data.payment.paidAt).toEqual(expect.any(String));
+  });
+
   it('rejects scoped module mutations when the resource belongs to another tenant', async () => {
     const primaryBusiness = (await request(app)
       .get('/api/admin/businesses')

@@ -150,6 +150,7 @@ export function PublicCatalogPage() {
         </Card>
       ) : (
         <BusinessCatalogSection
+          business={site.business}
           tenantSlug={site.business.slug}
           modules={segmentState.modules}
           segmentConfig={segmentState.segmentConfig}

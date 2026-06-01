@@ -13,6 +13,7 @@ import {
   listProfessionalsController,
   updateAppointmentRequestStatusController,
   updateAppointmentServiceController,
+  updateOrderPaymentStatusController,
   updateOrderStatusController,
   updateProductController,
   updateProfessionalController,
@@ -23,6 +24,7 @@ import {
   appointmentRequestStatusBodySchema,
   appointmentServiceBodySchema,
   businessIdParamsSchema,
+  orderPaymentStatusBodySchema,
   orderStatusBodySchema,
   productBodySchema,
   professionalBodySchema,
@@ -103,6 +105,11 @@ router.patch(
   '/businesses/:businessId/orders/:id/status',
   validateRequest({ params: scopedResourceParamsSchema, body: orderStatusBodySchema }),
   updateOrderStatusController,
+);
+router.patch(
+  '/businesses/:businessId/orders/:id/payment-status',
+  validateRequest({ params: scopedResourceParamsSchema, body: orderPaymentStatusBodySchema }),
+  updateOrderPaymentStatusController,
 );
 
 export default router;

@@ -146,6 +146,16 @@ export async function updateClientPanelOrderStatus(token, orderId, status) {
   return response.data;
 }
 
+export async function updateClientPanelOrderPaymentStatus(token, orderId, status) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/panel/orders/${orderId}/payment-status`, {
+    method: 'PATCH',
+    headers: buildSessionAuthHeaders(token),
+    body: JSON.stringify({ status }),
+  });
+
+  return response.data;
+}
+
 export async function deleteClientPanelOrder(token, orderId) {
   const response = await apiRequest(`${appConfig.apiBaseUrl}/panel/orders/${orderId}`, {
     method: 'DELETE',

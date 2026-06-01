@@ -30,6 +30,7 @@ import {
   updateAdminBusiness,
   updateAdminBusinessStatus,
   updateTenantOrderStatus,
+  updateTenantOrderPaymentStatus,
   updateTenantProduct,
   updateTenantProfessional,
   uploadAdminImage,
@@ -605,6 +606,8 @@ export function DashboardHomePage() {
         runModuleAction('update-appointment-request-status', () => updateTenantAppointmentRequestStatus(token, selectedBusinessId, requestId, status), 'Status do agendamento atualizado com sucesso.'),
       updateOrderStatus: (orderId, status) =>
         runModuleAction('update-order-status', () => updateTenantOrderStatus(token, selectedBusinessId, orderId, status), 'Status do pedido atualizado com sucesso.'),
+      updateOrderPaymentStatus: (orderId, status) =>
+        runModuleAction('update-order-payment-status', () => updateTenantOrderPaymentStatus(token, selectedBusinessId, orderId, status), 'Status do pagamento atualizado com sucesso.'),
     }),
     [refreshPreview, selectedBusinessId, token],
   );

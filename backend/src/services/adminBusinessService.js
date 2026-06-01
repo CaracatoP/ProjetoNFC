@@ -39,6 +39,7 @@ import {
   calculateActionRate,
 } from '../utils/adminAnalytics.js';
 import { normalizeBusinessContact } from '../../../shared/utils/businessContact.js';
+import { normalizeBusinessPaymentSettings, normalizeOrderPayment } from '../../../shared/utils/businessPayment.js';
 import {
   getCanonicalSectionType,
   normalizeHost,
@@ -221,6 +222,7 @@ function normalizeBusinessPayload(payload = {}) {
   const seoDescription =
     String(payload.seo?.description || '').trim() || description || (name ? `Pagina NFC oficial de ${name}.` : '');
   const segmentState = buildBusinessSegmentState(payload);
+  const contact = normalizeBusinessContact(payload.contact || {});
 
   return {
     name,
@@ -249,7 +251,8 @@ function normalizeBusinessPayload(payload = {}) {
       longitude: normalizeCoordinate(payload.address?.longitude),
     },
     hours: normalizeHours(payload.hours),
-    contact: normalizeBusinessContact(payload.contact || {}),
+    contact,
+    paymentSettings: normalizeBusinessPaymentSettings(payload.paymentSettings || {}, contact.pix || {}),
     seo: {
       title: seoTitle,
       description: seoDescription,
@@ -743,6 +746,7 @@ async function hydrateEditorResponse(businessId) {
         status: item.status,
         notes: item.notes || '',
         createdAt: item.createdAt,
+        payment: normalizeOrderPayment(item.payment || {}, Number(item.total || 0)),
       })),
     },
   };

@@ -1,5 +1,6 @@
 import { BUSINESS_STATUS, LINK_GROUPS, LINK_TYPES, SECTION_TYPES } from '../../../shared/constants/index.js';
 import { normalizeBusinessContact } from '../../../shared/utils/businessContact.js';
+import { normalizeBusinessPaymentSettings } from '../../../shared/utils/businessPayment.js';
 import { buildBusinessSegmentState } from '../../../shared/utils/segments.js';
 import { normalizePhoneActionValue, slugify } from '../../../shared/utils/tenantIdentity.js';
 import { createDefaultTheme } from '../../../shared/utils/theme.js';
@@ -281,6 +282,7 @@ export function buildDefaultTenantSetup(input = {}) {
       wifi: input.contact?.wifi,
       pix: input.contact?.pix,
     }),
+    paymentSettings: normalizeBusinessPaymentSettings(input.paymentSettings || {}, input.contact?.pix || {}),
     seo: {
       title: `${name} | Pagina NFC`,
       description: description || `Pagina NFC oficial de ${name}.`,
