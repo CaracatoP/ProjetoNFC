@@ -192,6 +192,13 @@ O service principal continua em [adminFinanceService.js](/C:/Users/RDP/Downloads
 
 - `walletId` deve ser validado antes de salvar.
 - alteracoes sensiveis continuam permitidas, mas o backend deve rejeitar combinacoes invalidas, nao apenas aceitar o payload.
+- `walletId` e `apiKey` devem ficar mascarados por padrao na UI.
+- deve existir botao de `mostrar/ocultar`.
+- deve existir botao de `copiar`.
+- deve existir aviso visual de impacto antes de alteracoes sensiveis.
+- salvar alteracao sensivel deve exigir confirmacao explicita.
+- campos sensiveis devem ficar agrupados dentro de `Configuracoes avancadas`.
+- erros de API nunca devem exibir stack trace ou payload sensivel cru.
 
 ### Shape do DTO
 
@@ -231,8 +238,6 @@ Esses campos sao complementares, nao substituem os atuais.
 
 ```json
 {
-  "businessId": "...",
-  "businessName": "...",
   "businessSlug": "...",
   "enabled": true,
   "provider": "asaas",
@@ -392,15 +397,16 @@ O formulario sera mantido na tela atual, mas com UX mais guiada.
 
 Ao criar a subconta com sucesso:
 
+- atualizar o tenant no estado local da tela
 - atualizar `tenantSettings`
 - atualizar `tenantDraft`
 - atualizar `subaccountDraft`
-- atualizar o tenant no estado local da tela
-- refletir `walletId`
-- preencher `walletId` automaticamente
-- refletir `status`
-- atualizar o status financeiro do tenant
+- preencher `asaas.walletId` automaticamente
+- atualizar `tenantFinancialStatus`
+- atualizar `summary` e `warnings`
 - refletir `provider`/split/metodos conforme retorno do backend
+- exibir mensagem de sucesso com `walletId` e `status`
+- nao apagar os demais dados financeiros ja configurados
 
 Sem refresh manual.
 
