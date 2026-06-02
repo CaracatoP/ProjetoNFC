@@ -188,7 +188,7 @@ O service principal continua em [adminFinanceService.js](/C:/Users/RDP/Downloads
 - se qualquer regra falhar, o backend deve retornar erro claro e incluir `warnings` no DTO.
 - metodos online devem ser bloqueados quando a subconta nao estiver valida.
 
-#### WalletId e campos sensiveis
+### WalletId e campos sensiveis
 
 - walletId deve ser validado antes de salvar.
 - alteracoes sensiveis continuam permitidas, mas o backend deve rejeitar combinacoes invalidas.
@@ -199,6 +199,10 @@ O service principal continua em [adminFinanceService.js](/C:/Users/RDP/Downloads
 - salvar alteracao sensivel deve exigir confirmacao explicita.
 - campos sensiveis devem ficar agrupados dentro de Configuracoes avancadas.
 - erros de API nunca devem exibir stack trace ou payload sensivel cru.
+
+Copy sugerida:
+
+`Alterar credenciais financeiras pode impactar pagamentos deste tenant.`
 
 ### Shape do DTO
 
@@ -283,13 +287,14 @@ Campos derivados esperados:
   - `splitPreview.mode = "custom"`
 - `effectivePlatformFeePercent` precisa ficar entre `0` e `MAX_PLATFORM_FEE_PERCENT`.
 
-## Modo avancado
+### Modo avancado
 
-Campos tecnicos e sensiveis vao para um bloco colapsavel:
+Campos tecnicos e sensiveis devem ficar em um bloco colapsavel de Configuracoes avancadas.
 
-- API key manual
-- edicao manual de walletId
-- override manual de provider
+Incluir nesse bloco:
+
+- walletId manual
+- apiKey
 - credenciais sensiveis
 - acoes de limpeza/troca de chave
 
@@ -297,7 +302,7 @@ Objetivo:
 
 - manter a UI principal mais limpa
 - concentrar campos tecnicos em uma area controlada
-- reaproveitar as regras da secao `WalletId e campos sensiveis`
+- reaproveitar as regras da secao WalletId e campos sensiveis
 
 ## Split e override de taxa
 
