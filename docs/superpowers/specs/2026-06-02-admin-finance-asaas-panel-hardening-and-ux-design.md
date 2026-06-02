@@ -176,11 +176,16 @@ O service principal continua em [adminFinanceService.js](/C:/Users/RDP/Downloads
 - `split.enabled = true` exige `platformWalletId` global valido.
 - `split.enabled = true` exige `asaas.walletId` valido no tenant.
 - `split.enabled = true` so pode operar quando o provider efetivo for `asaas`.
-- taxa nao pode ser menor que `0` nem maior que o limite configurado pelo backend.
+- o backend define um limite explicito `MAX_PLATFORM_FEE_PERCENT`, com valor inicial `30`.
+- `effectivePlatformFeePercent` nao pode ser menor que `0` nem maior que `MAX_PLATFORM_FEE_PERCENT`.
 
 #### Checkout online
 
-- checkout online nao pode permanecer ativo se o tenant estiver configurado para Asaas com subconta inconsistente.
+- `enabled = true` com `provider = asaas` exige integracao global valida.
+- `enabled = true` com `provider = asaas` exige `tenantFinancialStatus` valido/ativo.
+- `enabled = true` com `provider = asaas` exige `asaas.walletId` valido.
+- `enabled = true` com `split.enabled = true` exige `canEnableSplit = true`.
+- se qualquer regra falhar, o backend deve retornar erro claro e incluir `warnings` no DTO.
 - metodos online devem ser bloqueados quando a subconta nao estiver valida.
 
 #### WalletId e campos sensiveis
@@ -244,7 +249,7 @@ Esses campos sao complementares, nao substituem os atuais.
   "warnings": [],
   "splitPreview": {
     "globalPercent": 3,
-    "tenantOverridePercent": 0,
+    "tenantOverridePercent": null,
     "effectivePlatformFeePercent": 3,
     "platformPercent": 3,
     "tenantNetPercent": 97,
@@ -254,12 +259,24 @@ Esses campos sao complementares, nao substituem os atuais.
   },
   "summary": {
     "providerLabel": "Asaas",
-    "subaccountStatus": "active",
-    "checkoutStatus": "active",
-    "splitStatus": "active"
+    "integrationLabel": "Configurado",
+    "tenantFinancialLabel": "Ativo",
+    "splitLabel": "Ativo",
+    "checkoutLabel": "Ativo"
   }
 }
 ```
+
+### Regra de taxa efetiva
+
+- quando `usesGlobalFee = true`:
+  - `effectivePlatformFeePercent = globalPercent`
+  - `tenantOverridePercent = null`
+  - `splitPreview.mode = "global"`
+- quando `usesGlobalFee = false`:
+  - `effectivePlatformFeePercent = tenantOverridePercent`
+  - `splitPreview.mode = "custom"`
+- `effectivePlatformFeePercent` precisa ficar entre `0` e `MAX_PLATFORM_FEE_PERCENT`.
 
 ## Modo avancado
 
@@ -334,6 +351,12 @@ Modo: taxa customizada do tenant
 - `Este tenant esta usando a taxa global da plataforma`
 - `Este tenant possui taxa customizada`
 
+### Regra operacional do override
+
+- `override = 0` nao significa automaticamente taxa customizada `0%`.
+- se `usesGlobalFee = true`, o override deve ser ignorado e a UI deve usar a taxa global.
+- apenas quando `usesGlobalFee = false` o valor de `tenantOverridePercent` passa a definir a taxa efetiva.
+
 ## Criacao de subconta Asaas
 
 O formulario sera mantido na tela atual, mas com UX mais guiada.
@@ -354,6 +377,16 @@ O formulario sera mantido na tela atual, mas com UX mais guiada.
 - exibicao do status da conta
 - exibicao de que a conta foi vinculada ao tenant
 - erro da API tratado sem stack trace cru
+
+### Regras de validacao da subconta
+
+- `cpfCnpj` obrigatorio e normalizado antes de enviar para a API.
+- `email` obrigatorio e validado em formato correto.
+- `mobilePhone` obrigatorio e validado com formato aceitavel para operacao.
+- `postalCode` obrigatorio.
+- `addressNumber` obrigatorio.
+- `province` obrigatorio.
+- erro vindo do Asaas deve ser convertido para mensagem limpa e operacional, sem stack ou payload sensivel cru.
 
 ### Pos-sucesso
 
