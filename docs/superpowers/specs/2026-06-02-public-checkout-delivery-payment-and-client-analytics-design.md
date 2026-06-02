@@ -75,12 +75,7 @@ Estado esperado:
 - `paymentMethod = ''` ou `null`
 - botao `Finalizar pedido` bloqueado ate `deliveryType` e `paymentMethod` estarem validos
 
-Antes da escolha de `deliveryType`:
-
-- nao mostrar formas de pagamento
-- nao permitir envio do pedido
-
-### Formas de pagamento filtradas
+### Etapa 2: formas de pagamento filtradas
 
 Se `deliveryType = delivery`, permitir:
 
@@ -119,7 +114,7 @@ Normalizar aliases legados antes de renderizar ou validar:
 
 - `cash` ou `money` + `delivery` => `cash_on_delivery`
 - `cash` ou `money` + `pickup` => `cash_on_pickup`
-- `card` => `credit_card` ou `debit_card` apenas se o tenant tiver essa opcao habilitada de forma compativel
+- `card` => `credit_card` ou `debit_card` apenas se o tenant tiver essa opcao habilitada
 - `online` => `pix` ou cartao apenas se houver metodo online habilitado explicitamente
 - aliases ambiguos nunca devem gerar opcao vazia ou invalida no frontend
 
