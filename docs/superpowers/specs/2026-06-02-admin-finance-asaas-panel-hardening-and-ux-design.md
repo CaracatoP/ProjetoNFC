@@ -188,21 +188,51 @@ O service principal continua em [adminFinanceService.js](/C:/Users/RDP/Downloads
 - se qualquer regra falhar, o backend deve retornar erro claro e incluir `warnings` no DTO.
 - metodos online devem ser bloqueados quando a subconta nao estiver valida.
 
-### WalletId e campos sensiveis
+#### WalletId e campos sensiveis
 
-- `walletId` deve ser validado antes de salvar.
+- walletId deve ser validado antes de salvar.
 - alteracoes sensiveis continuam permitidas, mas o backend deve rejeitar combinacoes invalidas.
-- `walletId` e `apiKey` devem ficar mascarados por padrao na UI.
-- deve existir botao `mostrar/ocultar`.
-- deve existir botao `copiar`.
+- walletId e apiKey devem ficar mascarados por padrao na UI.
+- deve existir botao mostrar/ocultar.
+- deve existir botao copiar.
 - deve existir aviso visual de impacto antes de alteracoes sensiveis.
 - salvar alteracao sensivel deve exigir confirmacao explicita.
-- campos sensiveis devem ficar agrupados dentro de `Configuracoes avancadas`.
+- campos sensiveis devem ficar agrupados dentro de Configuracoes avancadas.
 - erros de API nunca devem exibir stack trace ou payload sensivel cru.
 
 ### Shape do DTO
 
-Manter os campos atuais e enriquecer com campos derivados, sem quebrar compatibilidade:
+O shape atual deve ser mantido. O backend pode enriquecer a resposta com campos derivados, sem substituir os campos atuais.
+
+Campos derivados esperados:
+
+- integrationStatus
+- tenantFinancialStatus
+- splitPreview
+- usesGlobalFee
+- effectivePlatformFeePercent
+- canEnableSplit
+- canEnableCheckout
+- warnings
+- summary
+
+#### Global settings
+
+```json
+{
+  "environment": "sandbox",
+  "rootApiKeyConfigured": true,
+  "platformWalletId": "wallet_xxx",
+  "defaultPlatformFeePercent": 3,
+  "webhookUrl": "https://...",
+  "integrationStatus": "configured",
+  "summary": {
+    "platformReady": true
+  }
+}
+```
+
+#### Tenant finance settings
 
 ```json
 {
@@ -263,18 +293,11 @@ Campos tecnicos e sensiveis vao para um bloco colapsavel:
 - credenciais sensiveis
 - acoes de limpeza/troca de chave
 
-Regras:
+Objetivo:
 
-- mascarados por padrao
-- botao mostrar/ocultar
-- botao copiar
-- aviso visual de impacto
-- confirmacao antes de salvar alteracao sensivel
-- agrupados dentro de `Configuracoes avancadas`
-
-Copy sugerida:
-
-`Alterar credenciais financeiras pode impactar pagamentos deste tenant.`
+- manter a UI principal mais limpa
+- concentrar campos tecnicos em uma area controlada
+- reaproveitar as regras da secao `WalletId e campos sensiveis`
 
 ## Split e override de taxa
 
@@ -363,7 +386,7 @@ O formulario sera mantido na tela atual, mas com UX mais guiada.
 - `province` obrigatorio.
 - erro vindo do Asaas deve ser convertido para mensagem limpa e operacional, sem stack ou payload sensivel cru.
 
-### Pos-sucesso
+### Pos-sucesso da criacao de subconta
 
 Ao criar a subconta com sucesso:
 
