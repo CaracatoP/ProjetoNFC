@@ -37,10 +37,11 @@ E melhorar o analytics do painel cliente para que:
 2. `deliveryType` iniciando vazio, sem default implicito
 3. Filtragem de metodos de pagamento por tipo de recebimento
 4. Limpeza de `paymentMethod` ao trocar `deliveryType` quando a opcao ficar invalida
-5. Validacao defensiva no backend contra combinacoes invalidas
-6. Enriquecimento do payload de analytics do painel cliente com labels, shares e blocos derivados
-7. Pequenas melhorias de copy e hierarquia visual no painel cliente
-8. Testes de regressao do checkout e de analytics
+5. Compatibilidade com tenants antigos que ainda usam aliases legados de pagamento
+6. Validacao defensiva no backend contra combinacoes invalidas
+7. Enriquecimento do payload de analytics do painel cliente com labels, shares e blocos derivados
+8. Pequenas melhorias de copy e hierarquia visual no painel cliente
+9. Testes de regressao do checkout e de analytics
 
 ### Nao inclui
 
@@ -65,6 +66,12 @@ Antes dessa escolha:
 - nao permitir envio do pedido
 
 `deliveryType` deixa de nascer como `pickup` no estado inicial e passa a ser vazio.
+
+Estado inicial esperado:
+
+- `deliveryType = ''` ou `null`
+- `paymentMethod = ''` ou `null`
+- botao `Finalizar pedido` bloqueado ate os dois campos estarem validos
 
 ### Etapa 2: formas de pagamento filtradas
 
@@ -99,6 +106,24 @@ Exemplos invalidos:
 - `pickup + cash_on_delivery`
 - `delivery + cash_on_pickup`
 
+### Compatibilidade com metodos antigos
+
+Se algum tenant ainda estiver usando aliases legados como:
+
+- `cash`
+- `money`
+- `card`
+- `online`
+
+o sistema deve normalizar esses valores antes de renderizar ou validar.
+
+Regras minimas:
+
+- `cash` ou `money` + `delivery` => `cash_on_delivery`
+- `cash` ou `money` + `pickup` => `cash_on_pickup`
+
+Para aliases mais ambiguos, como `card` e `online`, o sistema deve aplicar um fallback seguro e consistente com os metodos efetivamente habilitados no tenant, sem deixar o frontend exibir opcao vazia ou quebrada.
+
 ## Design do checkout
 
 ### Estrutura visual
@@ -118,11 +143,21 @@ Cada opcao deve trazer:
 - descricao curta
 - estado selecionado claro
 
+Copy obrigatoria:
+
+- `Entrega` -> `Receber no endereco informado`
+- `Retirada` -> `Buscar no estabelecimento`
+
 ### Secao de pagamento
 
 So aparece quando `deliveryType` estiver definido.
 
 Mantem o padrao recente de cards de pagamento, mas agora filtrado pelo tipo de recebimento.
+
+O titulo da etapa deve ser contextual:
+
+- `Como deseja pagar na entrega?`
+- `Como deseja pagar na retirada?`
 
 O restante do fluxo atual continua:
 
@@ -134,6 +169,21 @@ O restante do fluxo atual continua:
 
 O backend precisa validar a compatibilidade entre `deliveryType` e `payment.method` na criacao do pedido, sem confiar no frontend.
 
+Deve existir uma funcao central:
+
+`validatePaymentMethodForDeliveryType(deliveryType, paymentMethod)`
+
+Essa funcao deve concentrar a regra e ser reutilizada em:
+
+- `backend/src/services/moduleService.js`
+- `backend/src/validators/moduleValidators.js`
+- qualquer outro ponto que crie pedido publico
+
+Objetivo:
+
+- evitar regra duplicada espalhada
+- manter o comportamento coerente entre validacao de request e regra de negocio
+
 Regra:
 
 - se `deliveryType = delivery`, rejeitar `cash_on_pickup`
@@ -142,6 +192,12 @@ Regra:
 Resposta esperada:
 
 - `400` com codigo explicito de combinacao invalida
+
+Mensagens obrigatorias:
+
+- sem `deliveryType`: `Escolha se deseja entrega ou retirada.`
+- sem `paymentMethod`: `Escolha uma forma de pagamento.`
+- combinacao invalida: `Essa forma de pagamento nao esta disponivel para o tipo de recebimento escolhido.`
 
 O backend continua:
 
@@ -192,6 +248,13 @@ Sem redesenhar o painel inteiro, ajustar:
 - lista de barras com labels legiveis
 - legenda simples no grafico de ritmo recente, se couber sem inflar o escopo
 
+Mesmo com payload enriquecido, o frontend deve manter fallback seguro para labels desconhecidas.
+
+Exemplo:
+
+- se vier `eventType` desconhecido, humanizar de forma segura
+- nunca deixar o bloco sem nome ou com texto vazio
+
 ## Arquivos esperados
 
 ### Checkout
@@ -200,7 +263,7 @@ Sem redesenhar o painel inteiro, ajustar:
 - `frontend/src/components/business/BusinessCatalogSection.test.jsx`
 - `backend/src/services/moduleService.js`
 - `backend/src/validators/moduleValidators.js`
-- possivelmente `shared/utils/businessPayment.js` se a compatibilidade de metodos precisar de helper dedicado
+- `shared/utils/businessPayment.js` para normalizacao/compatibilidade de metodos
 
 ### Analytics cliente
 
@@ -218,13 +281,17 @@ Sem redesenhar o painel inteiro, ajustar:
 2. `pickup` nao aceita `cash_on_delivery`
 3. `delivery` nao aceita `cash_on_pickup`
 4. trocar `deliveryType` limpa `paymentMethod` invalido
-5. backend rejeita payload manual incompativel
+5. tenant com metodo legado `cash` renderiza corretamente conforme `deliveryType`
+6. `deliveryType` vazio bloqueia envio
+7. `paymentMethod` vazio bloqueia envio depois do `deliveryType`
+8. backend rejeita payload manual incompativel
 
 ### Analytics cliente
 
-6. payload de analytics do cliente inclui labels legiveis para `byEventType`
-7. payload de analytics do cliente inclui labels legiveis para `topTargets`
-8. painel cliente renderiza metricas e nomes legiveis sem depender de tokens crus
+9. payload de analytics do cliente inclui labels legiveis para `byEventType`
+10. payload de analytics do cliente inclui labels legiveis para `topTargets`
+11. painel cliente renderiza metricas e nomes legiveis sem depender de tokens crus
+12. fallback de label desconhecida no analytics evita nome vazio
 
 ## Criterios de aceite
 
