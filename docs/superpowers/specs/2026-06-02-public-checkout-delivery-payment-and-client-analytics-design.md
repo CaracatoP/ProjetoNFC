@@ -53,18 +53,6 @@ E melhorar o analytics do painel cliente para que:
 
 ## Regras de negocio
 
-### Etapa 1: tipo de recebimento
-
-O checkout passa a exigir uma escolha explicita entre:
-
-- `delivery`
-- `pickup`
-
-Antes dessa escolha:
-
-- nao mostrar formas de pagamento
-- nao permitir envio do pedido
-
 ### Estado inicial
 
 `deliveryType` deixa de nascer como `pickup` e passa a ser vazio.
@@ -73,60 +61,59 @@ Estado esperado:
 
 - `deliveryType = ''` ou `null`
 - `paymentMethod = ''` ou `null`
-- botao `Finalizar pedido` bloqueado ate os dois campos estarem validos
+- botao `Finalizar pedido` bloqueado ate `deliveryType` e `paymentMethod` estarem validos
 
-### Etapa 2: formas de pagamento filtradas
+Antes da escolha de `deliveryType`:
 
-Se o cliente escolher `delivery`, so podem aparecer:
+- nao mostrar formas de pagamento
+- nao permitir envio do pedido
+
+### Formas de pagamento filtradas
+
+Se `deliveryType = delivery`, permitir:
 
 - `pix`
 - `credit_card`
 - `debit_card`
 - `cash_on_delivery`
 
-Se o cliente escolher `pickup`, so podem aparecer:
+Se `deliveryType = pickup`, permitir:
 
 - `pix`
 - `credit_card`
 - `debit_card`
 - `cash_on_pickup`
 
-### Troca de tipo de recebimento
+Labels contextuais:
 
-Ao trocar de `delivery` para `pickup`, ou de `pickup` para `delivery`:
+- `delivery`: `Pagamento na entrega`
+- `pickup`: `Pagamento na retirada`
 
-- se o `paymentMethod` atual continuar valido, ele pode ser mantido
-- se o `paymentMethod` atual se tornar invalido, ele deve ser limpo imediatamente
-
-Exemplos invalidos:
+Combinacoes invalidas:
 
 - `pickup + cash_on_delivery`
 - `delivery + cash_on_pickup`
 
+### Troca de tipo de recebimento
+
+Ao trocar `deliveryType`:
+
+- se `paymentMethod` atual continuar valido, pode manter
+- se `paymentMethod` atual ficar invalido, limpar imediatamente
+
 ### Compatibilidade com metodos antigos
 
-Se algum tenant ainda estiver usando aliases legados como:
-
-- `cash`
-- `money`
-- `card`
-- `online`
-
-o sistema deve normalizar esses valores antes de renderizar ou validar.
-
-Regras minimas:
+Normalizar aliases legados antes de renderizar ou validar:
 
 - `cash` ou `money` + `delivery` => `cash_on_delivery`
 - `cash` ou `money` + `pickup` => `cash_on_pickup`
-- `card` deve mapear para `credit_card` ou `debit_card` apenas se o tenant tiver essa opcao habilitada de forma compativel
-- `online` deve mapear para `pix` ou cartao apenas se houver metodo online habilitado de forma explicita
+- `card` => `credit_card` ou `debit_card` apenas se o tenant tiver essa opcao habilitada de forma compativel
+- `online` => `pix` ou cartao apenas se houver metodo online habilitado explicitamente
 - aliases ambiguos nunca devem gerar opcao vazia ou invalida no frontend
 
 ## Design do checkout
 
-### Estrutura visual
-
-O drawer/modal atual do carrinho sera mantido, mas a area de checkout sera reorganizada em duas secoes bem separadas:
+Fluxo visual em duas etapas:
 
 1. `Como voce vai receber?`
 2. `Como deseja pagar?`
@@ -135,16 +122,13 @@ Etapa 1 deve usar cards grandes:
 
 - `Entrega`
   - `Receber no endereco informado`
+
 - `Retirada`
   - `Buscar no estabelecimento`
 
-### Secao de recebimento
-
-Usar cards ou botoes grandes, visiveis e clicaveis, com destaque visual maior do que os campos de formulario.
-
 Cada card deve ter:
 
-- titulo: `Entrega` ou `Retirada`
+- titulo
 - descricao curta
 - estado selecionado claro
 
@@ -152,50 +136,38 @@ Cada card deve ter:
 
 So aparece quando `deliveryType` estiver definido.
 
-Mantem o padrao recente de cards de pagamento, mas agora filtrado pelo tipo de recebimento.
-
-O titulo da etapa deve ser contextual:
+Titulo contextual:
 
 - `Como deseja pagar na entrega?`
 - `Como deseja pagar na retirada?`
-
-As labels devem refletir o contexto:
-
-- em `delivery`, mostrar `Pagamento na entrega`
-- em `pickup`, mostrar `Pagamento na retirada`
 
 O restante do fluxo atual continua:
 
 - Pix continua mostrando QR Code/copia e cola no sucesso
 - cartao online continua seguindo redirect/hosted checkout
-- pagamento manual continua com instrucoes de retirada/entrega
+- pagamento manual continua com instrucoes coerentes de retirada/entrega
 
 ## Backend
 
 O backend precisa validar a compatibilidade entre `deliveryType` e `payment.method` na criacao do pedido, sem confiar no frontend.
 
-Deve existir uma funcao central:
+Criar funcao central:
 
 `validatePaymentMethodForDeliveryType(deliveryType, paymentMethod)`
 
-Essa funcao deve concentrar a regra e ser reutilizada em:
+Usar em:
 
 - `backend/src/services/moduleService.js`
 - `backend/src/validators/moduleValidators.js`
 - qualquer outro ponto que crie pedido publico
 
-Objetivo:
-
-- evitar regra duplicada espalhada
-- manter o comportamento coerente entre validacao de request e regra de negocio
-
 Regras:
 
-- se `deliveryType = delivery`, rejeitar `cash_on_pickup`
-- se `deliveryType = pickup`, rejeitar `cash_on_delivery`
 - se `deliveryType` estiver vazio, rejeitar
 - se `paymentMethod` estiver vazio, rejeitar
 - se `paymentMethod` nao estiver habilitado para o tenant, rejeitar
+- se `deliveryType = delivery`, rejeitar `cash_on_pickup`
+- se `deliveryType = pickup`, rejeitar `cash_on_delivery`
 - se `paymentMethod` nao for compativel com `deliveryType`, retornar `400` com codigo explicito
 
 Mensagens obrigatorias:
