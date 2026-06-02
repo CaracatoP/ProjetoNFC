@@ -53,6 +53,18 @@ E melhorar o analytics do painel cliente para que:
 
 ## Regras de negocio
 
+### Etapa 1: tipo de recebimento
+
+O checkout passa a exigir uma escolha explicita entre:
+
+- `delivery`
+- `pickup`
+
+Antes dessa escolha:
+
+- nao mostrar formas de pagamento
+- nao permitir envio do pedido
+
 ### Estado inicial
 
 `deliveryType` deixa de nascer como `pickup` e passa a ser vazio.
@@ -113,7 +125,9 @@ Normalizar aliases legados antes de renderizar ou validar:
 
 ## Design do checkout
 
-Fluxo visual em duas etapas:
+### Estrutura visual
+
+O drawer/modal atual do carrinho sera mantido, mas a area de checkout sera reorganizada em duas secoes bem separadas:
 
 1. `Como voce vai receber?`
 2. `Como deseja pagar?`
