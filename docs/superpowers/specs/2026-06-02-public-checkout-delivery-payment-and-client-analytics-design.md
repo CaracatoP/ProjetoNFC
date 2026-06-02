@@ -65,9 +65,11 @@ Antes dessa escolha:
 - nao mostrar formas de pagamento
 - nao permitir envio do pedido
 
-`deliveryType` deixa de nascer como `pickup` no estado inicial e passa a ser vazio.
+### Estado inicial
 
-Estado inicial esperado:
+`deliveryType` deixa de nascer como `pickup` e passa a ser vazio.
+
+Estado esperado:
 
 - `deliveryType = ''` ou `null`
 - `paymentMethod = ''` ou `null`
@@ -88,11 +90,6 @@ Se o cliente escolher `pickup`, so podem aparecer:
 - `credit_card`
 - `debit_card`
 - `cash_on_pickup`
-
-As labels devem refletir o contexto:
-
-- em `delivery`, mostrar `Pagamento na entrega`
-- em `pickup`, mostrar `Pagamento na retirada`
 
 ### Troca de tipo de recebimento
 
@@ -121,8 +118,9 @@ Regras minimas:
 
 - `cash` ou `money` + `delivery` => `cash_on_delivery`
 - `cash` ou `money` + `pickup` => `cash_on_pickup`
-
-Para aliases mais ambiguos, como `card` e `online`, o sistema deve aplicar um fallback seguro e consistente com os metodos efetivamente habilitados no tenant, sem deixar o frontend exibir opcao vazia ou quebrada.
+- `card` deve mapear para `credit_card` ou `debit_card` apenas se o tenant tiver essa opcao habilitada de forma compativel
+- `online` deve mapear para `pix` ou cartao apenas se houver metodo online habilitado de forma explicita
+- aliases ambiguos nunca devem gerar opcao vazia ou invalida no frontend
 
 ## Design do checkout
 
@@ -133,20 +131,22 @@ O drawer/modal atual do carrinho sera mantido, mas a area de checkout sera reorg
 1. `Como voce vai receber?`
 2. `Como deseja pagar?`
 
+Etapa 1 deve usar cards grandes:
+
+- `Entrega`
+  - `Receber no endereco informado`
+- `Retirada`
+  - `Buscar no estabelecimento`
+
 ### Secao de recebimento
 
 Usar cards ou botoes grandes, visiveis e clicaveis, com destaque visual maior do que os campos de formulario.
 
-Cada opcao deve trazer:
+Cada card deve ter:
 
 - titulo: `Entrega` ou `Retirada`
 - descricao curta
 - estado selecionado claro
-
-Copy obrigatoria:
-
-- `Entrega` -> `Receber no endereco informado`
-- `Retirada` -> `Buscar no estabelecimento`
 
 ### Secao de pagamento
 
@@ -159,13 +159,18 @@ O titulo da etapa deve ser contextual:
 - `Como deseja pagar na entrega?`
 - `Como deseja pagar na retirada?`
 
+As labels devem refletir o contexto:
+
+- em `delivery`, mostrar `Pagamento na entrega`
+- em `pickup`, mostrar `Pagamento na retirada`
+
 O restante do fluxo atual continua:
 
 - Pix continua mostrando QR Code/copia e cola no sucesso
 - cartao online continua seguindo redirect/hosted checkout
 - pagamento manual continua com instrucoes de retirada/entrega
 
-## Validacao defensiva no backend
+## Backend
 
 O backend precisa validar a compatibilidade entre `deliveryType` e `payment.method` na criacao do pedido, sem confiar no frontend.
 
@@ -184,14 +189,14 @@ Objetivo:
 - evitar regra duplicada espalhada
 - manter o comportamento coerente entre validacao de request e regra de negocio
 
-Regra:
+Regras:
 
 - se `deliveryType = delivery`, rejeitar `cash_on_pickup`
 - se `deliveryType = pickup`, rejeitar `cash_on_delivery`
-
-Resposta esperada:
-
-- `400` com codigo explicito de combinacao invalida
+- se `deliveryType` estiver vazio, rejeitar
+- se `paymentMethod` estiver vazio, rejeitar
+- se `paymentMethod` nao estiver habilitado para o tenant, rejeitar
+- se `paymentMethod` nao for compativel com `deliveryType`, retornar `400` com codigo explicito
 
 Mensagens obrigatorias:
 
