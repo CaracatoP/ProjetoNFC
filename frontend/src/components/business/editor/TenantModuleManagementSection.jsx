@@ -4,6 +4,7 @@ import {
   BUSINESS_SEGMENT_VALUES,
   DEFAULT_PRODUCT_MEASUREMENT_UNIT,
   PAYMENT_METHOD_LABELS,
+  PAYMENT_PROVIDER_LABELS,
   PAYMENT_STATUS,
   PAYMENT_STATUS_LABELS,
   PAYMENT_STATUS_VALUES,
@@ -1291,6 +1292,57 @@ export function TenantModuleManagementSection({
                               <span>{PAYMENT_STATUS_LABELS[order.payment.status] || PAYMENT_STATUS_LABELS[PAYMENT_STATUS.MANUAL]}</span>
                             </div>
                           </div>
+                          <div className="admin-order-payment__details">
+                            <span>
+                              <strong>Provider:</strong> {PAYMENT_PROVIDER_LABELS[order.payment.provider] || order.payment.provider || 'Manual'}
+                            </span>
+                            <span>
+                              <strong>Valor do pagamento:</strong> {formatCurrencyValue(order.payment.amount || order.total)}
+                            </span>
+                            {order.payment.platformFeeAmount > 0 ? (
+                              <span>
+                                <strong>Taxa da plataforma:</strong> {formatCurrencyValue(order.payment.platformFeeAmount)}
+                              </span>
+                            ) : null}
+                            {order.payment.tenantNetAmount > 0 ? (
+                              <span>
+                                <strong>Liquido estimado do tenant:</strong> {formatCurrencyValue(order.payment.tenantNetAmount)}
+                              </span>
+                            ) : null}
+                            {mode === 'admin' && order.payment.providerPaymentId ? (
+                              <span>
+                                <strong>Pagamento Asaas:</strong> {order.payment.providerPaymentId}
+                              </span>
+                            ) : null}
+                          </div>
+                          {order.payment.invoiceUrl ? (
+                            <div className="admin-inline-actions">
+                              <Button
+                                href={order.payment.invoiceUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                variant="secondary"
+                              >
+                                Abrir cobranca
+                              </Button>
+                            </div>
+                          ) : null}
+                          {Array.isArray(order.paymentEvents) && order.paymentEvents.length ? (
+                            <div className="admin-order-payment-events">
+                              <strong>Historico financeiro</strong>
+                              <ul className="admin-order-payment-events__list">
+                                {order.paymentEvents.map((event, eventIndex) => (
+                                  <li key={`${order.id}-payment-event-${event.type || 'event'}-${eventIndex}`}>
+                                    <span>{event.type}</span>
+                                    <small>
+                                      {(event.status && PAYMENT_STATUS_LABELS[event.status]) || event.status || 'sem status'}
+                                      {event.occurredAt ? ` • ${formatDateTime(event.occurredAt)}` : ''}
+                                    </small>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
                           {canMarkPaymentAsPaid(order) ? (
                             <Button
                               variant="secondary"

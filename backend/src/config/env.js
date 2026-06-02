@@ -89,6 +89,15 @@ export const env = {
   adminTokenSecret,
   previewTokenSecret,
   previewTokenTtlMinutes: Number(process.env.PREVIEW_TOKEN_TTL_MINUTES || 10),
+  paymentCredentialsEncryptionKey: getDevelopmentFallback(
+    process.env.PAYMENT_CREDENTIALS_ENCRYPTION_KEY,
+    'dev-payment-credentials-key-32!!',
+  ),
+  asaasApiKey: process.env.ASAAS_API_KEY || '',
+  asaasEnv: String(process.env.ASAAS_ENV || 'sandbox')
+    .trim()
+    .toLowerCase() || 'sandbox',
+  asaasWebhookAuthToken: process.env.ASAAS_WEBHOOK_AUTH_TOKEN || '',
   adminSessionTtlHours: Number(process.env.ADMIN_SESSION_TTL_HOURS || 12),
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB || 5),
   authLoginRateLimitWindowMs: Number(process.env.AUTH_LOGIN_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),

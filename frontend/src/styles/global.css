@@ -4524,6 +4524,60 @@ img {
   color: var(--theme-text);
 }
 
+.admin-order-payment__details {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 0.95rem;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 82%, transparent);
+  background: color-mix(in srgb, var(--theme-surface) 86%, transparent);
+}
+
+.admin-order-payment__details span {
+  color: var(--theme-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.admin-order-payment__details strong,
+.admin-order-payment-events > strong {
+  color: var(--theme-text);
+}
+
+.admin-order-payment-events {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.admin-order-payment-events__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.admin-order-payment-events__list li {
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 84%, transparent);
+  background: color-mix(in srgb, var(--theme-surface) 82%, transparent);
+}
+
+.admin-order-payment-events__list span {
+  color: var(--theme-text);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.admin-order-payment-events__list small {
+  color: var(--theme-text-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .admin-order-payment-badge {
   display: inline-flex;
   align-items: center;
@@ -5049,6 +5103,136 @@ img {
   gap: 1rem;
 }
 
+.catalog-checkout__payment-methods {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 84%, transparent);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--theme-surface-alt) 60%, transparent), color-mix(in srgb, var(--theme-surface) 96%, transparent));
+}
+
+.catalog-checkout__payment-header {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.catalog-checkout__payment-header strong {
+  color: var(--theme-text);
+  font-family: var(--font-heading);
+  font-size: 0.98rem;
+}
+
+.catalog-checkout__payment-header span {
+  color: var(--theme-text-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.catalog-checkout__payment-grid {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.catalog-checkout__payment-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.8rem;
+  align-items: start;
+  width: 100%;
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 88%, transparent);
+  background: color-mix(in srgb, var(--theme-surface) 78%, transparent);
+  color: inherit;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+
+.catalog-checkout__payment-card:hover,
+.catalog-checkout__payment-card:focus-visible {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--theme-accent-solid, var(--theme-primary)) 28%, var(--theme-border));
+  background: color-mix(in srgb, var(--theme-surface-alt) 84%, transparent);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.16);
+}
+
+.catalog-checkout__payment-card--selected {
+  border-color: color-mix(in srgb, var(--theme-accent-solid, var(--theme-primary)) 46%, var(--theme-border));
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--theme-primary-button, var(--theme-primary)) 12%, transparent), transparent 34%),
+    color-mix(in srgb, var(--theme-surface-alt) 88%, transparent);
+  box-shadow:
+    0 18px 32px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.catalog-checkout__payment-copy {
+  display: grid;
+  gap: 0.28rem;
+  text-align: left;
+}
+
+.catalog-checkout__payment-copy strong {
+  color: var(--theme-text);
+  font-size: 0.96rem;
+}
+
+.catalog-checkout__payment-copy span {
+  color: var(--theme-text-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.catalog-checkout__payment-tag {
+  align-self: center;
+  padding: 0.34rem 0.72rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-primary-button, var(--theme-primary)) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--theme-primary-button, var(--theme-primary)) 22%, var(--theme-border));
+  color: var(--theme-text);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.admin-finance-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-finance-panel__form {
+  gap: 1rem;
+}
+
+.admin-finance-panel__toggles {
+  gap: 0.75rem;
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  color: var(--theme-text);
+  font-size: 0.92rem;
+}
+
+.admin-checkbox-field input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--theme-accent-solid, var(--theme-primary));
+}
+
 .catalog-checkout__fields,
 .catalog-checkout__notes {
   align-self: stretch;
@@ -5208,6 +5392,18 @@ img {
   .catalog-cart-panel__footer,
   .catalog-checkout__item-footer {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .catalog-checkout__payment-card {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-checkout__payment-tag {
+    justify-self: start;
+  }
+
+  .admin-order-payment__meta {
     align-items: stretch;
   }
 

@@ -14,6 +14,7 @@ let Plan;
 let Subscription;
 let Product;
 let Order;
+let decryptSecret;
 let mongoServer;
 let primaryBusiness;
 let secondaryBusiness;
@@ -53,6 +54,7 @@ describe('Client panel routes', () => {
     ({ Subscription } = await import('../models/Subscription.js'));
     ({ Product } = await import('../models/Product.js'));
     ({ Order } = await import('../models/Order.js'));
+    ({ decryptSecret } = await import('../utils/secretCrypto.js'));
     ({ default: app } = await import('../app.js'));
 
     await connectDatabase();
@@ -276,6 +278,159 @@ describe('Client panel routes', () => {
     expect(updateResponse.body.data.business.name).toBe('Barbearia Cliente');
     expect(updateResponse.body.data.business.contact.phone).toBe('1130304040');
     expect(updateResponse.body.data.business.slug).toBe('barbearia-estilo-vivo');
+  });
+
+  it('keeps Mercado Pago encrypted credentials out of the client panel payload', async () => {
+    await Business.updateOne(
+      { _id: primaryBusiness._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'mercado_pago',
+          mercadoPago: {
+            enabled: true,
+            publicKey: 'APP_USR-public-key',
+            accessTokenEncrypted: 'v1:iv:tag:payload',
+            webhookSecretEncrypted: 'v1:iv:tag:webhook',
+            accountEmail: 'seller@example.com',
+            connectedAt: new Date('2026-06-01T12:00:00.000Z'),
+          },
+        },
+      },
+    );
+
+    const ownerToken = await login('owner@cliente.local', 'owner123456');
+    const response = await request(app)
+      .get('/api/panel/business')
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.business.paymentSettings.mercadoPago).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        publicKey: 'APP_USR-public-key',
+        accountEmail: 'seller@example.com',
+        connected: true,
+        hasAccessToken: true,
+        hasWebhookSecret: true,
+      }),
+    );
+    expect(response.body.data.business.paymentSettings.mercadoPago.accessTokenEncrypted).toBeUndefined();
+    expect(response.body.data.business.paymentSettings.mercadoPago.webhookSecretEncrypted).toBeUndefined();
+  });
+
+  it('lets the tenant owner save Mercado Pago credentials without exposing secrets back to the client panel', async () => {
+    const ownerToken = await login('owner@cliente.local', 'owner123456');
+
+    const response = await request(app)
+      .put('/api/panel/business/basics')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({
+        business: {
+          paymentSettings: {
+            enabled: true,
+            provider: 'mercado_pago',
+            methods: {
+              pix: true,
+              creditCard: true,
+              debitCard: true,
+              cashOnPickup: true,
+              cashOnDelivery: true,
+            },
+            mercadoPago: {
+              enabled: true,
+              publicKey: 'APP_USR-client-public',
+              accessToken: 'CLIENT-ACCESS-TOKEN',
+              webhookSecret: 'CLIENT-WEBHOOK-SECRET',
+              accountEmail: 'seller@cliente.local',
+            },
+          },
+        },
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.business.paymentSettings.mercadoPago).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        publicKey: 'APP_USR-client-public',
+        accountEmail: 'seller@cliente.local',
+        connected: true,
+        hasAccessToken: true,
+        hasWebhookSecret: true,
+      }),
+    );
+    expect(response.body.data.business.paymentSettings.mercadoPago.accessToken).toBeUndefined();
+    expect(response.body.data.business.paymentSettings.mercadoPago.webhookSecret).toBeUndefined();
+    expect(response.body.data.business.paymentSettings.mercadoPago.accessTokenEncrypted).toBeUndefined();
+    expect(response.body.data.business.paymentSettings.mercadoPago.webhookSecretEncrypted).toBeUndefined();
+
+    const storedBusiness = await Business.findById(primaryBusiness._id).lean();
+    expect(storedBusiness.paymentSettings.mercadoPago.accessTokenEncrypted).toMatch(/^v1:/);
+    expect(storedBusiness.paymentSettings.mercadoPago.webhookSecretEncrypted).toMatch(/^v1:/);
+    expect(decryptSecret(storedBusiness.paymentSettings.mercadoPago.accessTokenEncrypted)).toBe('CLIENT-ACCESS-TOKEN');
+    expect(decryptSecret(storedBusiness.paymentSettings.mercadoPago.webhookSecretEncrypted)).toBe('CLIENT-WEBHOOK-SECRET');
+  });
+
+  it('preserves stored Mercado Pago credentials when the owner edits payment settings without resending the secrets', async () => {
+    await Business.updateOne(
+      { _id: primaryBusiness._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'mercado_pago',
+          mercadoPago: {
+            enabled: true,
+            publicKey: 'APP_USR-existing-public',
+            accessTokenEncrypted: 'v1:existing:access:token',
+            webhookSecretEncrypted: 'v1:existing:webhook:secret',
+            accountEmail: 'existing@cliente.local',
+          },
+        },
+      },
+    );
+
+    const seededBusiness = await Business.findById(primaryBusiness._id).lean();
+    const encryptedAccessToken = seededBusiness.paymentSettings.mercadoPago.accessTokenEncrypted;
+    const encryptedWebhookSecret = seededBusiness.paymentSettings.mercadoPago.webhookSecretEncrypted;
+    const ownerToken = await login('owner@cliente.local', 'owner123456');
+
+    const response = await request(app)
+      .put('/api/panel/business/basics')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({
+        business: {
+          paymentSettings: {
+            provider: 'mercado_pago',
+            mercadoPago: {
+              enabled: true,
+              publicKey: 'APP_USR-updated-public',
+              accountEmail: 'updated@cliente.local',
+            },
+          },
+        },
+      });
+
+    expect(response.status).toBe(200);
+
+    const storedBusiness = await Business.findById(primaryBusiness._id).lean();
+    expect(storedBusiness.paymentSettings.mercadoPago.publicKey).toBe('APP_USR-updated-public');
+    expect(storedBusiness.paymentSettings.mercadoPago.accountEmail).toBe('updated@cliente.local');
+    expect(storedBusiness.paymentSettings.mercadoPago.accessTokenEncrypted).toBe(encryptedAccessToken);
+    expect(storedBusiness.paymentSettings.mercadoPago.webhookSecretEncrypted).toBe(encryptedWebhookSecret);
   });
 
   it('lets the manager edit catalog items but blocks basic tenant settings', async () => {

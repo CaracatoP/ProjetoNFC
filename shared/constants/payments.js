@@ -20,6 +20,7 @@ export const PAYMENT_STATUS_VALUES = Object.values(PAYMENT_STATUS);
 
 export const PAYMENT_PROVIDERS = Object.freeze({
   MANUAL: 'manual',
+  ASAAS: 'asaas',
   MERCADO_PAGO: 'mercado_pago',
   STRIPE: 'stripe',
   PAGARME: 'pagarme',
@@ -41,6 +42,14 @@ export const PAYMENT_STATUS_LABELS = Object.freeze({
   [PAYMENT_STATUS.FAILED]: 'Falhou',
   [PAYMENT_STATUS.CANCELLED]: 'Cancelado',
   [PAYMENT_STATUS.MANUAL]: 'Manual',
+});
+
+export const PAYMENT_PROVIDER_LABELS = Object.freeze({
+  [PAYMENT_PROVIDERS.MANUAL]: 'Manual',
+  [PAYMENT_PROVIDERS.ASAAS]: 'Asaas',
+  [PAYMENT_PROVIDERS.MERCADO_PAGO]: 'Mercado Pago',
+  [PAYMENT_PROVIDERS.STRIPE]: 'Stripe',
+  [PAYMENT_PROVIDERS.PAGARME]: 'Pagar.me',
 });
 
 export const DEFAULT_PAYMENT_METHOD = PAYMENT_METHODS.CASH_ON_PICKUP;

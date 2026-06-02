@@ -45,6 +45,8 @@ import {
 import {
   isBusinessPaymentMethodEnabled,
   normalizeOrderPayment,
+  normalizeOrderPaymentEvent,
+  normalizeOrderPaymentEvents,
   normalizePaymentStatus,
   resolveBusinessPaymentSettings,
   resolveDefaultPaymentMethod,
@@ -59,6 +61,22 @@ import {
 import { TENANT_REALTIME_KINDS } from '../../../shared/constants/tenantRealtime.js';
 import { buildPixPayload } from '../../../shared/utils/pix.js';
 import { publishTenantUpdated } from './tenantRealtimeService.js';
+import { createMercadoPagoCheckoutPreference } from './mercadoPagoService.js';
+import { getFinanceSettingsRecord } from '../repositories/systemSettingRepository.js';
+import {
+  getDeclaredHostedCheckoutProvider,
+  isAsaasProviderConnected,
+  isMercadoPagoProviderConnected,
+} from '../utils/paymentProvider.js';
+import {
+  buildAsaasExternalReference,
+  buildAsaasSplitRules,
+  createAsaasCustomer,
+  createAsaasPaymentCharge,
+  getAsaasPixQrCode,
+  mapAsaasPaymentStatus,
+} from './asaasService.js';
+import { resolveEffectiveAsaasSplitSettings } from './adminFinanceService.js';
 
 function toPlainRecord(value) {
   if (!value) {
@@ -238,6 +256,115 @@ function resolveRequestedPaymentMethod(payload, paymentSettings) {
   return fallbackMethod;
 }
 
+function resolveRequestedPaymentProvider(payload, method, paymentSettings) {
+  const requestedProvider = String(payload?.payment?.provider || '').trim().toLowerCase();
+  const declaredHostedProvider = getDeclaredHostedCheckoutProvider(paymentSettings);
+
+  if ([PAYMENT_METHODS.CASH_ON_PICKUP, PAYMENT_METHODS.CASH_ON_DELIVERY].includes(method)) {
+    return PAYMENT_PROVIDERS.MANUAL;
+  }
+
+  if ([PAYMENT_METHODS.CREDIT_CARD, PAYMENT_METHODS.DEBIT_CARD].includes(method)) {
+    if (
+      requestedProvider &&
+      [PAYMENT_PROVIDERS.ASAAS, PAYMENT_PROVIDERS.MERCADO_PAGO].includes(requestedProvider)
+    ) {
+      return requestedProvider;
+    }
+
+    return declaredHostedProvider || PAYMENT_PROVIDERS.MANUAL;
+  }
+
+  if (method !== PAYMENT_METHODS.PIX) {
+    return PAYMENT_PROVIDERS.MANUAL;
+  }
+
+  const manualPixAvailable = Boolean(paymentSettings?.methods?.pix && paymentSettings?.pix?.key);
+  const hostedPixAvailable = Boolean(paymentSettings?.methods?.pix && declaredHostedProvider);
+
+  if (
+    requestedProvider &&
+    [PAYMENT_PROVIDERS.ASAAS, PAYMENT_PROVIDERS.MERCADO_PAGO].includes(requestedProvider) &&
+    hostedPixAvailable
+  ) {
+    return requestedProvider;
+  }
+
+  if (requestedProvider === PAYMENT_PROVIDERS.MANUAL && manualPixAvailable) {
+    return PAYMENT_PROVIDERS.MANUAL;
+  }
+
+  if (manualPixAvailable) {
+    return PAYMENT_PROVIDERS.MANUAL;
+  }
+
+  if (hostedPixAvailable) {
+    return declaredHostedProvider;
+  }
+
+  return PAYMENT_PROVIDERS.MANUAL;
+}
+
+function assertMercadoPagoPaymentMethodAllowed(paymentSettings, method) {
+  if (!getDeclaredHostedCheckoutProvider(paymentSettings)) {
+    throw new AppError(
+      'Pagamento online indisponivel para este tenant no momento.',
+      400,
+      'payment_provider_unavailable',
+    );
+  }
+
+  if (
+    (method === PAYMENT_METHODS.PIX && !paymentSettings?.methods?.pix) ||
+    (method === PAYMENT_METHODS.CREDIT_CARD && !paymentSettings?.methods?.creditCard) ||
+    (method === PAYMENT_METHODS.DEBIT_CARD && !paymentSettings?.methods?.debitCard)
+  ) {
+    throw new AppError(
+      'Esta forma de pagamento nao esta disponivel para este tenant.',
+      400,
+      'payment_method_unavailable',
+    );
+  }
+
+  if (!isMercadoPagoProviderConnected(paymentSettings)) {
+    throw new AppError(
+      'Este tenant ainda nao concluiu a configuracao do Mercado Pago.',
+      400,
+      'payment_provider_unavailable',
+    );
+  }
+}
+
+function assertAsaasPaymentMethodAllowed(paymentSettings, method) {
+  if (!getDeclaredHostedCheckoutProvider(paymentSettings)) {
+    throw new AppError(
+      'Pagamento online indisponivel para este tenant no momento.',
+      400,
+      'payment_provider_unavailable',
+    );
+  }
+
+  if (
+    (method === PAYMENT_METHODS.PIX && !paymentSettings?.methods?.pix) ||
+    (method === PAYMENT_METHODS.CREDIT_CARD && !paymentSettings?.methods?.creditCard) ||
+    (method === PAYMENT_METHODS.DEBIT_CARD && !paymentSettings?.methods?.debitCard)
+  ) {
+    throw new AppError(
+      'Esta forma de pagamento nao esta disponivel para este tenant.',
+      400,
+      'payment_method_unavailable',
+    );
+  }
+
+  if (!isAsaasProviderConnected(paymentSettings)) {
+    throw new AppError(
+      'Este tenant ainda nao concluiu a configuracao do Asaas.',
+      400,
+      'payment_provider_unavailable',
+    );
+  }
+}
+
 function buildManualPixPaymentSnapshot(paymentSettings, amount) {
   const pixPayload = buildPixPayload(
     {
@@ -288,16 +415,67 @@ function buildManualCashPaymentSnapshot(method, amount) {
   );
 }
 
-function buildPublicOrderPaymentSnapshot(business, payload, amount) {
-  const paymentSettings = resolveBusinessPaymentSettings(business);
-  const method = resolveRequestedPaymentMethod(payload, paymentSettings);
+function buildMercadoPagoPaymentSnapshot(method, amount, occurredAt = new Date()) {
+  return normalizeOrderPayment(
+    {
+      method,
+      status: PAYMENT_STATUS.PENDING,
+      provider: PAYMENT_PROVIDERS.MERCADO_PAGO,
+      amount,
+      pixCopyPaste: '',
+      pixQrCodeUrl: '',
+      providerPaymentId: '',
+      providerPreferenceId: '',
+      checkoutUrl: '',
+      paidAt: null,
+      updatedAt: occurredAt,
+    },
+    amount,
+  );
+}
 
-  if ([PAYMENT_METHODS.CREDIT_CARD, PAYMENT_METHODS.DEBIT_CARD].includes(method)) {
-    throw new AppError(
-      'Pagamento online com cartao ainda nao esta disponivel para este tenant.',
-      400,
-      'payment_method_unavailable',
-    );
+function buildAsaasPaymentSnapshot(method, amount, occurredAt = new Date()) {
+  return normalizeOrderPayment(
+    {
+      method,
+      status: PAYMENT_STATUS.PENDING,
+      provider: PAYMENT_PROVIDERS.ASAAS,
+      amount,
+      pixCopyPaste: '',
+      pixQrCodeUrl: '',
+      pixQrCode: '',
+      providerPaymentId: '',
+      providerCustomerId: '',
+      invoiceUrl: '',
+      bankSlipUrl: '',
+      paidAt: null,
+      updatedAt: occurredAt,
+    },
+    amount,
+  );
+}
+
+function resolveAsaasBillingType(method) {
+  if (method === PAYMENT_METHODS.PIX) {
+    return 'PIX';
+  }
+
+  return 'UNDEFINED';
+}
+
+function buildPublicOrderPaymentSnapshot(business, payload, amount, occurredAt = new Date()) {
+  const paymentSettings = resolveBusinessPaymentSettings(business, { mode: 'storage' });
+  const method = resolveRequestedPaymentMethod(payload, paymentSettings);
+  const provider = resolveRequestedPaymentProvider(payload, method, paymentSettings);
+
+  if (provider === PAYMENT_PROVIDERS.MERCADO_PAGO) {
+    assertMercadoPagoPaymentMethodAllowed(paymentSettings, method);
+    return buildMercadoPagoPaymentSnapshot(method, amount, occurredAt);
+  }
+
+  if (provider === PAYMENT_PROVIDERS.ASAAS) {
+    assertAsaasPaymentMethodAllowed(paymentSettings, method);
+    return buildAsaasPaymentSnapshot(method, amount, occurredAt);
   }
 
   if (method === PAYMENT_METHODS.PIX) {
@@ -310,17 +488,194 @@ function buildPublicOrderPaymentSnapshot(business, payload, amount) {
 function buildOrderPaymentStatusPatch(existingOrder, status, occurredAt = new Date()) {
   const currentPayment = normalizeOrderPayment(existingOrder?.payment || {}, existingOrder?.total || 0);
   const nextStatus = normalizePaymentStatus(status, currentPayment.status);
+  const paymentEvents = normalizeOrderPaymentEvents(existingOrder?.paymentEvents || []);
+  const nextPayment = {
+    ...currentPayment,
+    status: nextStatus,
+    amount: Number(Number(existingOrder?.total || currentPayment.amount || 0).toFixed(2)),
+    paidAt:
+      nextStatus === PAYMENT_STATUS.PAID
+        ? currentPayment.paidAt || occurredAt
+        : currentPayment.paidAt || null,
+  };
+
+  if (
+    currentPayment.provider === PAYMENT_PROVIDERS.MANUAL &&
+    currentPayment.status !== PAYMENT_STATUS.PAID &&
+    nextStatus === PAYMENT_STATUS.PAID
+  ) {
+    return {
+      payment: nextPayment,
+      paymentEvents: appendUniquePaymentEvents(paymentEvents, [
+        {
+          type: 'manual_mark_paid',
+          provider: PAYMENT_PROVIDERS.MANUAL,
+          status: PAYMENT_STATUS.PAID,
+          providerPaymentId: currentPayment.providerPaymentId || '',
+          occurredAt,
+          meta: {
+            method: currentPayment.method,
+          },
+        },
+      ]),
+    };
+  }
 
   return {
-    payment: {
+    payment: nextPayment,
+  };
+}
+
+function buildMercadoPagoWebhookPaymentPatch(existingOrder, paymentSnapshot, occurredAt = new Date()) {
+  const currentPayment = normalizeOrderPayment(existingOrder?.payment || {}, existingOrder?.total || 0);
+  const nextStatus = normalizePaymentStatus(paymentSnapshot?.status, currentPayment.status);
+  const nextPaidAt =
+    nextStatus === PAYMENT_STATUS.PAID
+      ? currentPayment.paidAt || paymentSnapshot?.paidAt || occurredAt
+      : currentPayment.paidAt || null;
+  const nextPayment = normalizeOrderPayment(
+    {
       ...currentPayment,
+      method: paymentSnapshot?.method || currentPayment.method,
+      provider: PAYMENT_PROVIDERS.MERCADO_PAGO,
       status: nextStatus,
       amount: Number(Number(existingOrder?.total || currentPayment.amount || 0).toFixed(2)),
+      providerPaymentId: paymentSnapshot?.providerPaymentId || currentPayment.providerPaymentId,
+      providerPreferenceId:
+        paymentSnapshot?.providerPreferenceId || currentPayment.providerPreferenceId,
+      paidAt: nextPaidAt,
+      updatedAt: occurredAt,
+    },
+    existingOrder?.total || currentPayment.amount || 0,
+  );
+  const hasChanged =
+    nextPayment.method !== currentPayment.method ||
+    nextPayment.status !== currentPayment.status ||
+    nextPayment.provider !== currentPayment.provider ||
+    nextPayment.providerPaymentId !== currentPayment.providerPaymentId ||
+    nextPayment.providerPreferenceId !== currentPayment.providerPreferenceId ||
+    String(nextPayment.paidAt || '') !== String(currentPayment.paidAt || '');
+
+  return {
+    hasChanged,
+    payment: nextPayment,
+  };
+}
+
+function arePaymentEventsEquivalent(left, right) {
+  return (
+    left.type === right.type &&
+    left.provider === right.provider &&
+    left.status === right.status &&
+    left.providerEvent === right.providerEvent &&
+    left.providerPaymentId === right.providerPaymentId
+  );
+}
+
+function appendUniquePaymentEvents(existingEvents = [], nextEvents = []) {
+  const normalizedExistingEvents = normalizeOrderPaymentEvents(existingEvents);
+  const normalizedNextEvents = nextEvents
+    .map((event) => normalizeOrderPaymentEvent(event))
+    .filter((event) => Boolean(event.type));
+
+  if (!normalizedNextEvents.length) {
+    return normalizedExistingEvents;
+  }
+
+  const mergedEvents = [...normalizedExistingEvents];
+
+  normalizedNextEvents.forEach((candidateEvent) => {
+    if (!mergedEvents.some((existingEvent) => arePaymentEventsEquivalent(existingEvent, candidateEvent))) {
+      mergedEvents.push(candidateEvent);
+    }
+  });
+
+  return mergedEvents;
+}
+
+function buildAsaasWebhookPaymentPatch(
+  existingOrder,
+  asaasPayment,
+  providerEvent = '',
+  occurredAt = new Date(),
+) {
+  const currentPayment = normalizeOrderPayment(existingOrder?.payment || {}, existingOrder?.total || 0);
+  const currentPaymentEvents = normalizeOrderPaymentEvents(existingOrder?.paymentEvents || []);
+  const nextStatus = mapAsaasPaymentStatus(asaasPayment?.status);
+  const nextPayment = normalizeOrderPayment(
+    {
+      ...currentPayment,
+      provider: PAYMENT_PROVIDERS.ASAAS,
+      status: nextStatus,
+      amount: Number(Number(existingOrder?.total || currentPayment.amount || 0).toFixed(2)),
+      providerPaymentId: String(asaasPayment?.id || currentPayment.providerPaymentId || '').trim(),
+      providerCustomerId: String(asaasPayment?.customer || currentPayment.providerCustomerId || '').trim(),
+      invoiceUrl: String(asaasPayment?.invoiceUrl || currentPayment.invoiceUrl || '').trim(),
+      bankSlipUrl: String(asaasPayment?.bankSlipUrl || currentPayment.bankSlipUrl || '').trim(),
       paidAt:
         nextStatus === PAYMENT_STATUS.PAID
-          ? currentPayment.paidAt || occurredAt
+          ? currentPayment.paidAt ||
+            asaasPayment?.confirmedDate ||
+            asaasPayment?.clientPaymentDate ||
+            occurredAt
           : currentPayment.paidAt || null,
+      updatedAt: occurredAt,
     },
+    existingOrder?.total || currentPayment.amount || 0,
+  );
+
+  const statusEventType =
+    nextStatus === PAYMENT_STATUS.PAID
+      ? 'payment_paid'
+      : nextStatus === PAYMENT_STATUS.FAILED
+        ? 'payment_failed'
+        : nextStatus === PAYMENT_STATUS.CANCELLED
+          ? 'payment_cancelled'
+          : '';
+  const nextEvents = appendUniquePaymentEvents(currentPaymentEvents, [
+    {
+      type: 'webhook_received',
+      provider: PAYMENT_PROVIDERS.ASAAS,
+      status: nextStatus,
+      providerEvent: String(providerEvent || '').trim(),
+      providerPaymentId: String(asaasPayment?.id || currentPayment.providerPaymentId || '').trim(),
+      occurredAt,
+      meta: {
+        externalReference: String(asaasPayment?.externalReference || '').trim(),
+      },
+    },
+    ...(statusEventType
+      ? [
+          {
+            type: statusEventType,
+            provider: PAYMENT_PROVIDERS.ASAAS,
+            status: nextStatus,
+            providerEvent: String(providerEvent || '').trim(),
+            providerPaymentId: String(asaasPayment?.id || currentPayment.providerPaymentId || '').trim(),
+            occurredAt,
+            meta: {
+              externalReference: String(asaasPayment?.externalReference || '').trim(),
+            },
+          },
+        ]
+      : []),
+  ]);
+  const hasChanged =
+    nextPayment.method !== currentPayment.method ||
+    nextPayment.status !== currentPayment.status ||
+    nextPayment.provider !== currentPayment.provider ||
+    nextPayment.providerPaymentId !== currentPayment.providerPaymentId ||
+    nextPayment.providerCustomerId !== currentPayment.providerCustomerId ||
+    nextPayment.invoiceUrl !== currentPayment.invoiceUrl ||
+    nextPayment.bankSlipUrl !== currentPayment.bankSlipUrl ||
+    String(nextPayment.paidAt || '') !== String(currentPayment.paidAt || '') ||
+    String(nextPayment.updatedAt || '') !== String(currentPayment.updatedAt || '') ||
+    nextEvents.length !== currentPaymentEvents.length;
+
+  return {
+    hasChanged,
+    payment: nextPayment,
+    paymentEvents: nextEvents,
   };
 }
 
@@ -520,8 +875,8 @@ export async function createPublicOrder(slug, payload) {
   const orderItems = await buildOrderItemsSnapshot(business._id, payload.items || []);
   const total = calculateOrderTotal(orderItems);
   const receivedAt = new Date();
-  const payment = buildPublicOrderPaymentSnapshot(business, payload, total);
-
+  const storedPaymentSettings = resolveBusinessPaymentSettings(business, { mode: 'storage' });
+  const payment = buildPublicOrderPaymentSnapshot(business, payload, total, receivedAt);
   const created = await createOrderRecord({
     ...payload,
     businessId: business._id,
@@ -531,9 +886,150 @@ export async function createPublicOrder(slug, payload) {
     receivedAt,
     payment,
   });
+  let finalOrder = created;
+
+  if (payment.provider === PAYMENT_PROVIDERS.MERCADO_PAGO) {
+    try {
+      const preference = await createMercadoPagoCheckoutPreference({
+        business,
+        order: serializeOrderRecord(created),
+        paymentMethod: payment.method,
+        mercadoPagoSettings: storedPaymentSettings.mercadoPago,
+      });
+
+      finalOrder = await updateOrderRecordByBusinessId(business._id, created._id, {
+        payment: normalizeOrderPayment(
+          {
+            ...payment,
+            providerPreferenceId: preference.preferenceId,
+            checkoutUrl: preference.checkoutUrl,
+            updatedAt: new Date(),
+          },
+          total,
+        ),
+      });
+    } catch (error) {
+      await updateOrderRecordByBusinessId(business._id, created._id, {
+        payment: normalizeOrderPayment(
+          {
+            ...payment,
+            status: PAYMENT_STATUS.FAILED,
+            updatedAt: new Date(),
+          },
+          total,
+        ),
+      });
+      throw error;
+    }
+  }
+
+  if (payment.provider === PAYMENT_PROVIDERS.ASAAS) {
+    try {
+      const financeSettingsRecord = await getFinanceSettingsRecord();
+      const customer = await createAsaasCustomer({
+        apiKey: storedPaymentSettings.asaas.apiKeyEncrypted,
+        customer: {
+          name: String(payload.customerName || '').trim(),
+          mobilePhone: String(payload.customerPhone || '').trim(),
+        },
+      });
+      const effectiveSplitSettings = resolveEffectiveAsaasSplitSettings(
+        storedPaymentSettings,
+        financeSettingsRecord?.value,
+      );
+      const { platformFeeAmount, tenantNetAmount, split } = buildAsaasSplitRules({
+        total,
+        platformFeePercent: effectiveSplitSettings.enabled
+          ? effectiveSplitSettings.platformFeePercent
+          : 0,
+        platformWalletId: effectiveSplitSettings.platformWalletId,
+      });
+      const charge = await createAsaasPaymentCharge({
+        apiKey: storedPaymentSettings.asaas.apiKeyEncrypted,
+        charge: {
+          customer: String(customer.id || '').trim(),
+          billingType: resolveAsaasBillingType(payment.method),
+          value: total,
+          dueDate: receivedAt.toISOString().slice(0, 10),
+          description: business.name ? `Pedido em ${business.name}` : 'Pedido TapLink',
+          externalReference: buildAsaasExternalReference(business._id, created._id),
+          ...(split.length ? { split } : {}),
+        },
+      });
+
+      let nextPayment = normalizeOrderPayment(
+        {
+          ...payment,
+          providerPaymentId: String(charge.id || '').trim(),
+          providerCustomerId: String(customer.id || '').trim(),
+          invoiceUrl: String(charge.invoiceUrl || '').trim(),
+          bankSlipUrl: String(charge.bankSlipUrl || '').trim(),
+          platformFeeAmount,
+          tenantNetAmount,
+          updatedAt: new Date(),
+        },
+        total,
+      );
+
+      if (payment.method === PAYMENT_METHODS.PIX) {
+        const pixQrCode = await getAsaasPixQrCode({
+          apiKey: storedPaymentSettings.asaas.apiKeyEncrypted,
+          paymentId: String(charge.id || '').trim(),
+        });
+
+        nextPayment = normalizeOrderPayment(
+          {
+            ...nextPayment,
+            pixCopyPaste: pixQrCode.payload,
+            pixQrCode: pixQrCode.encodedImage,
+          },
+          total,
+        );
+      }
+
+      finalOrder = await updateOrderRecordByBusinessId(business._id, created._id, {
+        payment: nextPayment,
+        paymentEvents: appendUniquePaymentEvents(created.paymentEvents || [], [
+          {
+            type: 'charge_created',
+            provider: PAYMENT_PROVIDERS.ASAAS,
+            status: PAYMENT_STATUS.PENDING,
+            providerPaymentId: String(charge.id || '').trim(),
+            occurredAt: receivedAt,
+            meta: {
+              externalReference: buildAsaasExternalReference(business._id, created._id),
+              method: payment.method,
+            },
+          },
+        ]),
+      });
+    } catch (error) {
+      await updateOrderRecordByBusinessId(business._id, created._id, {
+        payment: normalizeOrderPayment(
+          {
+            ...payment,
+            status: PAYMENT_STATUS.FAILED,
+            updatedAt: new Date(),
+          },
+          total,
+        ),
+        paymentEvents: appendUniquePaymentEvents(created.paymentEvents || [], [
+          {
+            type: 'payment_failed',
+            provider: PAYMENT_PROVIDERS.ASAAS,
+            status: PAYMENT_STATUS.FAILED,
+            providerPaymentId: payment.providerPaymentId || '',
+            occurredAt: new Date(),
+            message: String(error?.message || '').trim(),
+          },
+        ]),
+      });
+      throw error;
+    }
+  }
 
   publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_CREATED, 'created');
-  return serializeOrderRecord(created);
+  return serializeOrderRecord(finalOrder);
 }
 
 export async function listTenantOrders(businessId) {
@@ -572,6 +1068,72 @@ export async function updateTenantOrderPaymentStatus(businessId, id, status) {
   }
 
   publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_PAYMENT_UPDATED);
+  return serializeOrderRecord(updated);
+}
+
+export async function syncMercadoPagoOrderPaymentWebhook(
+  businessId,
+  id,
+  paymentSnapshot,
+  occurredAt = new Date(),
+) {
+  const business = await assertBusinessExists(businessId);
+  const existing = await findOrderById(id);
+  assertTenantScope(existing, businessId, 'Pedido');
+  const nextPaymentPatch = buildMercadoPagoWebhookPaymentPatch(existing, paymentSnapshot, occurredAt);
+
+  if (!nextPaymentPatch.hasChanged) {
+    return serializeOrderRecord(existing);
+  }
+
+  const updated = await updateOrderRecordByBusinessId(businessId, id, {
+    payment: nextPaymentPatch.payment,
+  });
+
+  if (!updated) {
+    throw new AppError('Pedido nao encontrado', 404, 'module_resource_not_found');
+  }
+
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_PAYMENT_UPDATED);
+  return serializeOrderRecord(updated);
+}
+
+export async function syncAsaasOrderPaymentWebhook(
+  businessId,
+  id,
+  asaasPayment,
+  providerEvent = '',
+  occurredAt = new Date(),
+) {
+  const business = await assertBusinessExists(businessId);
+  const existing = await findOrderById(id);
+  assertTenantScope(existing, businessId, 'Pedido');
+
+  if (existing.payment?.provider !== PAYMENT_PROVIDERS.ASAAS) {
+    throw new AppError('Pedido nao configurado para Asaas', 404, 'module_resource_not_found');
+  }
+
+  const nextPaymentPatch = buildAsaasWebhookPaymentPatch(
+    existing,
+    asaasPayment,
+    providerEvent,
+    occurredAt,
+  );
+
+  if (!nextPaymentPatch.hasChanged) {
+    return serializeOrderRecord(existing);
+  }
+
+  const updated = await updateOrderRecordByBusinessId(businessId, id, {
+    payment: nextPaymentPatch.payment,
+    paymentEvents: nextPaymentPatch.paymentEvents,
+  });
+
+  if (!updated) {
+    throw new AppError('Pedido nao encontrado', 404, 'module_resource_not_found');
+  }
+
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.PAYMENT_UPDATED);
   return serializeOrderRecord(updated);
 }
 

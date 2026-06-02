@@ -21,6 +21,52 @@ export async function resetAdminAnalytics(token) {
   return response.data;
 }
 
+export async function fetchAdminFinanceSettings(token) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/finance/settings`, {
+    headers: buildAdminAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
+export async function updateAdminFinanceSettings(token, payload) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/finance/settings`, {
+    method: 'PATCH',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return response.data;
+}
+
+export async function fetchAdminBusinessFinanceSettings(token, businessId) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/finance/businesses/${businessId}`, {
+    headers: buildAdminAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
+export async function updateAdminBusinessFinanceSettings(token, businessId, payload) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/finance/businesses/${businessId}`, {
+    method: 'PATCH',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return response.data;
+}
+
+export async function createAdminBusinessAsaasSubaccount(token, businessId, payload) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/finance/businesses/${businessId}/asaas/subaccount`, {
+    method: 'POST',
+    headers: buildAdminAuthHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return response.data;
+}
+
 function buildQueryString(filters = {}) {
   const params = new URLSearchParams();
 

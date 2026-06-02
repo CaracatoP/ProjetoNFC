@@ -18,6 +18,7 @@ const PUBLIC_BUSINESS_PROJECTION = {
   hours: 1,
   rating: 1,
   contact: 1,
+  paymentSettings: 1,
   seo: 1,
 };
 

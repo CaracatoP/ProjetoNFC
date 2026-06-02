@@ -14,7 +14,10 @@ import {
   isValidMeasurementQuantity,
   normalizeMeasurementUnit,
 } from '../../../shared/utils/productMeasurement.js';
-import { normalizeOrderPayment } from '../../../shared/utils/businessPayment.js';
+import {
+  normalizeOrderPayment,
+  normalizeOrderPaymentEvents,
+} from '../../../shared/utils/businessPayment.js';
 import { baseSchemaOptions } from '../utils/mongoose.js';
 
 const ORDER_STATUS_VALUES = ['received', 'preparing', 'ready', 'delivered', 'cancelled'];
@@ -93,10 +96,45 @@ const orderPaymentSchema = new mongoose.Schema(
       trim: true,
     },
     amount: { type: Number, required: true, min: 0, default: 0 },
+    platformFeeAmount: { type: Number, min: 0, default: 0 },
+    tenantNetAmount: { type: Number, min: 0, default: 0 },
     pixCopyPaste: { type: String, trim: true, default: '' },
     pixQrCodeUrl: { type: String, trim: true, default: '' },
+    pixQrCode: { type: String, trim: true, default: '' },
     providerPaymentId: { type: String, trim: true, default: '' },
+    providerCustomerId: { type: String, trim: true, default: '' },
+    providerPreferenceId: { type: String, trim: true, default: '' },
+    checkoutUrl: { type: String, trim: true, default: '' },
+    invoiceUrl: { type: String, trim: true, default: '' },
+    bankSlipUrl: { type: String, trim: true, default: '' },
     paidAt: { type: Date, default: null },
+    updatedAt: { type: Date, default: null },
+  },
+  {
+    _id: false,
+  },
+);
+
+const orderPaymentEventSchema = new mongoose.Schema(
+  {
+    type: { type: String, required: true, trim: true },
+    provider: {
+      type: String,
+      enum: PAYMENT_PROVIDER_VALUES,
+      default: DEFAULT_PAYMENT_PROVIDER,
+      trim: true,
+    },
+    status: {
+      type: String,
+      enum: PAYMENT_STATUS_VALUES,
+      default: DEFAULT_PAYMENT_STATUS,
+      trim: true,
+    },
+    message: { type: String, trim: true, default: '' },
+    providerEvent: { type: String, trim: true, default: '' },
+    providerPaymentId: { type: String, trim: true, default: '' },
+    occurredAt: { type: Date, default: Date.now },
+    meta: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   {
     _id: false,
@@ -120,6 +158,7 @@ const orderSchema = new mongoose.Schema(
     cancelledAt: { type: Date, default: null },
     notes: { type: String, trim: true },
     payment: { type: orderPaymentSchema, default: undefined },
+    paymentEvents: { type: [orderPaymentEventSchema], default: [] },
     archivedAt: { type: Date, default: null, index: true },
   },
   {
@@ -131,6 +170,7 @@ const orderSchema = new mongoose.Schema(
         transformed.items = normalizeOrderItems(transformed.items);
         transformed.total = Number(Number(transformed.total || 0).toFixed(2));
         transformed.payment = normalizeOrderPayment(transformed.payment || {}, transformed.total);
+        transformed.paymentEvents = normalizeOrderPaymentEvents(transformed.paymentEvents || []);
         return transformed;
       },
     },
@@ -141,6 +181,7 @@ const orderSchema = new mongoose.Schema(
         transformed.items = normalizeOrderItems(transformed.items);
         transformed.total = Number(Number(transformed.total || 0).toFixed(2));
         transformed.payment = normalizeOrderPayment(transformed.payment || {}, transformed.total);
+        transformed.paymentEvents = normalizeOrderPaymentEvents(transformed.paymentEvents || []);
         return transformed;
       },
     },

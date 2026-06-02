@@ -192,6 +192,18 @@ const businessBodySchema = z.object({
         })
         .default({}),
       provider: z.enum(PAYMENT_PROVIDER_VALUES).default(DEFAULT_PAYMENT_PROVIDER),
+      mercadoPago: z
+        .object({
+          enabled: z.boolean().optional(),
+          publicKey: optionalString,
+          accessToken: optionalString,
+          webhookSecret: optionalString,
+          accountEmail: z.string().email().optional().or(z.literal('')),
+          connected: z.boolean().optional(),
+          hasAccessToken: z.boolean().optional(),
+          hasWebhookSecret: z.boolean().optional(),
+        })
+        .default({}),
     })
     .default({}),
   seo: z.object({

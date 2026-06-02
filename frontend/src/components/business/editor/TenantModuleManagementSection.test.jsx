@@ -581,6 +581,69 @@ describe('TenantModuleManagementSection', () => {
     });
   });
 
+  it('renders financial audit details for Asaas orders without offering manual mark-paid actions', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <TenantModuleManagementSection
+        draft={buildDraft({
+          modulesData: {
+            professionals: [],
+            appointmentServices: [],
+            products: [],
+            appointmentRequests: [],
+            orders: [
+              {
+                id: 'order-asaas-1',
+                customerName: 'Julia',
+                customerPhone: '5511977776666',
+                deliveryType: 'pickup',
+                total: 120,
+                status: 'received',
+                payment: {
+                  method: 'credit_card',
+                  status: 'pending',
+                  provider: 'asaas',
+                  amount: 120,
+                  platformFeeAmount: 6,
+                  tenantNetAmount: 114,
+                  providerPaymentId: 'pay_asaas_123',
+                  invoiceUrl: 'https://sandbox.asaas.com/i/pay_asaas_123',
+                },
+                paymentEvents: [
+                  {
+                    type: 'charge_created',
+                    provider: 'asaas',
+                    status: 'pending',
+                    occurredAt: '2026-06-02T10:00:00.000Z',
+                  },
+                ],
+                items: [{ name: 'Pomada', quantity: 3, unitPrice: 40, measurementUnit: 'unit', itemTotal: 120 }],
+                notes: '',
+              },
+            ],
+          },
+        })}
+        onDraftChange={vi.fn()}
+        moduleActions={{}}
+        mode="admin"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Pedidos' }));
+
+    const orderCard = screen.getByTestId('order-card-received');
+    expect(within(orderCard).getByText(/Taxa da plataforma/i)).toBeInTheDocument();
+    expect(within(orderCard).getByText(/Liquido estimado do tenant/i)).toBeInTheDocument();
+    expect(within(orderCard).getByText('pay_asaas_123')).toBeInTheDocument();
+    expect(within(orderCard).getByRole('link', { name: /Abrir cobranca/i })).toHaveAttribute(
+      'href',
+      'https://sandbox.asaas.com/i/pay_asaas_123',
+    );
+    expect(within(orderCard).getByText('charge_created')).toBeInTheDocument();
+    expect(within(orderCard).queryByRole('button', { name: /Marcar pagamento como pago/i })).not.toBeInTheDocument();
+  });
+
   it('keeps the main admin mode behavior expanded without client-only collapse controls', async () => {
     const user = userEvent.setup();
 

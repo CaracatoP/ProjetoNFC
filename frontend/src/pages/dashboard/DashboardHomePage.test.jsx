@@ -14,6 +14,11 @@ vi.mock('@/context/AuthContext.jsx', () => ({
 vi.mock('@/services/adminService.js', () => ({
   fetchAdminOverview: vi.fn(),
   resetAdminAnalytics: vi.fn(),
+  fetchAdminFinanceSettings: vi.fn(),
+  updateAdminFinanceSettings: vi.fn(),
+  fetchAdminBusinessFinanceSettings: vi.fn(),
+  updateAdminBusinessFinanceSettings: vi.fn(),
+  createAdminBusinessAsaasSubaccount: vi.fn(),
   listAdminBusinesses: vi.fn(),
   listAdminClients: vi.fn(),
   getAdminBusiness: vi.fn(),
@@ -391,6 +396,127 @@ describe('DashboardHomePage', () => {
       scope: 'global',
       baselineAt: '2026-06-01T10:05:00.000Z',
       updatedBusinesses: 3,
+    });
+    adminService.fetchAdminFinanceSettings.mockResolvedValue({
+      environment: 'sandbox',
+      rootApiKeyConfigured: true,
+      platformWalletId: 'wallet_platform_root',
+      defaultPlatformFeePercent: 5,
+      webhookUrl: 'http://localhost:4000/api/webhooks/asaas',
+      integrationStatus: 'configured',
+    });
+    adminService.updateAdminFinanceSettings.mockResolvedValue({
+      environment: 'sandbox',
+      rootApiKeyConfigured: true,
+      platformWalletId: 'wallet_platform_root',
+      defaultPlatformFeePercent: 6.5,
+      webhookUrl: 'http://localhost:4000/api/webhooks/asaas',
+      integrationStatus: 'configured',
+    });
+    adminService.fetchAdminBusinessFinanceSettings.mockResolvedValue({
+      businessId: 'business-1',
+      businessName: 'Barbearia Estilo Vivo',
+      businessSlug: 'barbearia-estilo-vivo',
+      enabled: true,
+      provider: 'asaas',
+      methods: {
+        pix: true,
+        creditCard: true,
+        debitCard: true,
+        cashOnPickup: true,
+        cashOnDelivery: true,
+      },
+      manualPixConfigured: true,
+      asaas: {
+        enabled: true,
+        connected: true,
+        hasApiKey: true,
+        walletId: 'wallet_sub_123',
+        accountEmail: 'financeiro@cliente.local',
+        accountName: 'Barbearia Estilo Vivo',
+        status: 'active',
+        subaccountId: 'subacc_123',
+        connectedAt: '2026-06-02T10:00:00.000Z',
+      },
+      split: {
+        enabled: true,
+        inheritsGlobal: true,
+        platformFeePercent: 0,
+        effectivePlatformFeePercent: 5,
+        platformWalletConfigured: true,
+        defaultPlatformFeePercent: 5,
+        mode: 'percentage',
+      },
+    });
+    adminService.updateAdminBusinessFinanceSettings.mockResolvedValue({
+      businessId: 'business-1',
+      businessName: 'Barbearia Estilo Vivo',
+      businessSlug: 'barbearia-estilo-vivo',
+      enabled: true,
+      provider: 'asaas',
+      methods: {
+        pix: true,
+        creditCard: true,
+        debitCard: true,
+        cashOnPickup: true,
+        cashOnDelivery: true,
+      },
+      manualPixConfigured: true,
+      asaas: {
+        enabled: true,
+        connected: true,
+        hasApiKey: true,
+        walletId: 'wallet_sub_123',
+        accountEmail: 'financeiro@cliente.local',
+        accountName: 'Barbearia Estilo Vivo',
+        status: 'active',
+        subaccountId: 'subacc_123',
+        connectedAt: '2026-06-02T10:00:00.000Z',
+      },
+      split: {
+        enabled: true,
+        inheritsGlobal: false,
+        platformFeePercent: 7.5,
+        effectivePlatformFeePercent: 7.5,
+        platformWalletConfigured: true,
+        defaultPlatformFeePercent: 5,
+        mode: 'percentage',
+      },
+    });
+    adminService.createAdminBusinessAsaasSubaccount.mockResolvedValue({
+      businessId: 'business-1',
+      businessName: 'Barbearia Estilo Vivo',
+      businessSlug: 'barbearia-estilo-vivo',
+      enabled: true,
+      provider: 'asaas',
+      methods: {
+        pix: true,
+        creditCard: true,
+        debitCard: true,
+        cashOnPickup: true,
+        cashOnDelivery: true,
+      },
+      manualPixConfigured: true,
+      asaas: {
+        enabled: true,
+        connected: true,
+        hasApiKey: true,
+        walletId: 'wallet_sub_created',
+        accountEmail: 'financeiro@cliente.local',
+        accountName: 'Barbearia Estilo Vivo',
+        status: 'active',
+        subaccountId: 'subacc_created',
+        connectedAt: '2026-06-02T10:05:00.000Z',
+      },
+      split: {
+        enabled: true,
+        inheritsGlobal: true,
+        platformFeePercent: 0,
+        effectivePlatformFeePercent: 5,
+        platformWalletConfigured: true,
+        defaultPlatformFeePercent: 5,
+        mode: 'percentage',
+      },
     });
     adminService.listAdminBusinesses.mockResolvedValue([businessFixture]);
     adminService.listAdminClients.mockResolvedValue([
@@ -1152,6 +1278,59 @@ describe('DashboardHomePage', () => {
     expect(screen.getByText('Atalhos mais usados')).toBeInTheDocument();
     expect(screen.getByText(/Contando desde/)).toBeInTheDocument();
     expect(screen.queryByText('Novo comercio')).not.toBeInTheDocument();
+  });
+
+  it('shows the financial settings area only for level 0 and lets the admin update global and tenant Asaas settings safely', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Financeiro/i }));
+
+    expect(await screen.findByText('Configuracoes Financeiras')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('wallet_platform_root')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('wallet_sub_123')).toBeInTheDocument();
+    expect(await screen.findByLabelText(/Nova apiKey da subconta/i)).toHaveValue('');
+
+    await user.clear(screen.getByLabelText(/Taxa padrao da plataforma/i));
+    await user.type(screen.getByLabelText(/Taxa padrao da plataforma/i), '6.5');
+    await user.click(screen.getByRole('button', { name: /Salvar configuracoes globais/i }));
+
+    await waitFor(() => {
+      expect(adminService.updateAdminFinanceSettings).toHaveBeenCalledWith(
+        'admin-token',
+        expect.objectContaining({
+          platformWalletId: 'wallet_platform_root',
+          defaultPlatformFeePercent: 6.5,
+        }),
+      );
+    });
+
+    await user.click(screen.getByLabelText(/Nao herdar taxa global/i));
+    await user.clear(await screen.findByLabelText(/Override da taxa do tenant/i));
+    await user.type(screen.getByLabelText(/Override da taxa do tenant/i), '7.5');
+    await user.click(screen.getByRole('button', { name: /Salvar configuracoes do tenant/i }));
+
+    await waitFor(() => {
+      expect(adminService.updateAdminBusinessFinanceSettings).toHaveBeenCalledWith(
+        'admin-token',
+        'business-1',
+        expect.objectContaining({
+          provider: 'asaas',
+          split: expect.objectContaining({
+            inheritsGlobal: false,
+            enabled: true,
+            platformFeePercent: 7.5,
+          }),
+        }),
+      );
+    });
   });
 
   it('lets level 0 reset the analytics baseline from the admin analytics view', async () => {

@@ -131,4 +131,55 @@ describe('publicSitePayloadSchema', () => {
       description: '',
     });
   });
+
+  it('accepts the safe Mercado Pago payment settings dto without requiring secrets', () => {
+    const parsed = publicSitePayloadSchema.parse({
+      business: {
+        id: 'business-3',
+        slug: 'mercearia-central',
+        name: 'Mercearia Central',
+        status: 'active',
+        paymentSettings: {
+          enabled: true,
+          provider: 'mercado_pago',
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: false,
+          },
+          mercadoPago: {
+            enabled: true,
+            publicKey: 'APP_USR-public-key',
+            accountEmail: 'seller@example.com',
+            connected: true,
+            hasAccessToken: true,
+            hasWebhookSecret: true,
+          },
+        },
+        seo: {
+          title: 'Mercearia Central',
+          description: 'Pagina publica',
+        },
+      },
+      theme: baseTheme,
+      sections: [],
+      links: [],
+      seo: {
+        title: 'Mercearia Central',
+        description: 'Pagina publica',
+      },
+    });
+
+    expect(parsed.business.paymentSettings.provider).toBe('mercado_pago');
+    expect(parsed.business.paymentSettings.mercadoPago).toEqual({
+      enabled: true,
+      publicKey: 'APP_USR-public-key',
+      accountEmail: 'seller@example.com',
+      connected: true,
+      hasAccessToken: true,
+      hasWebhookSecret: true,
+    });
+  });
 });

@@ -32,6 +32,35 @@ const businessFixture = {
   },
 };
 
+const asaasBusinessFixture = {
+  ...businessFixture,
+  paymentSettings: {
+    enabled: true,
+    provider: 'asaas',
+    methods: {
+      pix: true,
+      creditCard: true,
+      debitCard: true,
+      cashOnPickup: true,
+      cashOnDelivery: true,
+    },
+    pix: {
+      key: 'pix@asaas.local',
+      merchantName: 'Barbearia Estilo Vivo',
+      merchantCity: 'Sao Paulo',
+    },
+    asaas: {
+      enabled: true,
+      connected: true,
+      hasApiKey: true,
+      walletId: 'wallet_sub_123',
+      accountEmail: 'financeiro@cliente.local',
+      accountName: 'Barbearia Estilo Vivo',
+      status: 'active',
+    },
+  },
+};
+
 const productsFixture = [
   {
     id: 'product-1',
@@ -277,7 +306,7 @@ describe('BusinessCatalogSection', () => {
     expect(screen.getByText(/Tente buscar por outro nome, categoria ou descricao/i)).toBeInTheDocument();
   });
 
-  it('shows active payment methods, submits Pix orders with the selected method, and renders the Pix QR after success', async () => {
+  it('shows payment method cards, submits Pix orders with the selected method, and renders the Pix QR after success', async () => {
     const user = userEvent.setup();
     const writeTextMock = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(window.navigator, 'clipboard', {
@@ -315,10 +344,10 @@ describe('BusinessCatalogSection', () => {
     await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
 
     expect(screen.getByText('Forma de pagamento')).toBeInTheDocument();
-    expect(screen.getByLabelText(/Pix/i)).toBeChecked();
-    expect(screen.getByLabelText(/Pagamento na retirada/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Pagamento na entrega/i)).toBeInTheDocument();
-    expect(screen.queryByLabelText('Cartao de credito')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Pix/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Pagamento na retirada/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Pagamento na entrega/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cartao de credito' })).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText('Nome'), 'Julia');
     await user.type(screen.getByLabelText('Telefone'), '5511977776666');
@@ -345,5 +374,62 @@ describe('BusinessCatalogSection', () => {
         '00020126580014br.gov.bcb.pix0116pix@example.com520400005303986540559.905802BR5919Barbearia Estilo Vivo6009SAO PAULO62070503***6304ABCD',
       );
     });
+  });
+
+  it('shows Asaas online payment cards and redirects hosted card checkout to the invoice URL', async () => {
+    const user = userEvent.setup();
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const onSubmitOrder = vi.fn().mockResolvedValue({
+      id: 'order-asaas-1',
+      total: 39.9,
+      payment: {
+        method: PAYMENT_METHODS.CREDIT_CARD,
+        status: PAYMENT_STATUS.PENDING,
+        provider: 'asaas',
+        amount: 39.9,
+        invoiceUrl: 'https://sandbox.asaas.com/i/pay_123',
+      },
+    });
+
+    render(
+      <BusinessCatalogSection
+        business={asaasBusinessFixture}
+        tenantSlug="barbearia-estilo-vivo"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={onSubmitOrder}
+      />,
+    );
+
+    const catalogCard = screen.getByText('Pomada modeladora').closest('.catalog-card');
+    await user.click(within(catalogCard).getByRole('button', { name: 'Adicionar' }));
+    await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
+
+    expect(screen.getByRole('button', { name: 'Pix' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cartao de credito' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cartao de debito' })).toBeInTheDocument();
+    expect(screen.getAllByText(/Pagamento seguro processado pelo Asaas/i).length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole('button', { name: 'Cartao de credito' }));
+    await user.type(screen.getByLabelText('Nome'), 'Julia');
+    await user.type(screen.getByLabelText('Telefone'), '5511977776666');
+    await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
+
+    await waitFor(() => {
+      expect(onSubmitOrder).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payment: {
+            method: PAYMENT_METHODS.CREDIT_CARD,
+          },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(openSpy).toHaveBeenCalledWith('https://sandbox.asaas.com/i/pay_123', '_self');
+    });
+
+    openSpy.mockRestore();
   });
 });

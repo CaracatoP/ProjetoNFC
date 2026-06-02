@@ -56,6 +56,7 @@ import {
 } from '../../../shared/utils/productMeasurement.js';
 import { TENANT_REALTIME_KINDS } from '../../../shared/constants/tenantRealtime.js';
 import { createPreviewToken } from '../utils/previewToken.js';
+import { encryptSecret } from '../utils/secretCrypto.js';
 
 function normalizeCoordinate(value) {
   if (value === '' || value === null || value === undefined) {
@@ -215,7 +216,41 @@ function normalizeHours(hours = []) {
     .filter((hour) => hour.label && hour.value);
 }
 
-function normalizeBusinessPayload(payload = {}) {
+function buildStoredPaymentSettings(input = {}, contact = {}, existingBusiness = null) {
+  const fallbackPix = contact?.pix || {};
+  const normalizedSettings = normalizeBusinessPaymentSettings(input, fallbackPix, { mode: 'storage' });
+  const existingSettings = normalizeBusinessPaymentSettings(
+    existingBusiness?.paymentSettings || {},
+    existingBusiness?.contact?.pix || fallbackPix,
+    { mode: 'storage' },
+  );
+  const rawMercadoPago = isPlainObject(input?.mercadoPago) ? input.mercadoPago : {};
+  const nextAccessToken = normalizeOptionalValue(rawMercadoPago.accessToken);
+  const nextWebhookSecret = normalizeOptionalValue(rawMercadoPago.webhookSecret);
+  const accessTokenEncrypted = nextAccessToken
+    ? encryptSecret(nextAccessToken)
+    : normalizedSettings.mercadoPago.accessTokenEncrypted || existingSettings.mercadoPago.accessTokenEncrypted || '';
+  const webhookSecretEncrypted = nextWebhookSecret
+    ? encryptSecret(nextWebhookSecret)
+    : normalizedSettings.mercadoPago.webhookSecretEncrypted || existingSettings.mercadoPago.webhookSecretEncrypted || '';
+  const connectedAt = accessTokenEncrypted
+    ? normalizedSettings.mercadoPago.connectedAt || existingSettings.mercadoPago.connectedAt || new Date()
+    : null;
+
+  return {
+    ...normalizedSettings,
+    mercadoPago: {
+      ...normalizedSettings.mercadoPago,
+      accessTokenEncrypted,
+      webhookSecretEncrypted,
+      connectedAt,
+    },
+  };
+}
+
+function normalizeBusinessPayload(payload = {}, options = {}) {
+  const paymentMode = options.paymentMode || 'safe';
+  const existingBusiness = options.existingBusiness || null;
   const name = String(payload.name || '').trim();
   const description = String(payload.description || '').trim();
   const seoTitle = String(payload.seo?.title || '').trim() || (name ? `${name} | Pagina NFC` : '');
@@ -252,7 +287,10 @@ function normalizeBusinessPayload(payload = {}) {
     },
     hours: normalizeHours(payload.hours),
     contact,
-    paymentSettings: normalizeBusinessPaymentSettings(payload.paymentSettings || {}, contact.pix || {}),
+    paymentSettings:
+      paymentMode === 'storage'
+        ? buildStoredPaymentSettings(payload.paymentSettings || {}, contact, existingBusiness)
+        : normalizeBusinessPaymentSettings(payload.paymentSettings || {}, contact.pix || {}),
     seo: {
       title: seoTitle,
       description: seoDescription,
@@ -779,6 +817,8 @@ export async function createAdminBusiness(input) {
   const businessPayload = normalizeBusinessPayload({
     ...defaults.business,
     ...(input.business || input),
+  }, {
+    paymentMode: 'storage',
   });
   await assertBusinessSlugAvailable(businessPayload.slug);
   await assertBusinessDomainsAvailable(businessPayload.domains);
@@ -814,7 +854,10 @@ export async function createAdminBusiness(input) {
 export async function updateAdminBusiness(businessId, input) {
   assertEditorBusinessIdMatchesTarget(businessId, input);
   const existingGraph = await findBusinessGraphForAdmin(businessId);
-  const businessPayload = normalizeBusinessPayload(input.business || {});
+  const businessPayload = normalizeBusinessPayload(input.business || {}, {
+    paymentMode: 'storage',
+    existingBusiness: existingGraph.business || null,
+  });
   const themePayload = normalizeThemePayload(input.theme || {});
   const sectionsPayload = normalizeSectionsPayload(input.sections || []);
   const tagPayload = normalizeTagPayload(input.nfcTag || null);

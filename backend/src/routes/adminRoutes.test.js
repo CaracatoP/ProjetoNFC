@@ -18,6 +18,7 @@ let AppointmentService;
 let AppointmentRequest;
 let Order;
 let subscribeToTenantUpdates;
+let decryptSecret;
 let mongoServer;
 let adminToken;
 
@@ -60,6 +61,7 @@ describe('Admin routes', () => {
     ({ AppointmentRequest } = await import('../models/AppointmentRequest.js'));
     ({ Order } = await import('../models/Order.js'));
     ({ subscribeToTenantUpdates } = await import('../services/tenantRealtimeService.js'));
+    ({ decryptSecret } = await import('../utils/secretCrypto.js'));
     ({ default: app } = await import('../app.js'));
 
     await connectDatabase();
@@ -1139,6 +1141,258 @@ describe('Admin routes', () => {
       }),
     );
     expect(response.body.data.payment.paidAt).toEqual(expect.any(String));
+  });
+
+  it('keeps Mercado Pago encrypted credentials out of the admin editor response', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'mercado_pago',
+          mercadoPago: {
+            enabled: true,
+            publicKey: 'APP_USR-public-key',
+            accessTokenEncrypted: 'v1:iv:tag:payload',
+            webhookSecretEncrypted: 'v1:iv:tag:webhook',
+            accountEmail: 'seller@example.com',
+            connectedAt: new Date('2026-06-01T12:00:00.000Z'),
+          },
+        },
+      },
+    );
+
+    const response = await request(app)
+      .get(`/api/admin/businesses/${business._id.toString()}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.business.paymentSettings.mercadoPago).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        publicKey: 'APP_USR-public-key',
+        accountEmail: 'seller@example.com',
+        connected: true,
+        hasAccessToken: true,
+        hasWebhookSecret: true,
+      }),
+    );
+    expect(response.body.data.business.paymentSettings.mercadoPago.accessTokenEncrypted).toBeUndefined();
+    expect(response.body.data.business.paymentSettings.mercadoPago.webhookSecretEncrypted).toBeUndefined();
+  });
+
+  it('keeps Asaas encrypted credentials out of the admin editor response', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'asaas',
+          asaas: {
+            enabled: true,
+            subaccountId: 'sub_123',
+            walletId: 'wallet_sub_123',
+            apiKeyEncrypted: 'v1:iv:tag:payload',
+            webhookAuthTokenEncrypted: 'v1:iv:tag:webhook',
+            accountEmail: 'financeiro@loja.com',
+            accountName: 'Loja Teste LTDA',
+            status: 'active',
+            connectedAt: new Date('2026-06-02T12:00:00.000Z'),
+          },
+          split: {
+            enabled: true,
+            platformFeePercent: 5,
+            platformWalletId: 'wallet_platform_123',
+            mode: 'percentage',
+            inheritsGlobal: false,
+          },
+        },
+      },
+    );
+
+    const response = await request(app)
+      .get(`/api/admin/businesses/${business._id.toString()}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.business.paymentSettings.asaas).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        subaccountId: 'sub_123',
+        walletId: 'wallet_sub_123',
+        accountEmail: 'financeiro@loja.com',
+        accountName: 'Loja Teste LTDA',
+        status: 'active',
+        connected: true,
+        hasApiKey: true,
+        hasWebhookAuthToken: true,
+      }),
+    );
+    expect(response.body.data.business.paymentSettings.asaas.apiKeyEncrypted).toBeUndefined();
+    expect(response.body.data.business.paymentSettings.asaas.webhookAuthTokenEncrypted).toBeUndefined();
+    expect(response.body.data.business.paymentSettings.split).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        platformFeePercent: 5,
+        platformWalletId: 'wallet_platform_123',
+        mode: 'percentage',
+        inheritsGlobal: false,
+      }),
+    );
+  });
+
+  it('encrypts Mercado Pago credentials on admin save and only returns a safe DTO', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' }).lean();
+    const detailResponse = await request(app)
+      .get(`/api/admin/businesses/${business._id.toString()}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(detailResponse.status).toBe(200);
+
+    const payload = {
+      business: {
+        ...detailResponse.body.data.business,
+        paymentSettings: {
+          ...(detailResponse.body.data.business.paymentSettings || {}),
+          enabled: true,
+          provider: 'mercado_pago',
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          mercadoPago: {
+            enabled: true,
+            publicKey: 'APP_USR-test-public',
+            accessToken: 'TEST-ACCESS-TOKEN',
+            webhookSecret: 'TEST-WEBHOOK-SECRET',
+            accountEmail: 'seller@example.com',
+          },
+        },
+      },
+      theme: detailResponse.body.data.theme,
+      links: detailResponse.body.data.links,
+      sections: detailResponse.body.data.sections,
+      nfcTag: detailResponse.body.data.nfcTag,
+    };
+
+    const response = await request(app)
+      .put(`/api/admin/businesses/${business._id.toString()}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(payload);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.business.paymentSettings.mercadoPago).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        publicKey: 'APP_USR-test-public',
+        accountEmail: 'seller@example.com',
+        connected: true,
+        hasAccessToken: true,
+        hasWebhookSecret: true,
+      }),
+    );
+    expect(response.body.data.business.paymentSettings.mercadoPago.accessToken).toBeUndefined();
+    expect(response.body.data.business.paymentSettings.mercadoPago.webhookSecret).toBeUndefined();
+    expect(response.body.data.business.paymentSettings.mercadoPago.accessTokenEncrypted).toBeUndefined();
+    expect(response.body.data.business.paymentSettings.mercadoPago.webhookSecretEncrypted).toBeUndefined();
+
+    const storedBusiness = await Business.findById(business._id).lean();
+    expect(storedBusiness.paymentSettings.mercadoPago.accessTokenEncrypted).toMatch(/^v1:/);
+    expect(storedBusiness.paymentSettings.mercadoPago.webhookSecretEncrypted).toMatch(/^v1:/);
+    expect(storedBusiness.paymentSettings.mercadoPago.accessTokenEncrypted).not.toContain('TEST-ACCESS-TOKEN');
+    expect(storedBusiness.paymentSettings.mercadoPago.webhookSecretEncrypted).not.toContain('TEST-WEBHOOK-SECRET');
+    expect(decryptSecret(storedBusiness.paymentSettings.mercadoPago.accessTokenEncrypted)).toBe('TEST-ACCESS-TOKEN');
+    expect(decryptSecret(storedBusiness.paymentSettings.mercadoPago.webhookSecretEncrypted)).toBe('TEST-WEBHOOK-SECRET');
+  });
+
+  it('preserves encrypted Mercado Pago credentials when admin edits settings without resending secrets', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'mercado_pago',
+          mercadoPago: {
+            enabled: true,
+            publicKey: 'APP_USR-old-public',
+            accessTokenEncrypted: 'v1:thistoken:will:bereplaced',
+            webhookSecretEncrypted: 'v1:thiswebhook:will:bereplaced',
+            accountEmail: 'old@example.com',
+          },
+        },
+      },
+    );
+
+    const seededBusiness = await Business.findById(business._id).lean();
+    const encryptedAccessToken = seededBusiness.paymentSettings.mercadoPago.accessTokenEncrypted;
+    const encryptedWebhookSecret = seededBusiness.paymentSettings.mercadoPago.webhookSecretEncrypted;
+
+    const detailResponse = await request(app)
+      .get(`/api/admin/businesses/${business._id.toString()}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const payload = {
+      business: {
+        ...detailResponse.body.data.business,
+        paymentSettings: {
+          ...(detailResponse.body.data.business.paymentSettings || {}),
+          provider: 'mercado_pago',
+          mercadoPago: {
+            ...(detailResponse.body.data.business.paymentSettings?.mercadoPago || {}),
+            enabled: true,
+            publicKey: 'APP_USR-new-public',
+            accountEmail: 'new@example.com',
+          },
+        },
+      },
+      theme: detailResponse.body.data.theme,
+      links: detailResponse.body.data.links,
+      sections: detailResponse.body.data.sections,
+      nfcTag: detailResponse.body.data.nfcTag,
+    };
+
+    const response = await request(app)
+      .put(`/api/admin/businesses/${business._id.toString()}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(payload);
+
+    expect(response.status).toBe(200);
+
+    const storedBusiness = await Business.findById(business._id).lean();
+    expect(storedBusiness.paymentSettings.mercadoPago.publicKey).toBe('APP_USR-new-public');
+    expect(storedBusiness.paymentSettings.mercadoPago.accountEmail).toBe('new@example.com');
+    expect(storedBusiness.paymentSettings.mercadoPago.accessTokenEncrypted).toBe(encryptedAccessToken);
+    expect(storedBusiness.paymentSettings.mercadoPago.webhookSecretEncrypted).toBe(encryptedWebhookSecret);
   });
 
   it('rejects scoped module mutations when the resource belongs to another tenant', async () => {

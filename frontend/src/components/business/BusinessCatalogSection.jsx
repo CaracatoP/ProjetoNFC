@@ -4,6 +4,7 @@ import {
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHODS,
   PAYMENT_METHOD_VALUES,
+  PAYMENT_PROVIDERS,
 } from '@shared/constants/index.js';
 import {
   isBusinessPaymentMethodEnabled,
@@ -127,7 +128,36 @@ function normalizePhoneDigits(value) {
   return String(value || '').replace(/\D+/g, '');
 }
 
-function getPaymentMethodDescription(method) {
+function isOnlineCheckoutMethod(method) {
+  return (
+    method === PAYMENT_METHODS.PIX ||
+    method === PAYMENT_METHODS.CREDIT_CARD ||
+    method === PAYMENT_METHODS.DEBIT_CARD
+  );
+}
+
+function isAsaasPaymentMethod(method, paymentSettings = {}) {
+  return (
+    paymentSettings?.provider === PAYMENT_PROVIDERS.ASAAS &&
+    paymentSettings?.asaas?.enabled &&
+    paymentSettings?.asaas?.connected &&
+    isOnlineCheckoutMethod(method)
+  );
+}
+
+function getPaymentMethodDescription(method, paymentSettings = {}) {
+  if (isAsaasPaymentMethod(method, paymentSettings)) {
+    switch (method) {
+      case PAYMENT_METHODS.PIX:
+        return 'Voce recebera o QR Code para pagamento.';
+      case PAYMENT_METHODS.CREDIT_CARD:
+      case PAYMENT_METHODS.DEBIT_CARD:
+        return 'Pagamento seguro processado pelo Asaas.';
+      default:
+        break;
+    }
+  }
+
   switch (method) {
     case PAYMENT_METHODS.PIX:
       return 'Pague pelo QR Code ou copie o codigo Pix. O estabelecimento confirma manualmente depois.';
@@ -137,10 +167,22 @@ function getPaymentMethodDescription(method) {
       return 'Voce pagara no momento da entrega do pedido.';
     case PAYMENT_METHODS.CREDIT_CARD:
     case PAYMENT_METHODS.DEBIT_CARD:
-      return 'Pagamento com cartao so sera liberado quando houver gateway seguro configurado.';
+      return 'Pagamento seguro processado pelo Asaas.';
     default:
       return '';
   }
+}
+
+function getPaymentMethodTag(method, paymentSettings = {}) {
+  if (isAsaasPaymentMethod(method, paymentSettings)) {
+    return method === PAYMENT_METHODS.PIX ? 'Online' : 'Checkout Asaas';
+  }
+
+  if (method === PAYMENT_METHODS.CASH_ON_PICKUP || method === PAYMENT_METHODS.CASH_ON_DELIVERY) {
+    return 'Manual';
+  }
+
+  return 'Disponivel';
 }
 
 function getPaymentSuccessMessage(method) {
@@ -153,6 +195,26 @@ function getPaymentSuccessMessage(method) {
     default:
       return 'Pedido enviado com sucesso. O pagamento sera feito na retirada.';
   }
+}
+
+function redirectToCheckoutUrl(url) {
+  const normalizedUrl = String(url || '').trim();
+
+  if (!normalizedUrl || typeof window === 'undefined') {
+    return false;
+  }
+
+  if (typeof window.open === 'function') {
+    window.open(normalizedUrl, '_self');
+    return true;
+  }
+
+  if (window.location?.assign) {
+    window.location.assign(normalizedUrl);
+    return true;
+  }
+
+  return false;
 }
 
 function defaultFractionInputValue(measurementUnit) {
@@ -561,12 +623,23 @@ export function BusinessCatalogSection({
         targetLabel: 'Finalizar pedido',
         sectionType: 'catalog',
       });
+      const nextPayment = createdOrder?.payment || {};
+      const shouldRedirectToHostedCheckout =
+        nextPayment.provider === PAYMENT_PROVIDERS.ASAAS &&
+        (nextPayment.method === PAYMENT_METHODS.CREDIT_CARD ||
+          nextPayment.method === PAYMENT_METHODS.DEBIT_CARD) &&
+        nextPayment.invoiceUrl;
+
       setCart({});
       setCheckout(defaultCheckoutState());
       setCheckoutResult(createdOrder || null);
       persistStoredCart(tenantSlug, {});
       setFeedback(getPaymentSuccessMessage(createdOrder?.payment?.method || checkout.paymentMethod));
       setIsCartOpen(true);
+
+      if (shouldRedirectToHostedCheckout) {
+        redirectToCheckoutUrl(nextPayment.invoiceUrl);
+      }
     } catch (error) {
       setFeedback(error?.message || 'Nao foi possivel enviar o pedido agora.');
     } finally {
@@ -805,29 +878,39 @@ export function BusinessCatalogSection({
                             ) : null}
                           </div>
 
-                          <fieldset className="catalog-checkout__payment-methods">
-                            <legend>Forma de pagamento</legend>
-                            {availablePaymentMethods.map((method) => (
-                              <label key={method} className="catalog-checkout__payment-option">
-                                <input
-                                  type="radio"
-                                  name="checkout-payment-method"
-                                  value={method}
-                                  checked={checkout.paymentMethod === method}
-                                  onChange={(event) =>
-                                    setCheckout((current) => ({
-                                      ...current,
-                                      paymentMethod: event.target.value,
-                                    }))
-                                  }
-                                />
-                                <div>
-                                  <strong>{PAYMENT_METHOD_LABELS[method]}</strong>
-                                  <span>{getPaymentMethodDescription(method)}</span>
-                                </div>
-                              </label>
-                            ))}
-                          </fieldset>
+                          <div className="catalog-checkout__payment-methods" role="group" aria-labelledby="checkout-payment-methods-title">
+                            <div className="catalog-checkout__payment-header">
+                              <strong id="checkout-payment-methods-title">Forma de pagamento</strong>
+                              <span>Escolha apenas entre os metodos liberados por este estabelecimento.</span>
+                            </div>
+                            <div className="catalog-checkout__payment-grid">
+                              {availablePaymentMethods.map((method) => {
+                                const selected = checkout.paymentMethod === method;
+
+                                return (
+                                  <button
+                                    key={method}
+                                    type="button"
+                                    className={`catalog-checkout__payment-card${selected ? ' catalog-checkout__payment-card--selected' : ''}`}
+                                    aria-label={PAYMENT_METHOD_LABELS[method]}
+                                    aria-pressed={selected}
+                                    onClick={() =>
+                                      setCheckout((current) => ({
+                                        ...current,
+                                        paymentMethod: method,
+                                      }))
+                                    }
+                                  >
+                                    <div className="catalog-checkout__payment-copy">
+                                      <strong>{PAYMENT_METHOD_LABELS[method]}</strong>
+                                      <span>{getPaymentMethodDescription(method, paymentSettings)}</span>
+                                    </div>
+                                    <span className="catalog-checkout__payment-tag">{getPaymentMethodTag(method, paymentSettings)}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
 
                           <label className="admin-field catalog-checkout__notes">
                             <span>Observacoes</span>

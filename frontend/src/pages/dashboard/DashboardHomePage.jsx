@@ -48,6 +48,12 @@ const LazyAdminClientsPanel = lazy(() =>
   })),
 );
 
+const LazyAdminFinancialSettingsPanel = lazy(() =>
+  import('@/components/business/AdminFinancialSettingsPanel.jsx').then((module) => ({
+    default: module.AdminFinancialSettingsPanel,
+  })),
+);
+
 function cloneTenantSnapshot(value) {
   return JSON.parse(JSON.stringify(value || null));
 }
@@ -810,6 +816,11 @@ export function DashboardHomePage() {
               <Button variant={activeView === 'clients' ? 'primary' : 'secondary'} onClick={() => setActiveView('clients')}>
                 Clientes
               </Button>
+              {access?.capabilities?.canManageBilling ? (
+                <Button variant={activeView === 'finance' ? 'primary' : 'secondary'} onClick={() => setActiveView('finance')}>
+                  Financeiro
+                </Button>
+              ) : null}
             </div>
 
             {activeView === 'workspace' ? (
@@ -890,7 +901,7 @@ export function DashboardHomePage() {
                   loadingEditor={loadingEditor}
                 />
               </Suspense>
-            ) : (
+            ) : activeView === 'clients' ? (
               <Suspense
                 fallback={
                   <DashboardViewFallback
@@ -907,6 +918,22 @@ export function DashboardHomePage() {
                     setSelectedBusinessId(businessId);
                     setActiveView('workspace');
                   }}
+                />
+              </Suspense>
+            ) : (
+              <Suspense
+                fallback={
+                  <DashboardViewFallback
+                    title="Carregando financeiro"
+                    description="Buscando a integracao da plataforma com o Asaas e a configuracao do tenant selecionado."
+                  />
+                }
+              >
+                <LazyAdminFinancialSettingsPanel
+                  token={token}
+                  businesses={businesses}
+                  selectedBusinessId={selectedBusinessId}
+                  onSelectBusiness={setSelectedBusinessId}
                 />
               </Suspense>
             )}

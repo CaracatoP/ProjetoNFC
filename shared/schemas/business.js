@@ -76,6 +76,39 @@ export const businessPaymentSettingsSchema = z.preprocess(
       })
       .default({}),
     provider: z.enum(PAYMENT_PROVIDER_VALUES).default(DEFAULT_PAYMENT_PROVIDER),
+    mercadoPago: z
+      .object({
+        enabled: z.boolean().default(false),
+        publicKey: z.string().default(''),
+        accountEmail: z.string().default(''),
+        connected: z.boolean().default(false),
+        hasAccessToken: z.boolean().default(false),
+        hasWebhookSecret: z.boolean().default(false),
+      })
+      .default({}),
+    asaas: z
+      .object({
+        enabled: z.boolean().default(false),
+        subaccountId: z.string().default(''),
+        walletId: z.string().default(''),
+        accountEmail: z.string().default(''),
+        accountName: z.string().default(''),
+        status: z.string().default('not_connected'),
+        connectedAt: z.date().nullable().optional(),
+        connected: z.boolean().default(false),
+        hasApiKey: z.boolean().default(false),
+        hasWebhookAuthToken: z.boolean().default(false),
+      })
+      .default({}),
+    split: z
+      .object({
+        enabled: z.boolean().default(false),
+        platformFeePercent: z.number().min(0).max(30).default(0),
+        platformWalletId: z.string().default(''),
+        mode: z.string().default('percentage'),
+        inheritsGlobal: z.boolean().default(true),
+      })
+      .default({}),
   }),
 );
 

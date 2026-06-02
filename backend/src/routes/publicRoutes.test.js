@@ -2,6 +2,29 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 
+const mercadoPagoServiceMock = vi.hoisted(() => ({
+  createMercadoPagoCheckoutPreference: vi.fn(),
+}));
+const asaasServiceMock = vi.hoisted(() => ({
+  createAsaasCustomer: vi.fn(),
+  createAsaasPaymentCharge: vi.fn(),
+  getAsaasPixQrCode: vi.fn(),
+}));
+
+vi.mock('../services/mercadoPagoService.js', () => ({
+  createMercadoPagoCheckoutPreference: mercadoPagoServiceMock.createMercadoPagoCheckoutPreference,
+}));
+vi.mock('../services/asaasService.js', async () => {
+  const actual = await vi.importActual('../services/asaasService.js');
+
+  return {
+    ...actual,
+    createAsaasCustomer: asaasServiceMock.createAsaasCustomer,
+    createAsaasPaymentCharge: asaasServiceMock.createAsaasPaymentCharge,
+    getAsaasPixQrCode: asaasServiceMock.getAsaasPixQrCode,
+  };
+});
+
 let app;
 let connectDatabase;
 let disconnectDatabase;
@@ -12,6 +35,7 @@ let BusinessSection;
 let Professional;
 let AppointmentService;
 let Product;
+let SystemSetting;
 let subscribeToTenantUpdates;
 let env;
 let mongoServer;
@@ -37,6 +61,7 @@ describe('Public routes', () => {
     ({ Professional } = await import('../models/Professional.js'));
     ({ AppointmentService } = await import('../models/AppointmentService.js'));
     ({ Product } = await import('../models/Product.js'));
+    ({ SystemSetting } = await import('../models/SystemSetting.js'));
     ({ subscribeToTenantUpdates } = await import('../services/tenantRealtimeService.js'));
     ({ env } = await import('../config/env.js'));
     ({ default: app } = await import('../app.js'));
@@ -47,6 +72,11 @@ describe('Public routes', () => {
   beforeEach(async () => {
     await seedDemoData({ reset: true });
     await AnalyticsEvent.deleteMany({});
+    await SystemSetting.deleteMany({});
+    mercadoPagoServiceMock.createMercadoPagoCheckoutPreference.mockReset();
+    asaasServiceMock.createAsaasCustomer.mockReset();
+    asaasServiceMock.createAsaasPaymentCharge.mockReset();
+    asaasServiceMock.getAsaasPixQrCode.mockReset();
     const loginResponse = await request(app).post('/api/admin/auth/login').send({
       username: 'admin@nfc.local',
       password: 'admin123456',
@@ -69,6 +99,50 @@ describe('Public routes', () => {
     expect(response.body.data.business.slug).toBe('barbearia-estilo-vivo');
     expect(response.body.data.sections[0].type).toBe('hero');
     expect(response.body.data.sections.some((section) => section.type === 'pix')).toBe(true);
+  });
+
+  it('does not expose encrypted Mercado Pago credentials on the public site payload', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'mercado_pago',
+          mercadoPago: {
+            enabled: true,
+            publicKey: 'APP_USR-public-key',
+            accessTokenEncrypted: 'v1:iv:tag:payload',
+            webhookSecretEncrypted: 'v1:iv:tag:webhook',
+            accountEmail: 'seller@example.com',
+          },
+        },
+      },
+    );
+
+    const response = await request(app).get('/api/public/site/barbearia-estilo-vivo');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.business.paymentSettings.mercadoPago).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        publicKey: 'APP_USR-public-key',
+        accountEmail: 'seller@example.com',
+        connected: true,
+        hasAccessToken: true,
+        hasWebhookSecret: true,
+      }),
+    );
+    expect(response.body.data.business.paymentSettings.mercadoPago.accessTokenEncrypted).toBeUndefined();
+    expect(response.body.data.business.paymentSettings.mercadoPago.webhookSecretEncrypted).toBeUndefined();
   });
 
   it('keeps the public site route working when preview tokens are not configured', async () => {
@@ -365,6 +439,17 @@ describe('Public routes', () => {
     expect(response.status).toBe(201);
     expect(response.body.data.status).toBe('received');
     expect(response.body.data.total).toBe(119.8);
+    expect(response.body.data.payment).toEqual(
+      expect.objectContaining({
+        method: 'cash_on_pickup',
+        status: 'manual',
+        provider: 'manual',
+        providerPaymentId: '',
+        providerPreferenceId: '',
+        checkoutUrl: '',
+        updatedAt: null,
+      }),
+    );
     expect(response.body.data.items[0]).toMatchObject({
       measurementUnit: 'unit',
       displayQuantity: '2 unidades',
@@ -551,6 +636,396 @@ describe('Public routes', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('payment_method_unavailable');
+  });
+
+  it('rejects online checkout when the tenant selects Asaas without a valid Asaas connection', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Maquina premium',
+      description: 'Equipamento profissional',
+      price: 199.9,
+      image: '',
+      category: 'Acessorios',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'asaas',
+          asaas: {
+            enabled: true,
+            walletId: '',
+            apiKeyEncrypted: '',
+            accountEmail: 'seller@example.com',
+            status: 'pending',
+          },
+        },
+      },
+    );
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Bianca',
+        customerPhone: '5511988877665',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: product.price,
+          },
+        ],
+        payment: {
+          method: 'credit_card',
+          provider: 'asaas',
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('payment_provider_unavailable');
+    expect(mercadoPagoServiceMock.createMercadoPagoCheckoutPreference).not.toHaveBeenCalled();
+  });
+
+  it('creates an Asaas Pix order and persists the provider payment fields returned by the charge flow', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Combo asaas pix',
+      description: 'Checkout online via Asaas',
+      price: 149.9,
+      image: '',
+      category: 'Combos',
+      measurementUnit: 'unit',
+      active: true,
+    });
+    await SystemSetting.create({
+      key: 'finance:asaas',
+      value: {
+        platformWalletId: 'wallet_platform_global',
+        defaultPlatformFeePercent: 5,
+      },
+    });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'asaas',
+          asaas: {
+            enabled: true,
+            subaccountId: 'subacc_123',
+            walletId: 'wallet_sub',
+            apiKeyEncrypted: 'encrypted-sub-key',
+            accountEmail: 'seller@example.com',
+            accountName: 'Casa do Preto',
+            status: 'active',
+          },
+          split: {
+            enabled: false,
+            platformFeePercent: 0,
+            mode: 'percentage',
+            inheritsGlobal: true,
+          },
+        },
+      },
+    );
+
+    asaasServiceMock.createAsaasCustomer.mockResolvedValue({
+      id: 'cus_123',
+      name: 'Nina',
+    });
+    asaasServiceMock.createAsaasPaymentCharge.mockResolvedValue({
+      id: 'pay_123',
+      status: 'PENDING',
+      invoiceUrl: 'https://sandbox.asaas.com/i/pay_123',
+    });
+    asaasServiceMock.getAsaasPixQrCode.mockResolvedValue({
+      payload: '000201010212',
+      encodedImage: 'data:image/png;base64,abc123',
+    });
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Nina',
+        customerPhone: '5511991112233',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: 1,
+            itemTotal: 1,
+          },
+        ],
+        payment: {
+          method: 'pix',
+          provider: 'asaas',
+        },
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.total).toBe(149.9);
+    expect(response.body.data.payment).toEqual(
+      expect.objectContaining({
+        method: 'pix',
+        provider: 'asaas',
+        status: 'pending',
+        amount: 149.9,
+        providerPaymentId: 'pay_123',
+        providerCustomerId: 'cus_123',
+        invoiceUrl: 'https://sandbox.asaas.com/i/pay_123',
+        pixCopyPaste: '000201010212',
+        pixQrCode: 'data:image/png;base64,abc123',
+        platformFeeAmount: 7.5,
+        tenantNetAmount: 142.4,
+      }),
+    );
+    expect(asaasServiceMock.createAsaasCustomer).toHaveBeenCalledOnce();
+    expect(asaasServiceMock.createAsaasPaymentCharge).toHaveBeenCalledOnce();
+    expect(asaasServiceMock.getAsaasPixQrCode).toHaveBeenCalledOnce();
+    expect(asaasServiceMock.createAsaasPaymentCharge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        charge: expect.objectContaining({
+          split: [{ walletId: 'wallet_platform_global', percentualValue: 5 }],
+        }),
+      }),
+    );
+    expect(mercadoPagoServiceMock.createMercadoPagoCheckoutPreference).not.toHaveBeenCalled();
+  });
+
+  it('creates a Checkout Pro order for a Mercado Pago tenant and returns the checkout URL', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Combo premium',
+      description: 'Servico + produto',
+      price: 79.9,
+      image: '',
+      category: 'Combos',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'mercado_pago',
+          mercadoPago: {
+            enabled: true,
+            publicKey: 'APP_USR-test-public-key',
+            accessTokenEncrypted: 'fake-encrypted-token',
+            webhookSecretEncrypted: 'fake-encrypted-webhook',
+            accountEmail: 'seller@example.com',
+          },
+        },
+      },
+    );
+    mercadoPagoServiceMock.createMercadoPagoCheckoutPreference.mockResolvedValue({
+      preferenceId: 'pref_test_123',
+      checkoutUrl: 'https://sandbox.mercadopago.com/checkout/v1/redirect?pref_id=pref_test_123',
+      externalReference: `tenant:${business._id.toString()}:order:fake-order`,
+    });
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Nina',
+        customerPhone: '5511991112233',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: 1,
+            itemTotal: 1,
+          },
+        ],
+        payment: {
+          method: 'credit_card',
+          provider: 'mercado_pago',
+        },
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.total).toBe(79.9);
+    expect(response.body.data.payment).toEqual(
+      expect.objectContaining({
+        method: 'credit_card',
+        provider: 'mercado_pago',
+        status: 'pending',
+        amount: 79.9,
+        providerPreferenceId: 'pref_test_123',
+        checkoutUrl: 'https://sandbox.mercadopago.com/checkout/v1/redirect?pref_id=pref_test_123',
+      }),
+    );
+    expect(response.body.data.payment.providerPaymentId).toBe('');
+    expect(mercadoPagoServiceMock.createMercadoPagoCheckoutPreference).toHaveBeenCalledOnce();
+  });
+
+  it('keeps manual checkout working even when the tenant also has Mercado Pago configured', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Pomada matte',
+      description: 'Finalizacao',
+      price: 42.5,
+      image: '',
+      category: 'Produtos',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'mercado_pago',
+          pix: {
+            key: 'pix-chave-teste',
+            merchantName: 'TapLink Teste',
+            merchantCity: 'SAO PAULO',
+          },
+          mercadoPago: {
+            enabled: true,
+            publicKey: 'APP_USR-test-public-key',
+            accessTokenEncrypted: 'fake-encrypted-token',
+            webhookSecretEncrypted: 'fake-encrypted-webhook',
+            accountEmail: 'seller@example.com',
+          },
+        },
+      },
+    );
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Dora',
+        customerPhone: '5511912345678',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 2,
+            unitPrice: product.price,
+          },
+        ],
+        payment: {
+          method: 'cash_on_delivery',
+        },
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.payment).toEqual(
+      expect.objectContaining({
+        method: 'cash_on_delivery',
+        provider: 'manual',
+        status: 'manual',
+        amount: 85,
+        checkoutUrl: '',
+        providerPreferenceId: '',
+      }),
+    );
+    expect(mercadoPagoServiceMock.createMercadoPagoCheckoutPreference).not.toHaveBeenCalled();
+  });
+
+  it('rejects Mercado Pago checkout when the tenant has no valid Mercado Pago credentials configured', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Navalha premium',
+      description: 'Acessorio',
+      price: 64.9,
+      image: '',
+      category: 'Acessorios',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'mercado_pago',
+          mercadoPago: {
+            enabled: true,
+            publicKey: 'APP_USR-test-public-key',
+            accessTokenEncrypted: '',
+            webhookSecretEncrypted: '',
+            accountEmail: 'seller@example.com',
+          },
+        },
+      },
+    );
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Erika',
+        customerPhone: '5511988877665',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: product.price,
+          },
+        ],
+        payment: {
+          method: 'debit_card',
+          provider: 'mercado_pago',
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('payment_provider_unavailable');
+    expect(mercadoPagoServiceMock.createMercadoPagoCheckoutPreference).not.toHaveBeenCalled();
   });
 
   it('calculates proportional totals for kg products and ignores manipulated item totals from the frontend', async () => {

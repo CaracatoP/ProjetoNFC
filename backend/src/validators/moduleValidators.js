@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   DEFAULT_PRODUCT_MEASUREMENT_UNIT,
   PAYMENT_METHOD_VALUES,
+  PAYMENT_PROVIDER_VALUES,
   PAYMENT_STATUS_VALUES,
   PRODUCT_MEASUREMENT_UNIT_VALUES,
 } from '../../../shared/constants/index.js';
@@ -23,6 +24,13 @@ const optionalPaymentMethodSchema = z.preprocess(
     return normalizedValue || undefined;
   },
   z.enum(PAYMENT_METHOD_VALUES).optional(),
+);
+const optionalPaymentProviderSchema = z.preprocess(
+  (value) => {
+    const normalizedValue = String(value || '').trim().toLowerCase();
+    return normalizedValue || undefined;
+  },
+  z.enum(PAYMENT_PROVIDER_VALUES).optional(),
 );
 
 export const businessIdParamsSchema = z.object({
@@ -119,6 +127,7 @@ export const orderBodySchema = z.object({
   payment: z
     .object({
       method: optionalPaymentMethodSchema,
+      provider: optionalPaymentProviderSchema,
     })
     .optional(),
 });
