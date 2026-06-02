@@ -188,13 +188,13 @@ O service principal continua em [adminFinanceService.js](/C:/Users/RDP/Downloads
 - se qualquer regra falhar, o backend deve retornar erro claro e incluir `warnings` no DTO.
 - metodos online devem ser bloqueados quando a subconta nao estiver valida.
 
-#### WalletId e campos sensiveis
+### WalletId e campos sensiveis
 
 - `walletId` deve ser validado antes de salvar.
-- alteracoes sensiveis continuam permitidas, mas o backend deve rejeitar combinacoes invalidas, nao apenas aceitar o payload.
+- alteracoes sensiveis continuam permitidas, mas o backend deve rejeitar combinacoes invalidas.
 - `walletId` e `apiKey` devem ficar mascarados por padrao na UI.
-- deve existir botao de `mostrar/ocultar`.
-- deve existir botao de `copiar`.
+- deve existir botao `mostrar/ocultar`.
+- deve existir botao `copiar`.
 - deve existir aviso visual de impacto antes de alteracoes sensiveis.
 - salvar alteracao sensivel deve exigir confirmacao explicita.
 - campos sensiveis devem ficar agrupados dentro de `Configuracoes avancadas`.
@@ -202,42 +202,12 @@ O service principal continua em [adminFinanceService.js](/C:/Users/RDP/Downloads
 
 ### Shape do DTO
 
-O shape atual deve ser mantido. O backend pode enriquecer a resposta com campos derivados como:
-
-- `integrationStatus`
-- `tenantFinancialStatus`
-- `splitPreview`
-- `usesGlobalFee`
-- `effectivePlatformFeePercent`
-- `canEnableSplit`
-- `canEnableCheckout`
-- `warnings`
-- `summary`
-
-Esses campos sao complementares, nao substituem os atuais.
-
-### Campos derivados propostos
-
-#### Global settings
+Manter os campos atuais e enriquecer com campos derivados, sem quebrar compatibilidade:
 
 ```json
 {
-  "environment": "sandbox",
-  "rootApiKeyConfigured": true,
-  "platformWalletId": "wallet_xxx",
-  "defaultPlatformFeePercent": 3,
-  "webhookUrl": "https://...",
-  "integrationStatus": "configured",
-  "summary": {
-    "platformReady": true
-  }
-}
-```
-
-#### Tenant finance settings
-
-```json
-{
+  "businessId": "...",
+  "businessName": "...",
   "businessSlug": "...",
   "enabled": true,
   "provider": "asaas",
@@ -398,17 +368,16 @@ O formulario sera mantido na tela atual, mas com UX mais guiada.
 Ao criar a subconta com sucesso:
 
 - atualizar o tenant no estado local da tela
-- atualizar `tenantSettings`
-- atualizar `tenantDraft`
-- atualizar `subaccountDraft`
+- atualizar `tenantSettings` com o retorno do backend
+- atualizar `tenantDraft` com o retorno do backend
+- atualizar `subaccountDraft` apenas com os dados que fizerem sentido manter ou limpar apos sucesso
 - preencher `asaas.walletId` automaticamente
 - atualizar `tenantFinancialStatus`
 - atualizar `summary` e `warnings`
 - refletir `provider`/split/metodos conforme retorno do backend
 - exibir mensagem de sucesso com `walletId` e `status`
 - nao apagar os demais dados financeiros ja configurados
-
-Sem refresh manual.
+- nao exigir F5
 
 ## Arquitetura de frontend
 
