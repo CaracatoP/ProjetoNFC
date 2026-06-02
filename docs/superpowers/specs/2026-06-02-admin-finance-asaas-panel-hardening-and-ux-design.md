@@ -176,6 +176,7 @@ O service principal continua em [adminFinanceService.js](/C:/Users/RDP/Downloads
 - `split.enabled = true` exige `platformWalletId` global valido.
 - `split.enabled = true` exige `asaas.walletId` valido no tenant.
 - `split.enabled = true` so pode operar quando o provider efetivo for `asaas`.
+- taxa nao pode ser menor que `0` nem maior que o limite configurado pelo backend.
 
 #### Checkout online
 
@@ -191,12 +192,15 @@ O service principal continua em [adminFinanceService.js](/C:/Users/RDP/Downloads
 
 O shape atual deve ser mantido. O backend pode enriquecer a resposta com campos derivados como:
 
-- `summary`
-- `warnings`
+- `integrationStatus`
+- `tenantFinancialStatus`
+- `splitPreview`
+- `usesGlobalFee`
+- `effectivePlatformFeePercent`
 - `canEnableSplit`
 - `canEnableCheckout`
-- `usesGlobalFee`
-- `splitPreview`
+- `warnings`
+- `summary`
 
 Esses campos sao complementares, nao substituem os atuais.
 
@@ -227,21 +231,26 @@ Esses campos sao complementares, nao substituem os atuais.
   "businessSlug": "...",
   "enabled": true,
   "provider": "asaas",
+  "integrationStatus": "configured",
+  "tenantFinancialStatus": "active",
   "methods": {},
   "manualPixConfigured": false,
   "asaas": {},
   "split": {},
   "usesGlobalFee": true,
+  "effectivePlatformFeePercent": 3,
   "canEnableSplit": true,
   "canEnableCheckout": true,
   "warnings": [],
   "splitPreview": {
     "globalPercent": 3,
     "tenantOverridePercent": 0,
-    "effectivePlatformPercent": 3,
+    "effectivePlatformFeePercent": 3,
+    "platformPercent": 3,
     "tenantNetPercent": 97,
     "inheritsGlobal": true,
-    "splitActive": true
+    "splitActive": true,
+    "mode": "global"
   },
   "summary": {
     "providerLabel": "Asaas",
@@ -269,6 +278,7 @@ Regras:
 - botao copiar
 - aviso visual de impacto
 - confirmacao antes de salvar alteracao sensivel
+- agrupados dentro de `Configuracoes avancadas`
 
 Copy sugerida:
 
@@ -290,9 +300,10 @@ O preview deve reagir aos campos do draft e exibir:
 
 - taxa global
 - override do tenant
-- se esta herdando ou nao
+- taxa efetiva
 - percentual TapLink
 - percentual tenant
+- se esta herdando ou usando taxa customizada
 
 Exemplos:
 
@@ -301,8 +312,10 @@ Exemplos:
 ```text
 Taxa global: 3%
 Override tenant: nao aplicado
+Taxa efetiva: 3%
 TapLink recebe: 3%
 Tenant recebe: 97%
+Modo: herdando taxa global
 ```
 
 #### Taxa customizada
@@ -310,8 +323,10 @@ Tenant recebe: 97%
 ```text
 Taxa global: 3%
 Override tenant: 2%
+Taxa efetiva: 2%
 TapLink recebe: 2%
 Tenant recebe: 98%
+Modo: taxa customizada do tenant
 ```
 
 ### Copy operacional
@@ -325,12 +340,20 @@ O formulario sera mantido na tela atual, mas com UX mais guiada.
 
 ### Melhorias
 
+- validacao clara de:
+  - CPF/CNPJ obrigatorio
+  - e-mail valido
+  - celular valido
+  - CEP obrigatorio
+  - numero obrigatorio
+  - bairro/provincia obrigatorio
 - validacao mais clara
 - loading dedicado
 - card de sucesso/erro
 - exibicao do `walletId` criado
 - exibicao do status da conta
 - exibicao de que a conta foi vinculada ao tenant
+- erro da API tratado sem stack trace cru
 
 ### Pos-sucesso
 
@@ -339,8 +362,11 @@ Ao criar a subconta com sucesso:
 - atualizar `tenantSettings`
 - atualizar `tenantDraft`
 - atualizar `subaccountDraft`
+- atualizar o tenant no estado local da tela
 - refletir `walletId`
+- preencher `walletId` automaticamente
 - refletir `status`
+- atualizar o status financeiro do tenant
 - refletir `provider`/split/metodos conforme retorno do backend
 
 Sem refresh manual.
@@ -383,10 +409,20 @@ Antes de salvar mudancas como API key, walletId manual ou provider tecnico:
 
 Adicionar ou ajustar testes para:
 
+- DTO enriquecido com:
+  - `integrationStatus`
+  - `tenantFinancialStatus`
+  - `splitPreview`
+  - `usesGlobalFee`
+  - `effectivePlatformFeePercent`
+  - `canEnableSplit`
+  - `canEnableCheckout`
+  - `warnings`
 - bloquear split sem `platformWalletId`
 - bloquear split sem `asaas.walletId`
 - bloquear `asaas.enabled` sem integracao global valida
 - bloquear checkout online inconsistente
+- bloquear taxa abaixo de `0` ou acima do limite
 - validar retorno seguro do DTO enriquecido
 - criar subconta e refletir estado atualizado do tenant
 
@@ -399,7 +435,9 @@ Adicionar ou ajustar testes para:
 - modo avancado colapsavel
 - preview de split em tempo real
 - confirmacao antes de salvar mudanca sensivel
+- botoes de mostrar/ocultar e copiar para campos sensiveis
 - atualizacao visual apos criar subconta
+- criacao de subconta atualizando a tela com `walletId` e status
 - sugestao de split quando provider = Asaas, sem save automatico
 
 ## Rollout seguro
