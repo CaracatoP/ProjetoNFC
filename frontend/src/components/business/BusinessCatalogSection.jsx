@@ -226,6 +226,10 @@ function getPaymentSuccessMessage(method) {
   }
 }
 
+function isPixCheckoutResult(order) {
+  return order?.payment?.method === PAYMENT_METHODS.PIX && Boolean(order?.payment?.pixCopyPaste);
+}
+
 function redirectToCheckoutUrl(url) {
   const normalizedUrl = String(url || '').trim();
 
@@ -406,6 +410,7 @@ export function BusinessCatalogSection({
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const [checkoutResult, setCheckoutResult] = useState(null);
+  const [pendingPixOrder, setPendingPixOrder] = useState(null);
   const [pixCopyFeedback, setPixCopyFeedback] = useState('');
   const hydratedSlugRef = useRef('');
   const normalizedProducts = useMemo(
@@ -432,6 +437,7 @@ export function BusinessCatalogSection({
     hydratedSlugRef.current = tenantSlug;
     setCheckout(defaultCheckoutState());
     setCheckoutResult(null);
+    setPendingPixOrder(null);
     setPixCopyFeedback('');
   }, [tenantSlug]);
 
@@ -523,6 +529,8 @@ export function BusinessCatalogSection({
     checkout.paymentMethod,
     checkoutPaymentMethods,
   ]);
+  const isShowingCheckoutSuccess = Boolean(checkoutResult && !cartItems.length);
+  const showPendingPixBanner = Boolean(!isCartOpen && isPixCheckoutResult(pendingPixOrder));
 
   useEffect(() => {
     setCheckout((current) => {
@@ -548,6 +556,7 @@ export function BusinessCatalogSection({
   function updateCartQuantity(product, quantity) {
     setCheckoutResult(null);
     setPixCopyFeedback('');
+    setFeedback('');
     setCart((current) => {
       const nextQuantity = normalizeCartQuantityForProduct(product, quantity);
 
@@ -691,8 +700,9 @@ export function BusinessCatalogSection({
       setCart({});
       setCheckout(defaultCheckoutState());
       setCheckoutResult(createdOrder || null);
+      setPendingPixOrder(isPixCheckoutResult(createdOrder) ? createdOrder : null);
       persistStoredCart(tenantSlug, {});
-      setFeedback(getPaymentSuccessMessage(createdOrder?.payment?.method || checkout.paymentMethod));
+      setFeedback('');
       setIsCartOpen(true);
 
       if (shouldRedirectToHostedCheckout) {
@@ -705,8 +715,8 @@ export function BusinessCatalogSection({
     }
   }
 
-  async function handleCopyPixCode() {
-    const pixCode = checkoutResult?.payment?.pixCopyPaste || '';
+  async function handleCopyPixCode(order = checkoutResult || pendingPixOrder) {
+    const pixCode = order?.payment?.pixCopyPaste || '';
 
     if (!pixCode || !navigator?.clipboard?.writeText) {
       setPixCopyFeedback('Nao foi possivel copiar o codigo Pix neste dispositivo.');
@@ -721,6 +731,12 @@ export function BusinessCatalogSection({
     }
   }
 
+  function handleContinueShopping() {
+    setCheckoutResult(null);
+    setFeedback('');
+    setIsCartOpen(false);
+  }
+
   return (
     <>
       {modules.cart || modules.orders ? (
@@ -733,6 +749,30 @@ export function BusinessCatalogSection({
               </span>
             </Button>
           </div>
+          {showPendingPixBanner ? (
+            <div className="catalog-pix-pending-banner" role="status" aria-live="polite">
+              <div className="catalog-pix-pending-banner__copy">
+                <strong>Pedido pendente</strong>
+                <span>Aguardando pagamento</span>
+              </div>
+              {pixCopyFeedback ? <small>{pixCopyFeedback}</small> : null}
+              <div className="catalog-pix-pending-banner__actions">
+                <Button type="button" variant="secondary" onClick={() => handleCopyPixCode(pendingPixOrder)}>
+                  Copiar Pix
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setCheckoutResult(pendingPixOrder);
+                    setIsCartOpen(true);
+                  }}
+                >
+                  Ver Pix
+                </Button>
+              </div>
+            </div>
+          ) : null}
           {isCartOpen ? (
             <div className="catalog-cart-layer">
               <button
@@ -746,11 +786,13 @@ export function BusinessCatalogSection({
                   <div className="catalog-cart-panel__header" data-testid="catalog-cart-header">
                     <div className="catalog-cart-panel__header-copy">
                       <span className="catalog-cart-panel__eyebrow" aria-hidden="true">
-                        Carrinho
+                        {isShowingCheckoutSuccess ? 'Pagamento' : 'Carrinho'}
                       </span>
-                      <strong>Seu pedido</strong>
+                      <strong>{isShowingCheckoutSuccess ? 'Pedido enviado' : 'Seu pedido'}</strong>
                       <span>
-                        {cartItemCount
+                        {isShowingCheckoutSuccess
+                          ? 'Conclua o pagamento para o estabelecimento confirmar seu pedido.'
+                          : cartItemCount
                           ? `${cartItemCount} item(ns) selecionado(s). Revise antes de finalizar.`
                           : 'Escolha os produtos e finalize com nome e telefone.'}
                       </span>
@@ -770,11 +812,24 @@ export function BusinessCatalogSection({
                     <div className="catalog-cart-panel__body" data-testid="catalog-cart-body">
                       {feedback ? <p className="site-inline-feedback catalog-checkout__feedback">{feedback}</p> : null}
 
-                      {checkoutResult && !cartItems.length ? (
+                      {isShowingCheckoutSuccess ? (
                         <div className="catalog-checkout__success" data-testid="catalog-checkout-success">
-                          <div className="catalog-checkout__success-copy">
-                            <strong>Pedido enviado com sucesso</strong>
-                            <p>{getPaymentSuccessMessage(checkoutResult?.payment?.method)}</p>
+                          <div className="catalog-checkout__success-hero">
+                            <span className="catalog-checkout__success-pill">Pedido enviado com sucesso</span>
+                            <div className="catalog-checkout__success-copy">
+                              <strong>Pedido enviado com sucesso</strong>
+                              <p>{getPaymentSuccessMessage(checkoutResult?.payment?.method)}</p>
+                            </div>
+                            <div className="catalog-checkout__success-meta">
+                              <div className="catalog-checkout__success-meta-card">
+                                <span>Pedido</span>
+                                <strong>{`Pedido #${checkoutResult?.id || 'novo'}`}</strong>
+                              </div>
+                              <div className="catalog-checkout__success-meta-card">
+                                <span>Status</span>
+                                <strong>{isPixCheckoutResult(checkoutResult) ? 'Aguardando pagamento' : 'Aguardando confirmacao'}</strong>
+                              </div>
+                            </div>
                           </div>
 
                           <div className="catalog-checkout__summary catalog-checkout__summary--success">
@@ -788,20 +843,24 @@ export function BusinessCatalogSection({
                             </div>
                           </div>
 
-                          {checkoutResult?.payment?.method === PAYMENT_METHODS.PIX && checkoutResult?.payment?.pixCopyPaste ? (
-                            <div className="catalog-checkout__pix-panel">
-                              <div className="catalog-checkout__pix-qr" aria-hidden="true">
-                                <QRCode value={checkoutResult.payment.pixCopyPaste} size={180} />
+                          {isPixCheckoutResult(checkoutResult) ? (
+                            <div className="catalog-checkout__pix-success-card">
+                              <div className="catalog-checkout__pix-qr-wrap">
+                                <div className="catalog-checkout__pix-qr" aria-hidden="true">
+                                  <QRCode value={checkoutResult.payment.pixCopyPaste} size={196} />
+                                </div>
                               </div>
+
                               <div className="catalog-checkout__pix-copy">
-                                <label className="admin-field">
-                                  <span>Codigo Pix</span>
+                                <div className="catalog-checkout__pix-copy-header">
+                                  <strong>Codigo Pix</strong>
+                                  <span>Use o QR Code ou copie o codigo completo para pagar agora.</span>
+                                </div>
+                                <label className="admin-field catalog-checkout__pix-code-field">
+                                  <span>Copia e cola Pix</span>
                                   <textarea readOnly rows="4" value={checkoutResult.payment.pixCopyPaste} />
                                 </label>
-                                <Button type="button" onClick={handleCopyPixCode}>
-                                  Copiar codigo Pix
-                                </Button>
-                                {pixCopyFeedback ? <p className="admin-muted-copy">{pixCopyFeedback}</p> : null}
+                                {pixCopyFeedback ? <p className="catalog-checkout__pix-feedback">{pixCopyFeedback}</p> : null}
                                 <p className="admin-muted-copy">Apos o pagamento, o estabelecimento confirmara seu pedido.</p>
                               </div>
                             </div>
@@ -815,9 +874,14 @@ export function BusinessCatalogSection({
                             <p className="admin-muted-copy">Voce pagara no momento da entrega do pedido.</p>
                           ) : null}
 
-                          <Button type="button" variant="secondary" onClick={() => setCheckoutResult(null)}>
-                            Adicionar novos produtos
-                          </Button>
+                          <div className="catalog-checkout__success-actions">
+                            <Button type="button" variant="secondary" onClick={handleContinueShopping}>
+                              Adicionar mais produtos
+                            </Button>
+                            <Button type="button" variant="secondary" onClick={() => setIsCartOpen(false)}>
+                              Fechar
+                            </Button>
+                          </div>
                         </div>
                       ) : cartItems.length ? (
                         <>
@@ -1041,18 +1105,32 @@ export function BusinessCatalogSection({
                     </div>
 
                     <div className="catalog-cart-panel__footer" data-testid="catalog-cart-footer">
-                      <div className="catalog-cart-panel__total">
-                        <span>Total do pedido</span>
-                        <strong>{formatCurrency(checkoutResult?.payment?.amount || checkoutResult?.total || cartTotal)}</strong>
-                      </div>
-                      {checkoutResult && !cartItems.length ? (
-                        <Button type="button" className="catalog-cart-panel__submit" onClick={() => setIsCartOpen(false)}>
-                          Fechar carrinho
-                        </Button>
+                      {isShowingCheckoutSuccess ? (
+                        <div className="catalog-cart-panel__footer-success">
+                          <div className="catalog-cart-panel__total catalog-cart-panel__total--compact">
+                            <span>Total do pedido</span>
+                            <strong>{formatCurrency(checkoutResult?.payment?.amount || checkoutResult?.total || 0)}</strong>
+                          </div>
+                          {isPixCheckoutResult(checkoutResult) ? (
+                            <Button type="button" className="catalog-cart-panel__submit" onClick={() => handleCopyPixCode(checkoutResult)}>
+                              Copiar codigo Pix
+                            </Button>
+                          ) : (
+                            <Button type="button" className="catalog-cart-panel__submit" onClick={() => setIsCartOpen(false)}>
+                              Fechar carrinho
+                            </Button>
+                          )}
+                        </div>
                       ) : (
-                        <Button type="submit" disabled={!canSubmitOrder || submitting || !availablePaymentMethods.length} className="catalog-cart-panel__submit">
+                        <>
+                          <div className="catalog-cart-panel__total">
+                            <span>Total do pedido</span>
+                            <strong>{formatCurrency(cartTotal)}</strong>
+                          </div>
+                          <Button type="submit" disabled={!canSubmitOrder || submitting || !availablePaymentMethods.length} className="catalog-cart-panel__submit">
                           {submitting ? 'Enviando...' : 'Finalizar pedido'}
-                        </Button>
+                          </Button>
+                        </>
                       )}
                     </div>
                   </form>

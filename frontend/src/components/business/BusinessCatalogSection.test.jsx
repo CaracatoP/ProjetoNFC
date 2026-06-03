@@ -389,9 +389,13 @@ describe('BusinessCatalogSection', () => {
       );
     });
 
-    expect(await screen.findByText('Pedido enviado com sucesso')).toBeInTheDocument();
+    expect((await screen.findAllByText('Pedido enviado com sucesso')).length).toBeGreaterThan(0);
+    expect(screen.getByText('Pedido #order-10')).toBeInTheDocument();
+    expect(screen.getByText('Aguardando pagamento')).toBeInTheDocument();
     expect(screen.getAllByText(/Apos o pagamento, o estabelecimento confirmara seu pedido/i).length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText('Nome')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Copiar codigo Pix/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Adicionar mais produtos/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Copiar codigo Pix/i }));
 
@@ -399,6 +403,17 @@ describe('BusinessCatalogSection', () => {
       expect(writeTextMock).toHaveBeenCalledWith(
         '00020126580014br.gov.bcb.pix0116pix@example.com520400005303986540559.905802BR5919Barbearia Estilo Vivo6009SAO PAULO62070503***6304ABCD',
       );
+    });
+
+    await user.click(screen.getByRole('button', { name: /Adicionar mais produtos/i }));
+
+    expect(screen.queryByRole('dialog', { name: /Seu pedido/i })).not.toBeInTheDocument();
+    expect(screen.getByText('Pedido pendente')).toBeInTheDocument();
+    expect(screen.getByText('Aguardando pagamento')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Copiar Pix/i }));
+
+    await waitFor(() => {
+      expect(writeTextMock).toHaveBeenCalledTimes(2);
     });
   });
 
