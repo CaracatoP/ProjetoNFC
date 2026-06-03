@@ -161,6 +161,62 @@ export function normalizePaymentMethod(value, fallback = DEFAULT_PAYMENT_METHOD)
   return PAYMENT_METHOD_VALUES.includes(normalized) ? normalized : fallback;
 }
 
+export function normalizeLegacyPaymentMethodAlias(method, deliveryType, enabledMethods = {}) {
+  const normalizedMethod = normalizeStringValue(method).toLowerCase();
+  const normalizedDeliveryType = normalizeStringValue(deliveryType).toLowerCase();
+  const hasEnabledMethods = Object.values(enabledMethods || {}).some(Boolean);
+
+  if (!normalizedMethod) {
+    return '';
+  }
+
+  if (normalizedMethod === 'cash' || normalizedMethod === 'money') {
+    if (normalizedDeliveryType === 'delivery') {
+      return PAYMENT_METHODS.CASH_ON_DELIVERY;
+    }
+
+    if (normalizedDeliveryType === 'pickup') {
+      return PAYMENT_METHODS.CASH_ON_PICKUP;
+    }
+
+    return '';
+  }
+
+  if (normalizedMethod === 'card') {
+    if (enabledMethods.creditCard) {
+      return PAYMENT_METHODS.CREDIT_CARD;
+    }
+
+    if (enabledMethods.debitCard) {
+      return PAYMENT_METHODS.DEBIT_CARD;
+    }
+
+    if (!hasEnabledMethods) {
+      return normalizedMethod;
+    }
+  }
+
+  if (normalizedMethod === 'online') {
+    if (enabledMethods.pix) {
+      return PAYMENT_METHODS.PIX;
+    }
+
+    if (enabledMethods.creditCard) {
+      return PAYMENT_METHODS.CREDIT_CARD;
+    }
+
+    if (enabledMethods.debitCard) {
+      return PAYMENT_METHODS.DEBIT_CARD;
+    }
+
+    if (!hasEnabledMethods) {
+      return normalizedMethod;
+    }
+  }
+
+  return normalizePaymentMethod(normalizedMethod, '');
+}
+
 export function normalizePaymentStatus(value, fallback = DEFAULT_PAYMENT_STATUS) {
   const normalized = normalizeStringValue(value).toLowerCase();
   return PAYMENT_STATUS_VALUES.includes(normalized) ? normalized : fallback;
@@ -185,11 +241,15 @@ export function normalizeBusinessPaymentPix(input = {}, fallbackPix = {}) {
 export function normalizeBusinessPaymentMethods(input = {}, fallbackPix = {}) {
   const methods = isPlainObject(input) ? input : {};
   const normalizedFallbackPix = normalizeBusinessPaymentPix({}, fallbackPix);
+  const legacyCashEnabled =
+    normalizeBooleanValue(methods.cash, false) || normalizeBooleanValue(methods.money, false);
+  const legacyCardEnabled = normalizeBooleanValue(methods.card, false);
+  const legacyOnlineEnabled = normalizeBooleanValue(methods.online, false);
 
   return {
-    pix: normalizeBooleanValue(methods.pix, Boolean(normalizedFallbackPix.key)),
-    creditCard: normalizeBooleanValue(methods.creditCard, false),
-    debitCard: normalizeBooleanValue(methods.debitCard, false),
+    pix: normalizeBooleanValue(methods.pix, Boolean(normalizedFallbackPix.key) || legacyOnlineEnabled),
+    creditCard: normalizeBooleanValue(methods.creditCard, legacyCardEnabled || legacyOnlineEnabled),
+    debitCard: normalizeBooleanValue(methods.debitCard, legacyCardEnabled || legacyOnlineEnabled),
     cashOnPickup: normalizeBooleanValue(methods.cashOnPickup, true),
     cashOnDelivery: normalizeBooleanValue(methods.cashOnDelivery, true),
   };

@@ -44,12 +44,12 @@ import {
 } from '../../../shared/constants/index.js';
 import {
   isBusinessPaymentMethodEnabled,
+  normalizeLegacyPaymentMethodAlias,
   normalizeOrderPayment,
   normalizeOrderPaymentEvent,
   normalizeOrderPaymentEvents,
   normalizePaymentStatus,
   resolveBusinessPaymentSettings,
-  resolveDefaultPaymentMethod,
 } from '../../../shared/utils/businessPayment.js';
 import {
   buildLegacyDisplayQuantity,
@@ -68,6 +68,7 @@ import {
   isAsaasProviderConnected,
   isMercadoPagoProviderConnected,
 } from '../utils/paymentProvider.js';
+import { validatePaymentMethodForDeliveryType } from '../utils/paymentDeliveryValidation.js';
 import {
   buildAsaasExternalReference,
   buildAsaasSplitRules,
@@ -229,31 +230,25 @@ function buildOrderStatusTimestampPatch(existingOrder, status, occurredAt = new 
 }
 
 function resolveRequestedPaymentMethod(payload, paymentSettings) {
-  const requestedMethod = String(payload?.payment?.method || '').trim().toLowerCase();
+  const requestedMethod = normalizeLegacyPaymentMethodAlias(
+    payload?.payment?.method,
+    payload?.deliveryType,
+    paymentSettings?.methods,
+  );
+  const { paymentMethod } = validatePaymentMethodForDeliveryType(
+    payload?.deliveryType,
+    requestedMethod,
+  );
 
-  if (requestedMethod) {
-    if (!isBusinessPaymentMethodEnabled(paymentSettings, requestedMethod)) {
-      throw new AppError(
-        'Esta forma de pagamento nao esta disponivel para este tenant.',
-        400,
-        'payment_method_unavailable',
-      );
-    }
-
-    return requestedMethod;
-  }
-
-  const fallbackMethod = resolveDefaultPaymentMethod(paymentSettings);
-
-  if (!fallbackMethod) {
+  if (!isBusinessPaymentMethodEnabled(paymentSettings, paymentMethod)) {
     throw new AppError(
-      'Nenhuma forma de pagamento esta disponivel no momento.',
+      'Esta forma de pagamento nao esta disponivel para este tenant.',
       400,
       'payment_method_unavailable',
     );
   }
 
-  return fallbackMethod;
+  return paymentMethod;
 }
 
 function resolveRequestedPaymentProvider(payload, method, paymentSettings) {
@@ -876,9 +871,26 @@ export async function createPublicOrder(slug, payload) {
   const total = calculateOrderTotal(orderItems);
   const receivedAt = new Date();
   const storedPaymentSettings = resolveBusinessPaymentSettings(business, { mode: 'storage' });
-  const payment = buildPublicOrderPaymentSnapshot(business, payload, total, receivedAt);
-  const created = await createOrderRecord({
+  const normalizedPaymentMethod = normalizeLegacyPaymentMethodAlias(
+    payload?.payment?.method,
+    payload?.deliveryType,
+    storedPaymentSettings?.methods,
+  );
+  const { deliveryType, paymentMethod } = validatePaymentMethodForDeliveryType(
+    payload?.deliveryType,
+    normalizedPaymentMethod,
+  );
+  const normalizedPayload = {
     ...payload,
+    deliveryType,
+    payment: {
+      ...(payload?.payment || {}),
+      method: paymentMethod,
+    },
+  };
+  const payment = buildPublicOrderPaymentSnapshot(business, normalizedPayload, total, receivedAt);
+  const created = await createOrderRecord({
+    ...normalizedPayload,
     businessId: business._id,
     items: orderItems,
     total,

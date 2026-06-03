@@ -404,6 +404,9 @@ describe('DashboardHomePage', () => {
       defaultPlatformFeePercent: 5,
       webhookUrl: 'http://localhost:4000/api/webhooks/asaas',
       integrationStatus: 'configured',
+      summary: {
+        platformReady: true,
+      },
     });
     adminService.updateAdminFinanceSettings.mockResolvedValue({
       environment: 'sandbox',
@@ -412,6 +415,9 @@ describe('DashboardHomePage', () => {
       defaultPlatformFeePercent: 6.5,
       webhookUrl: 'http://localhost:4000/api/webhooks/asaas',
       integrationStatus: 'configured',
+      summary: {
+        platformReady: true,
+      },
     });
     adminService.fetchAdminBusinessFinanceSettings.mockResolvedValue({
       businessId: 'business-1',
@@ -419,6 +425,8 @@ describe('DashboardHomePage', () => {
       businessSlug: 'barbearia-estilo-vivo',
       enabled: true,
       provider: 'asaas',
+      integrationStatus: 'configured',
+      tenantFinancialStatus: 'active',
       methods: {
         pix: true,
         creditCard: true,
@@ -437,6 +445,28 @@ describe('DashboardHomePage', () => {
         status: 'active',
         subaccountId: 'subacc_123',
         connectedAt: '2026-06-02T10:00:00.000Z',
+      },
+      usesGlobalFee: true,
+      effectivePlatformFeePercent: 5,
+      canEnableSplit: true,
+      canEnableCheckout: true,
+      warnings: [],
+      splitPreview: {
+        globalPercent: 5,
+        tenantOverridePercent: null,
+        effectivePlatformFeePercent: 5,
+        platformPercent: 5,
+        tenantNetPercent: 95,
+        inheritsGlobal: true,
+        splitActive: true,
+        mode: 'global',
+      },
+      summary: {
+        providerLabel: 'Asaas',
+        integrationLabel: 'Configurado',
+        tenantFinancialLabel: 'Ativo',
+        splitLabel: 'Ativo',
+        checkoutLabel: 'Ativo',
       },
       split: {
         enabled: true,
@@ -454,6 +484,8 @@ describe('DashboardHomePage', () => {
       businessSlug: 'barbearia-estilo-vivo',
       enabled: true,
       provider: 'asaas',
+      integrationStatus: 'configured',
+      tenantFinancialStatus: 'active',
       methods: {
         pix: true,
         creditCard: true,
@@ -473,6 +505,28 @@ describe('DashboardHomePage', () => {
         subaccountId: 'subacc_123',
         connectedAt: '2026-06-02T10:00:00.000Z',
       },
+      usesGlobalFee: false,
+      effectivePlatformFeePercent: 7.5,
+      canEnableSplit: true,
+      canEnableCheckout: true,
+      warnings: [],
+      splitPreview: {
+        globalPercent: 5,
+        tenantOverridePercent: 7.5,
+        effectivePlatformFeePercent: 7.5,
+        platformPercent: 7.5,
+        tenantNetPercent: 92.5,
+        inheritsGlobal: false,
+        splitActive: true,
+        mode: 'custom',
+      },
+      summary: {
+        providerLabel: 'Asaas',
+        integrationLabel: 'Configurado',
+        tenantFinancialLabel: 'Ativo',
+        splitLabel: 'Ativo',
+        checkoutLabel: 'Ativo',
+      },
       split: {
         enabled: true,
         inheritsGlobal: false,
@@ -489,6 +543,8 @@ describe('DashboardHomePage', () => {
       businessSlug: 'barbearia-estilo-vivo',
       enabled: true,
       provider: 'asaas',
+      integrationStatus: 'configured',
+      tenantFinancialStatus: 'active',
       methods: {
         pix: true,
         creditCard: true,
@@ -507,6 +563,28 @@ describe('DashboardHomePage', () => {
         status: 'active',
         subaccountId: 'subacc_created',
         connectedAt: '2026-06-02T10:05:00.000Z',
+      },
+      usesGlobalFee: true,
+      effectivePlatformFeePercent: 5,
+      canEnableSplit: true,
+      canEnableCheckout: true,
+      warnings: [],
+      splitPreview: {
+        globalPercent: 5,
+        tenantOverridePercent: null,
+        effectivePlatformFeePercent: 5,
+        platformPercent: 5,
+        tenantNetPercent: 95,
+        inheritsGlobal: true,
+        splitActive: true,
+        mode: 'global',
+      },
+      summary: {
+        providerLabel: 'Asaas',
+        integrationLabel: 'Configurado',
+        tenantFinancialLabel: 'Ativo',
+        splitLabel: 'Ativo',
+        checkoutLabel: 'Ativo',
       },
       split: {
         enabled: true,
@@ -1282,6 +1360,7 @@ describe('DashboardHomePage', () => {
 
   it('shows the financial settings area only for level 0 and lets the admin update global and tenant Asaas settings safely', async () => {
     const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     render(
       <MemoryRouter>
@@ -1294,9 +1373,17 @@ describe('DashboardHomePage', () => {
     await user.click(screen.getByRole('button', { name: /Financeiro/i }));
 
     expect(await screen.findByText('Configuracoes Financeiras')).toBeInTheDocument();
+    expect(screen.getByText('Configuracao Global da Plataforma')).toBeInTheDocument();
+    expect(screen.getByText('Configuracao Financeira do Tenant')).toBeInTheDocument();
+    expect(screen.getByText('Criar Subconta Asaas')).toBeInTheDocument();
+    expect(screen.getByText('Status financeiro do tenant')).toBeInTheDocument();
     expect(await screen.findByDisplayValue('wallet_platform_root')).toBeInTheDocument();
-    expect(await screen.findByDisplayValue('wallet_sub_123')).toBeInTheDocument();
-    expect(await screen.findByLabelText(/Nova apiKey da subconta/i)).toHaveValue('');
+    expect(screen.getByText('Configurado')).toBeInTheDocument();
+    expect(screen.getAllByText('Ativo').length).toBeGreaterThan(0);
+    expect(screen.getByText('TapLink recebe: 5%')).toBeInTheDocument();
+    expect(screen.getByText('Tenant recebe: 95%')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('wallet_sub_123')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Nova apiKey da subconta/i)).not.toBeInTheDocument();
 
     await user.clear(screen.getByLabelText(/Taxa padrao da plataforma/i));
     await user.type(screen.getByLabelText(/Taxa padrao da plataforma/i), '6.5');
@@ -1312,12 +1399,18 @@ describe('DashboardHomePage', () => {
       );
     });
 
+    await user.click(screen.getByRole('button', { name: /Mostrar configuracoes avancadas/i }));
+    expect(await screen.findByDisplayValue('wallet_sub_123')).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/Nova apiKey da subconta/i), '$aact_hmlg_manual_rotate');
     await user.click(screen.getByLabelText(/Nao herdar taxa global/i));
     await user.clear(await screen.findByLabelText(/Override da taxa do tenant/i));
     await user.type(screen.getByLabelText(/Override da taxa do tenant/i), '7.5');
+    expect(screen.getByText('TapLink recebe: 7.5%')).toBeInTheDocument();
+    expect(screen.getByText('Tenant recebe: 92.5%')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Salvar configuracoes do tenant/i }));
 
     await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalled();
       expect(adminService.updateAdminBusinessFinanceSettings).toHaveBeenCalledWith(
         'admin-token',
         'business-1',
@@ -1328,9 +1421,33 @@ describe('DashboardHomePage', () => {
             enabled: true,
             platformFeePercent: 7.5,
           }),
+          asaas: expect.objectContaining({
+            apiKey: '$aact_hmlg_manual_rotate',
+          }),
         }),
       );
     });
+
+    await user.type(screen.getByLabelText(/CPF ou CNPJ/i), '19131243000197');
+    await user.type(screen.getByLabelText(/Celular/i), '5511991112233');
+    await user.type(screen.getByLabelText(/CEP/i), '01310930');
+    await user.type(screen.getByLabelText(/^Numero$/i), '100');
+    await user.type(screen.getByLabelText(/Bairro \/ provincia/i), 'Centro');
+    await user.click(screen.getByRole('button', { name: /Criar subconta/i }));
+
+    await waitFor(() => {
+      expect(adminService.createAdminBusinessAsaasSubaccount).toHaveBeenCalledWith(
+        'admin-token',
+        'business-1',
+        expect.objectContaining({
+          cpfCnpj: '19131243000197',
+        }),
+      );
+    });
+
+    expect(await screen.findByText(/Subconta Asaas criada e conectada ao tenant/i)).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('wallet_sub_created')).toBeInTheDocument();
+    confirmSpy.mockRestore();
   });
 
   it('lets level 0 reset the analytics baseline from the admin analytics view', async () => {

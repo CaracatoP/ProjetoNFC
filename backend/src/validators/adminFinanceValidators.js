@@ -64,7 +64,7 @@ export const adminBusinessFinanceSubaccountBodySchema = z
     name: z.string().min(2),
     email: z.string().email(),
     cpfCnpj: z.string().min(11),
-    mobilePhone: optionalString,
+    mobilePhone: z.string().min(10),
     postalCode: z.string().min(8),
     addressNumber: z.string().min(1),
     province: z.string().min(2),

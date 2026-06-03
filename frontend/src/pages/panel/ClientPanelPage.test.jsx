@@ -669,4 +669,80 @@ describe('ClientPanelPage', () => {
 
     expect(realtimeCleanup).toHaveBeenCalledTimes(1);
   });
+
+  it('renders safe fallback labels for unknown analytics tokens in the client panel', async () => {
+    useAuth.mockReturnValue({
+      token: 'client-token',
+      user: { displayName: 'Cliente Dono', roleLevel: 2 },
+      subscription: { plan: { name: 'Premium' } },
+      access: {
+        billingStatus: 'paid',
+        analyticsScope: 'advanced',
+        capabilities: {
+          canEditTenantBasics: true,
+          canUploadMedia: true,
+          canViewCatalog: true,
+          canEditCatalog: true,
+          canViewOrders: true,
+          canManageOrders: true,
+          canViewAppointments: true,
+          canManageAppointments: true,
+          canViewProfessionals: true,
+          canEditProfessionals: true,
+          canViewServices: true,
+          canEditServices: true,
+          canViewAnalytics: true,
+        },
+      },
+      isSuspendedClientAccess: false,
+      logout: vi.fn(),
+    });
+    clientPanelService.fetchClientPanelAnalytics.mockResolvedValueOnce({
+      scope: 'advanced',
+      totals: {
+        totalEvents: 4,
+        last7DaysEvents: 4,
+        pageViews: 2,
+      },
+      metrics: {
+        totalEvents: 4,
+        pageViews: 2,
+        interactions: 2,
+        actionRate: 100,
+      },
+      timeline: [
+        { date: '2026-06-01', totalEvents: 4, pageViews: 2, interactions: 2 },
+      ],
+      byEventType: [
+        { eventType: 'mystery_event', label: '', count: 2, share: 50 },
+      ],
+      topTargets: [
+        { targetType: 'special_offer', targetTypeLabel: '', targetLabel: '', count: 2, share: 50 },
+      ],
+      recentEvents: [
+        {
+          id: 'event-1',
+          eventType: 'weird_click',
+          eventTypeLabel: '',
+          targetType: 'special_offer',
+          targetTypeLabel: '',
+          targetLabel: '',
+          displayLabel: '',
+          occurredAt: '2026-06-01T12:00:00.000Z',
+        },
+      ],
+      uniqueVisitors: 2,
+    });
+
+    render(
+      <MemoryRouter>
+        <ClientPanelPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Operacao do tenant')).toBeInTheDocument();
+    expect(await screen.findByText('Mystery Event')).toBeInTheDocument();
+    expect(await screen.findAllByText('Special Offer')).not.toHaveLength(0);
+    expect(screen.getByLabelText('Legenda do grafico de analytics')).toBeInTheDocument();
+  });
 });

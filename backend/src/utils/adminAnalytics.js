@@ -32,7 +32,7 @@ function calculateShare(count, total) {
   return Number(((count / total) * 100).toFixed(1));
 }
 
-function humanizeToken(value) {
+export function humanizeAnalyticsToken(value) {
   return String(value || '')
     .replace(/[_-]+/g, ' ')
     .trim()
@@ -125,7 +125,7 @@ export function buildEventTypeBreakdown(rows = [], totalEvents = 0) {
   return rows
     .map((row) => ({
       eventType: row._id,
-      label: humanizeToken(row._id),
+      label: humanizeAnalyticsToken(row._id),
       count: row.count || 0,
       share: calculateShare(row.count || 0, totalEvents),
     }))
@@ -144,7 +144,7 @@ export function buildTopTargetBreakdown(rows = [], { limit = 6, shortcutsOnly = 
 
       return {
         key: `${row?._id?.businessId || 'global'}:${targetType}:${targetLabel || 'sem-rotulo'}`,
-        label: targetLabel || humanizeToken(targetType) || 'Sem rotulo',
+        label: targetLabel || humanizeAnalyticsToken(targetType) || 'Sem rotulo',
         targetType,
         count: row.count || 0,
         lastEventAt: row.lastEventAt || null,

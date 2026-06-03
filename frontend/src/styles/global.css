@@ -5103,6 +5103,7 @@ img {
   gap: 1rem;
 }
 
+.catalog-checkout__delivery-methods,
 .catalog-checkout__payment-methods {
   display: grid;
   gap: 0.85rem;
@@ -5130,11 +5131,17 @@ img {
   line-height: 1.5;
 }
 
+.catalog-checkout__delivery-grid,
 .catalog-checkout__payment-grid {
   display: grid;
   gap: 0.7rem;
 }
 
+.catalog-checkout__delivery-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.catalog-checkout__delivery-card,
 .catalog-checkout__payment-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -5154,6 +5161,8 @@ img {
     background 0.18s ease;
 }
 
+.catalog-checkout__delivery-card:hover,
+.catalog-checkout__delivery-card:focus-visible,
 .catalog-checkout__payment-card:hover,
 .catalog-checkout__payment-card:focus-visible {
   transform: translateY(-1px);
@@ -5162,6 +5171,7 @@ img {
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.16);
 }
 
+.catalog-checkout__delivery-card--selected,
 .catalog-checkout__payment-card--selected {
   border-color: color-mix(in srgb, var(--theme-accent-solid, var(--theme-primary)) 46%, var(--theme-border));
   background:
@@ -5170,6 +5180,15 @@ img {
   box-shadow:
     0 18px 32px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.catalog-checkout__delivery-card {
+  min-height: 110px;
+  align-items: center;
+}
+
+.catalog-checkout__delivery-card .catalog-checkout__payment-copy strong {
+  font-size: 1rem;
 }
 
 .catalog-checkout__payment-copy {
@@ -5211,6 +5230,178 @@ img {
   gap: 1rem;
 }
 
+.admin-finance-section,
+.admin-finance-summary-card,
+.admin-finance-preview-card,
+.admin-finance-config-card,
+.admin-finance-advanced-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem 1.05rem;
+  border-radius: 1.1rem;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 84%, transparent);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--theme-surface-alt) 58%, transparent), color-mix(in srgb, var(--theme-surface) 94%, transparent));
+}
+
+.admin-finance-section__header,
+.admin-finance-summary-card__header,
+.admin-finance-config-card__header,
+.admin-finance-advanced-card__header,
+.admin-finance-preview-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.admin-finance-section__header h3,
+.admin-finance-summary-card__header h3 {
+  margin: 0.45rem 0 0;
+  font-family: var(--font-heading);
+  font-size: 1.2rem;
+}
+
+.admin-finance-section__header p,
+.admin-finance-summary-card__header p,
+.admin-finance-config-card__header span,
+.admin-finance-advanced-card__header span,
+.admin-finance-preview-card__header span,
+.admin-finance-warning-list p,
+.admin-finance-help-text {
+  margin: 0;
+  color: var(--theme-text-muted);
+  line-height: 1.6;
+}
+
+.admin-finance-field-stack {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.admin-finance-summary-grid,
+.admin-finance-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.85rem;
+}
+
+.admin-finance-summary-grid--platform {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.admin-finance-summary-item,
+.admin-finance-preview-item {
+  display: grid;
+  gap: 0.28rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 0.95rem;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 82%, transparent);
+  background: color-mix(in srgb, var(--theme-surface) 80%, transparent);
+}
+
+.admin-finance-summary-item span,
+.admin-finance-preview-item span {
+  color: var(--theme-text-muted);
+  font-size: 0.84rem;
+}
+
+.admin-finance-summary-item strong,
+.admin-finance-preview-item strong,
+.admin-finance-config-card__header strong,
+.admin-finance-advanced-card__header strong,
+.admin-finance-preview-card__header strong {
+  font-family: var(--font-heading);
+}
+
+.admin-finance-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 34px;
+  padding: 0.36rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.admin-finance-status-badge i {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.admin-finance-status-badge--success {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.24);
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.admin-finance-status-badge--warning {
+  color: #facc15;
+  border-color: rgba(250, 204, 21, 0.24);
+  background: rgba(250, 204, 21, 0.08);
+}
+
+.admin-finance-status-badge--danger {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.24);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.admin-finance-status-badge--neutral {
+  color: #e5e7eb;
+  border-color: rgba(229, 231, 235, 0.22);
+  background: rgba(229, 231, 235, 0.08);
+}
+
+.admin-finance-preview-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.85rem;
+}
+
+.admin-finance-preview-totals p {
+  margin: 0;
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--theme-primary) 22%, var(--theme-border));
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--theme-primary-button, var(--theme-primary)) 18%, transparent), transparent 42%),
+    color-mix(in srgb, var(--theme-surface-alt) 72%, transparent);
+  font-family: var(--font-heading);
+  font-size: 1rem;
+}
+
+.admin-finance-sensitive-field {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.admin-finance-sensitive-field__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.admin-finance-inline-button {
+  min-height: 40px;
+  padding: 0.7rem 1rem;
+}
+
+.admin-finance-warning-list {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(250, 204, 21, 0.22);
+  background: rgba(250, 204, 21, 0.08);
+}
+
 .admin-finance-panel__toggles {
   gap: 0.75rem;
   padding: 0.95rem 1rem;
@@ -5233,6 +5424,11 @@ img {
   accent-color: var(--theme-accent-solid, var(--theme-primary));
 }
 
+.admin-inline-actions--between {
+  justify-content: space-between;
+}
+
+.catalog-checkout__address,
 .catalog-checkout__fields,
 .catalog-checkout__notes {
   align-self: stretch;
@@ -5393,6 +5589,10 @@ img {
   .catalog-checkout__item-footer {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .catalog-checkout__delivery-grid {
+    grid-template-columns: 1fr;
   }
 
   .catalog-checkout__payment-card {

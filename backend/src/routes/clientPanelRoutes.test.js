@@ -213,6 +213,9 @@ describe('Client panel routes', () => {
       customerPhone: '11999999999',
       deliveryType: 'pickup',
       notes: 'Sem cebola',
+      payment: {
+        method: 'cash_on_pickup',
+      },
       items: [
         {
           productId: String(existingProduct._id),
@@ -551,6 +554,7 @@ describe('Client panel routes', () => {
     const createOrderResponse = await request(app).post('/api/public/site/barbearia-estilo-vivo/orders').send({
       customerName: 'Cliente Pix',
       customerPhone: '11988887777',
+      deliveryType: 'pickup',
       items: [
         {
           productId: String(product._id),
@@ -965,6 +969,76 @@ describe('Client panel routes', () => {
     expect(response.status).toBe(200);
     expect(response.body.data.totals.totalEvents).toBe(1);
     expect(response.body.data.totals.pageViews).toBe(1);
+  });
+
+  it('returns client analytics with readable labels, shares and simplified timeline data', async () => {
+    const ownerToken = await login('owner@cliente.local', 'owner123456');
+
+    await request(app).post('/api/public/analytics/events').send({
+      slug: 'barbearia-estilo-vivo',
+      eventType: 'page_view',
+      targetType: 'page',
+      targetLabel: 'Catalogo',
+      occurredAt: '2026-06-01T12:00:00.000Z',
+    });
+
+    await request(app).post('/api/public/analytics/events').send({
+      slug: 'barbearia-estilo-vivo',
+      eventType: 'link_click',
+      targetType: 'whatsapp',
+      targetLabel: '',
+      occurredAt: '2026-06-01T12:05:00.000Z',
+    });
+
+    const response = await request(app)
+      .get('/api/panel/analytics')
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.metrics).toEqual(
+      expect.objectContaining({
+        totalEvents: 2,
+        pageViews: 1,
+        interactions: 1,
+      }),
+    );
+    expect(response.body.data.byEventType).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventType: 'page_view',
+          label: 'Page View',
+          count: 1,
+          share: 50,
+        }),
+        expect.objectContaining({
+          eventType: 'link_click',
+          label: 'Link Click',
+          count: 1,
+          share: 50,
+        }),
+      ]),
+    );
+    expect(response.body.data.topTargets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetType: 'whatsapp',
+          targetTypeLabel: 'Whatsapp',
+          label: 'Whatsapp',
+          count: 1,
+        }),
+      ]),
+    );
+    expect(response.body.data.timeline).toHaveLength(7);
+    expect(response.body.data.recentEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventType: 'link_click',
+          eventTypeLabel: 'Link Click',
+          targetTypeLabel: 'Whatsapp',
+          displayLabel: 'Whatsapp',
+        }),
+      ]),
+    );
   });
 
   it('rejects invalid measurement units on client panel product mutations', async () => {

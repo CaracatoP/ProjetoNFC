@@ -6,6 +6,7 @@ import {
   PAYMENT_STATUS_VALUES,
   PRODUCT_MEASUREMENT_UNIT_VALUES,
 } from '../../../shared/constants/index.js';
+import { normalizeLegacyPaymentMethodAlias } from '../../../shared/utils/businessPayment.js';
 import { requiresIntegerMeasurementQuantity } from '../../../shared/utils/productMeasurement.js';
 import { objectIdSchema, optionalObjectIdSchema } from './objectId.js';
 
@@ -23,7 +24,7 @@ const optionalPaymentMethodSchema = z.preprocess(
     const normalizedValue = String(value || '').trim().toLowerCase();
     return normalizedValue || undefined;
   },
-  z.enum(PAYMENT_METHOD_VALUES).optional(),
+  z.enum([...PAYMENT_METHOD_VALUES, 'cash', 'money', 'card', 'online']).optional(),
 );
 const optionalPaymentProviderSchema = z.preprocess(
   (value) => {
@@ -31,6 +32,13 @@ const optionalPaymentProviderSchema = z.preprocess(
     return normalizedValue || undefined;
   },
   z.enum(PAYMENT_PROVIDER_VALUES).optional(),
+);
+const optionalDeliveryTypeSchema = z.preprocess(
+  (value) => {
+    const normalizedValue = String(value || '').trim().toLowerCase();
+    return normalizedValue || undefined;
+  },
+  z.enum(['pickup', 'delivery']).optional(),
 );
 
 export const businessIdParamsSchema = z.object({
@@ -117,20 +125,42 @@ export const orderItemBodySchema = z
     }
   });
 
-export const orderBodySchema = z.object({
-  customerName: z.string().min(2),
-  customerPhone: z.string().min(8),
-  items: z.array(orderItemBodySchema).min(1),
-  deliveryType: z.enum(['pickup', 'delivery']).default('pickup'),
-  address: optionalString,
-  notes: optionalString,
-  payment: z
-    .object({
-      method: optionalPaymentMethodSchema,
-      provider: optionalPaymentProviderSchema,
-    })
-    .optional(),
-});
+export const orderBodySchema = z.preprocess(
+  (value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return value;
+    }
+
+    const normalizedDeliveryType = String(value.deliveryType || '').trim().toLowerCase();
+    const payment =
+      value.payment && typeof value.payment === 'object' && !Array.isArray(value.payment)
+        ? {
+            ...value.payment,
+            method: normalizeLegacyPaymentMethodAlias(value.payment.method, normalizedDeliveryType),
+          }
+        : value.payment;
+
+    return {
+      ...value,
+      deliveryType: normalizedDeliveryType,
+      payment,
+    };
+  },
+  z.object({
+    customerName: z.string().min(2),
+    customerPhone: z.string().min(8),
+    items: z.array(orderItemBodySchema).min(1),
+    deliveryType: optionalDeliveryTypeSchema,
+    address: optionalString,
+    notes: optionalString,
+    payment: z
+      .object({
+        method: optionalPaymentMethodSchema,
+        provider: optionalPaymentProviderSchema,
+      })
+      .optional(),
+  }),
+);
 
 export const orderStatusBodySchema = z.object({
   status: z.enum(['received', 'preparing', 'ready', 'delivered', 'cancelled']),

@@ -44,6 +44,14 @@ import { buildSessionSnapshot } from './sessionAuthService.js';
 import { assertBillingAllowsCriticalMutation, assertBillingAllowsPanelAccess } from '../utils/sessionAccess.js';
 import { AppError } from '../utils/appError.js';
 import { isAllowedClientPanelUploadAssetType, normalizeUploadAssetType } from '../utils/uploadPolicy.js';
+import {
+  buildDailyTimeline,
+  buildEventTypeBreakdown,
+  buildTopTargetBreakdown,
+  buildUserAgentBreakdowns,
+  calculateActionRate,
+  humanizeAnalyticsToken,
+} from '../utils/adminAnalytics.js';
 
 function isPlainObject(value) {
   return Object.prototype.toString.call(value) === '[object Object]';
@@ -110,33 +118,88 @@ function assertCapability(allowed, message, code) {
 }
 
 function buildAnalyticsPayload(analyticsSummary, scope) {
+  const totalEvents = analyticsSummary.totals?.totalEvents || 0;
+  const pageViews = analyticsSummary.totals?.pageViews || 0;
+  const interactions =
+    (analyticsSummary.totals?.linkClicks || 0) +
+    (analyticsSummary.totals?.ctaClicks || 0) +
+    (analyticsSummary.totals?.copyActions || 0) +
+    (analyticsSummary.totals?.qrViews || 0);
   const basePayload = {
     scope,
     baselineAt: analyticsSummary.baselineAt ? new Date(analyticsSummary.baselineAt).toISOString() : null,
     totals: analyticsSummary.totals || {},
+    metrics: {
+      totalEvents,
+      pageViews,
+      interactions,
+      actionRate: calculateActionRate(pageViews, interactions),
+    },
   };
 
   if (scope === 'summary') {
     return basePayload;
   }
 
+  const byEventType = buildEventTypeBreakdown(analyticsSummary.byEventType || [], totalEvents).map((item) => ({
+    eventType: item.eventType,
+    label: item.label,
+    count: item.count,
+    share: item.share,
+  }));
+  const totalTargetEvents = (analyticsSummary.topTargets || []).reduce(
+    (sum, row) => sum + Number(row?.count || 0),
+    0,
+  );
+  const topTargets = [
+    ...buildTopTargetBreakdown(analyticsSummary.topTargets || [], { limit: 6 }),
+    ...buildTopTargetBreakdown(analyticsSummary.topTargets || [], {
+      limit: 6,
+      shortcutsOnly: true,
+    }),
+  ]
+    .sort((first, second) => second.count - first.count || first.label.localeCompare(second.label, 'pt-BR'))
+    .slice(0, 6)
+    .map((item) => ({
+      ...item,
+      targetTypeLabel: humanizeAnalyticsToken(item.targetType),
+      share: totalTargetEvents ? Number(((Number(item.count || 0) / totalTargetEvents) * 100).toFixed(1)) : 0,
+    }));
+  const timeline = buildDailyTimeline(analyticsSummary.dailyEvents || [], 7);
+
   if (scope === 'basic') {
     return {
       ...basePayload,
-      byEventType: analyticsSummary.byEventType || [],
+      byEventType,
       dailyEvents: analyticsSummary.dailyEvents || [],
-      topTargets: analyticsSummary.topTargets || [],
+      timeline,
+      topTargets,
     };
   }
 
   return {
     ...basePayload,
-    byEventType: analyticsSummary.byEventType || [],
+    byEventType,
     dailyEvents: analyticsSummary.dailyEvents || [],
-    topTargets: analyticsSummary.topTargets || [],
+    timeline,
+    topTargets,
     uniqueVisitors: analyticsSummary.uniqueVisitors || 0,
-    userAgents: analyticsSummary.userAgents || [],
-    recentEvents: analyticsSummary.recentEvents || [],
+    ...buildUserAgentBreakdowns(analyticsSummary.userAgents || [], totalEvents),
+    recentEvents: (analyticsSummary.recentEvents || []).map((event) => ({
+      id: String(event._id || ''),
+      eventType: event.eventType || '',
+      eventTypeLabel: humanizeAnalyticsToken(event.eventType),
+      sectionType: event.sectionType || '',
+      targetType: event.targetType || '',
+      targetTypeLabel: humanizeAnalyticsToken(event.targetType),
+      targetLabel: event.targetLabel || '',
+      displayLabel:
+        String(event.targetLabel || '').trim() ||
+        humanizeAnalyticsToken(event.targetType) ||
+        humanizeAnalyticsToken(event.eventType) ||
+        'Evento',
+      occurredAt: event.occurredAt || null,
+    })),
   };
 }
 

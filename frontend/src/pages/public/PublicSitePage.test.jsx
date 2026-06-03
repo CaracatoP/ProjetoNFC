@@ -426,6 +426,7 @@ describe('PublicSitePage', () => {
 
     await user.click(screen.getAllByRole('button', { name: /Adicionar/i })[0]);
     await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
+    await user.click(screen.getByRole('button', { name: 'Retirada' }));
     await user.click(screen.getByLabelText(/Pagamento na retirada/i));
     await user.type(screen.getByLabelText('Nome'), 'Carlos');
     await user.type(screen.getByLabelText('Telefone'), '5511999999999');

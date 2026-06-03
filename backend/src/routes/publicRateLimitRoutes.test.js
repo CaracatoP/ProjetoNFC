@@ -73,6 +73,9 @@ describe('Public route hardening', () => {
         },
       ],
       deliveryType: 'pickup',
+      payment: {
+        method: 'cash_on_pickup',
+      },
       notes: 'Retirar as 18h',
     };
 

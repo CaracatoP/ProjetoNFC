@@ -32,6 +32,17 @@ const businessFixture = {
   },
 };
 
+const legacyCashBusinessFixture = {
+  ...businessFixture,
+  paymentSettings: {
+    enabled: true,
+    methods: {
+      cash: true,
+    },
+    provider: 'manual',
+  },
+};
+
 const asaasBusinessFixture = {
   ...businessFixture,
   paymentSettings: {
@@ -132,6 +143,8 @@ describe('BusinessCatalogSection', () => {
     expect(screen.getByText('2 unidades x R$ 39,90/Unidade')).toBeInTheDocument();
     await user.type(screen.getByLabelText('Nome'), 'Carlos');
     await user.type(screen.getByLabelText('Telefone'), '5511999999999');
+    await user.click(screen.getByRole('button', { name: 'Retirada' }));
+    await user.click(screen.getByRole('button', { name: 'Pagamento na retirada' }));
     await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
     await waitFor(() => {
@@ -175,10 +188,9 @@ describe('BusinessCatalogSection', () => {
     const finalizacaoCard = finalizacaoGroup?.parentElement?.querySelector('.catalog-card') || screen.getByText('Pomada modeladora').closest('.catalog-card');
     await user.click(within(finalizacaoCard).getByRole('button', { name: 'Adicionar' }));
     await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
-    await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
+    expect(screen.getByRole('button', { name: /Finalizar pedido/i })).toBeDisabled();
 
     expect(onSubmitOrder).not.toHaveBeenCalled();
-    expect(screen.getByText('Informe nome e telefone para finalizar o pedido.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Remover item Pomada modeladora/i }));
     expect(screen.getByText('Seu carrinho esta vazio')).toBeInTheDocument();
@@ -252,6 +264,8 @@ describe('BusinessCatalogSection', () => {
 
     await user.type(screen.getByLabelText('Nome'), 'Patricia');
     await user.type(screen.getByLabelText('Telefone'), '5511988887777');
+    await user.click(screen.getByRole('button', { name: 'Retirada' }));
+    await user.click(screen.getByRole('button', { name: 'Pagamento na retirada' }));
     await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
     await waitFor(() => {
@@ -343,14 +357,26 @@ describe('BusinessCatalogSection', () => {
     await user.click(within(catalogCard).getByRole('button', { name: 'Adicionar' }));
     await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
 
-    expect(screen.getByText('Forma de pagamento')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Pix/i })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: /Pagamento na retirada/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Pagamento na entrega/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Cartao de credito' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Forma de pagamento')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Entrega' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retirada' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Pix/i })).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText('Nome'), 'Julia');
     await user.type(screen.getByLabelText('Telefone'), '5511977776666');
+    expect(screen.getByRole('button', { name: /Finalizar pedido/i })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Retirada' }));
+
+    expect(screen.getByText('Como deseja pagar na retirada?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Pix/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Pagamento na retirada/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Pagamento na entrega/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cartao de credito' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Pix/i }));
+    expect(screen.getByRole('button', { name: /Finalizar pedido/i })).toBeEnabled();
+
     await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
     await waitFor(() => {
@@ -406,9 +432,14 @@ describe('BusinessCatalogSection', () => {
     await user.click(within(catalogCard).getByRole('button', { name: 'Adicionar' }));
     await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
 
+    await user.click(screen.getByRole('button', { name: 'Entrega' }));
+
+    expect(screen.getByText('Como deseja pagar na entrega?')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Pix' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cartao de credito' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cartao de debito' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pagamento na entrega' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pagamento na retirada' })).not.toBeInTheDocument();
     expect(screen.getAllByText(/Pagamento seguro processado pelo Asaas/i).length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole('button', { name: 'Cartao de credito' }));
@@ -431,5 +462,66 @@ describe('BusinessCatalogSection', () => {
     });
 
     openSpy.mockRestore();
+  });
+
+  it('filters payment methods by delivery type and clears an invalid payment selection when switching', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <BusinessCatalogSection
+        business={businessFixture}
+        tenantSlug="barbearia-estilo-vivo"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={vi.fn()}
+      />,
+    );
+
+    const catalogCard = screen.getByText('Pomada modeladora').closest('.catalog-card');
+    await user.click(within(catalogCard).getByRole('button', { name: 'Adicionar' }));
+    await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
+    await user.type(screen.getByLabelText('Nome'), 'Julia');
+    await user.type(screen.getByLabelText('Telefone'), '5511977776666');
+
+    await user.click(screen.getByRole('button', { name: 'Entrega' }));
+    await user.click(screen.getByRole('button', { name: 'Pagamento na entrega' }));
+
+    expect(screen.getByRole('button', { name: 'Pagamento na entrega' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Finalizar pedido/i })).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Retirada' }));
+
+    expect(screen.getByText('Como deseja pagar na retirada?')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pagamento na entrega' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pagamento na retirada' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /Finalizar pedido/i })).toBeDisabled();
+  });
+
+  it('renders legacy cash methods with the correct manual option for each delivery type', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <BusinessCatalogSection
+        business={legacyCashBusinessFixture}
+        tenantSlug="barbearia-estilo-vivo"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={vi.fn()}
+      />,
+    );
+
+    const catalogCard = screen.getByText('Pomada modeladora').closest('.catalog-card');
+    await user.click(within(catalogCard).getByRole('button', { name: 'Adicionar' }));
+    await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
+
+    await user.click(screen.getByRole('button', { name: 'Entrega' }));
+    expect(screen.getByRole('button', { name: 'Pagamento na entrega' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pagamento na retirada' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Retirada' }));
+    expect(screen.getByRole('button', { name: 'Pagamento na retirada' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pagamento na entrega' })).not.toBeInTheDocument();
   });
 });

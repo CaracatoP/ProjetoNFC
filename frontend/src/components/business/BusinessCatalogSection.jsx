@@ -29,7 +29,7 @@ function defaultCheckoutState() {
   return {
     customerName: '',
     customerPhone: '',
-    deliveryType: 'pickup',
+    deliveryType: '',
     address: '',
     notes: '',
     paymentMethod: '',
@@ -143,6 +143,35 @@ function isAsaasPaymentMethod(method, paymentSettings = {}) {
     paymentSettings?.asaas?.connected &&
     isOnlineCheckoutMethod(method)
   );
+}
+
+function isPaymentMethodCompatibleWithDeliveryType(deliveryType, paymentMethod) {
+  if (!deliveryType || !paymentMethod) {
+    return false;
+  }
+
+  if (
+    (deliveryType === 'delivery' && paymentMethod === PAYMENT_METHODS.CASH_ON_PICKUP) ||
+    (deliveryType === 'pickup' && paymentMethod === PAYMENT_METHODS.CASH_ON_DELIVERY)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function getAvailablePaymentMethodsForDeliveryType(methods = [], deliveryType = '') {
+  if (!deliveryType) {
+    return [];
+  }
+
+  return methods.filter((method) => isPaymentMethodCompatibleWithDeliveryType(deliveryType, method));
+}
+
+function getPaymentSectionTitle(deliveryType) {
+  return deliveryType === 'delivery'
+    ? 'Como deseja pagar na entrega?'
+    : 'Como deseja pagar na retirada?';
 }
 
 function getPaymentMethodDescription(method, paymentSettings = {}) {
@@ -393,6 +422,10 @@ export function BusinessCatalogSection({
       PAYMENT_METHOD_VALUES.filter((method) => isBusinessPaymentMethodEnabled(paymentSettings, method)),
     [paymentSettings],
   );
+  const checkoutPaymentMethods = useMemo(
+    () => getAvailablePaymentMethodsForDeliveryType(availablePaymentMethods, checkout.deliveryType),
+    [availablePaymentMethods, checkout.deliveryType],
+  );
 
   useEffect(() => {
     setCart(readStoredCart(tenantSlug));
@@ -470,23 +503,43 @@ export function BusinessCatalogSection({
       ),
     [cartItems],
   );
+  const canSubmitOrder = useMemo(() => {
+    const customerName = checkout.customerName.trim();
+    const customerPhone = normalizePhoneDigits(checkout.customerPhone);
+
+    return Boolean(
+      cartItems.length &&
+        customerName &&
+        customerPhone.length >= 8 &&
+        checkout.deliveryType &&
+        checkout.paymentMethod &&
+        checkoutPaymentMethods.includes(checkout.paymentMethod),
+    );
+  }, [
+    cartItems.length,
+    checkout.customerName,
+    checkout.customerPhone,
+    checkout.deliveryType,
+    checkout.paymentMethod,
+    checkoutPaymentMethods,
+  ]);
 
   useEffect(() => {
     setCheckout((current) => {
-      const nextPaymentMethod = availablePaymentMethods.includes(current.paymentMethod)
-        ? current.paymentMethod
-        : availablePaymentMethods[0] || '';
+      if (!current.paymentMethod) {
+        return current;
+      }
 
-      if (nextPaymentMethod === current.paymentMethod) {
+      if (checkoutPaymentMethods.includes(current.paymentMethod)) {
         return current;
       }
 
       return {
         ...current,
-        paymentMethod: nextPaymentMethod,
+        paymentMethod: '',
       };
     });
-  }, [availablePaymentMethods]);
+  }, [checkoutPaymentMethods]);
 
   if (!normalizedProducts.length) {
     return null;
@@ -592,13 +645,18 @@ export function BusinessCatalogSection({
       return;
     }
 
-    if (!availablePaymentMethods.length) {
+    if (!checkout.deliveryType) {
+      setFeedback('Escolha se deseja entrega ou retirada.');
+      return;
+    }
+
+    if (!checkoutPaymentMethods.length) {
       setFeedback('Nenhuma forma de pagamento esta disponivel no momento.');
       return;
     }
 
-    if (!checkout.paymentMethod || !availablePaymentMethods.includes(checkout.paymentMethod)) {
-      setFeedback('Escolha uma forma de pagamento para finalizar o pedido.');
+    if (!checkout.paymentMethod || !checkoutPaymentMethods.includes(checkout.paymentMethod)) {
+      setFeedback('Escolha uma forma de pagamento.');
       return;
     }
 
@@ -863,54 +921,105 @@ export function BusinessCatalogSection({
                               <span>Telefone</span>
                               <input value={checkout.customerPhone} onChange={(event) => setCheckout((current) => ({ ...current, customerPhone: event.target.value }))} />
                             </label>
-                            <label className="admin-field">
-                              <span>Entrega</span>
-                              <select value={checkout.deliveryType} onChange={(event) => setCheckout((current) => ({ ...current, deliveryType: event.target.value }))}>
-                                <option value="pickup">Retirada</option>
-                                <option value="delivery">Entrega</option>
-                              </select>
-                            </label>
-                            {checkout.deliveryType === 'delivery' ? (
-                              <label className="admin-field">
-                                <span>Endereco</span>
-                                <input value={checkout.address} onChange={(event) => setCheckout((current) => ({ ...current, address: event.target.value }))} />
-                              </label>
-                            ) : null}
                           </div>
 
-                          <div className="catalog-checkout__payment-methods" role="group" aria-labelledby="checkout-payment-methods-title">
+                          <div className="catalog-checkout__delivery-methods" role="group" aria-labelledby="checkout-delivery-type-title">
                             <div className="catalog-checkout__payment-header">
-                              <strong id="checkout-payment-methods-title">Forma de pagamento</strong>
-                              <span>Escolha apenas entre os metodos liberados por este estabelecimento.</span>
+                              <strong id="checkout-delivery-type-title">Como voce vai receber?</strong>
+                              <span>Escolha primeiro se o pedido sera entregue ou retirado no estabelecimento.</span>
                             </div>
-                            <div className="catalog-checkout__payment-grid">
-                              {availablePaymentMethods.map((method) => {
-                                const selected = checkout.paymentMethod === method;
+                            <div className="catalog-checkout__delivery-grid">
+                              {[
+                                {
+                                  value: 'delivery',
+                                  title: 'Entrega',
+                                  description: 'Receber no endereco informado',
+                                },
+                                {
+                                  value: 'pickup',
+                                  title: 'Retirada',
+                                  description: 'Buscar no estabelecimento',
+                                },
+                              ].map((option) => {
+                                const selected = checkout.deliveryType === option.value;
 
                                 return (
                                   <button
-                                    key={method}
+                                    key={option.value}
                                     type="button"
-                                    className={`catalog-checkout__payment-card${selected ? ' catalog-checkout__payment-card--selected' : ''}`}
-                                    aria-label={PAYMENT_METHOD_LABELS[method]}
+                                    className={`catalog-checkout__delivery-card${selected ? ' catalog-checkout__delivery-card--selected' : ''}`}
+                                    aria-label={option.title}
                                     aria-pressed={selected}
                                     onClick={() =>
-                                      setCheckout((current) => ({
-                                        ...current,
-                                        paymentMethod: method,
-                                      }))
+                                      setCheckout((current) => {
+                                        const nextPaymentMethods = getAvailablePaymentMethodsForDeliveryType(
+                                          availablePaymentMethods,
+                                          option.value,
+                                        );
+
+                                        return {
+                                          ...current,
+                                          deliveryType: option.value,
+                                          address: option.value === 'delivery' ? current.address : '',
+                                          paymentMethod: nextPaymentMethods.includes(current.paymentMethod)
+                                            ? current.paymentMethod
+                                            : '',
+                                        };
+                                      })
                                     }
                                   >
                                     <div className="catalog-checkout__payment-copy">
-                                      <strong>{PAYMENT_METHOD_LABELS[method]}</strong>
-                                      <span>{getPaymentMethodDescription(method, paymentSettings)}</span>
+                                      <strong>{option.title}</strong>
+                                      <span>{option.description}</span>
                                     </div>
-                                    <span className="catalog-checkout__payment-tag">{getPaymentMethodTag(method, paymentSettings)}</span>
                                   </button>
                                 );
                               })}
                             </div>
                           </div>
+
+                          {checkout.deliveryType === 'delivery' ? (
+                            <label className="admin-field catalog-checkout__address">
+                              <span>Endereco</span>
+                              <input value={checkout.address} onChange={(event) => setCheckout((current) => ({ ...current, address: event.target.value }))} />
+                            </label>
+                          ) : null}
+
+                          {checkout.deliveryType ? (
+                            <div className="catalog-checkout__payment-methods" role="group" aria-labelledby="checkout-payment-methods-title">
+                              <div className="catalog-checkout__payment-header">
+                                <strong id="checkout-payment-methods-title">{getPaymentSectionTitle(checkout.deliveryType)}</strong>
+                                <span>Escolha apenas entre os metodos liberados por este estabelecimento.</span>
+                              </div>
+                              <div className="catalog-checkout__payment-grid">
+                                {checkoutPaymentMethods.map((method) => {
+                                  const selected = checkout.paymentMethod === method;
+
+                                  return (
+                                    <button
+                                      key={method}
+                                      type="button"
+                                      className={`catalog-checkout__payment-card${selected ? ' catalog-checkout__payment-card--selected' : ''}`}
+                                      aria-label={PAYMENT_METHOD_LABELS[method]}
+                                      aria-pressed={selected}
+                                      onClick={() =>
+                                        setCheckout((current) => ({
+                                          ...current,
+                                          paymentMethod: method,
+                                        }))
+                                      }
+                                    >
+                                      <div className="catalog-checkout__payment-copy">
+                                        <strong>{PAYMENT_METHOD_LABELS[method]}</strong>
+                                        <span>{getPaymentMethodDescription(method, paymentSettings)}</span>
+                                      </div>
+                                      <span className="catalog-checkout__payment-tag">{getPaymentMethodTag(method, paymentSettings)}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : null}
 
                           <label className="admin-field catalog-checkout__notes">
                             <span>Observacoes</span>
@@ -941,7 +1050,7 @@ export function BusinessCatalogSection({
                           Fechar carrinho
                         </Button>
                       ) : (
-                        <Button type="submit" disabled={!cartItems.length || submitting || !availablePaymentMethods.length} className="catalog-cart-panel__submit">
+                        <Button type="submit" disabled={!canSubmitOrder || submitting || !availablePaymentMethods.length} className="catalog-cart-panel__submit">
                           {submitting ? 'Enviando...' : 'Finalizar pedido'}
                         </Button>
                       )}

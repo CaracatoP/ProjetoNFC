@@ -434,6 +434,9 @@ describe('Public routes', () => {
         deliveryType: 'delivery',
         address: 'Rua das Flores, 100',
         notes: 'Tocar interfone',
+        payment: {
+          method: 'cash_on_delivery',
+        },
       });
 
     expect(response.status).toBe(201);
@@ -441,7 +444,7 @@ describe('Public routes', () => {
     expect(response.body.data.total).toBe(119.8);
     expect(response.body.data.payment).toEqual(
       expect.objectContaining({
-        method: 'cash_on_pickup',
+        method: 'cash_on_delivery',
         status: 'manual',
         provider: 'manual',
         providerPaymentId: '',
@@ -463,6 +466,275 @@ describe('Public routes', () => {
       }),
     );
     unsubscribe();
+  });
+
+  it('rejects a public order when deliveryType is missing', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Navalha classica',
+      description: 'Acessorio',
+      price: 29.9,
+      image: '',
+      category: 'Acessorios',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Paula',
+        customerPhone: '5511999990000',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: product.price,
+          },
+        ],
+        payment: {
+          method: 'pix',
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.message).toBe('Escolha se deseja entrega ou retirada.');
+  });
+
+  it('rejects a public order when paymentMethod is missing', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Escova modeladora',
+      description: 'Acessorio',
+      price: 24.9,
+      image: '',
+      category: 'Acessorios',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Paula',
+        customerPhone: '5511999990000',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: product.price,
+          },
+        ],
+        deliveryType: 'pickup',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.message).toBe('Escolha uma forma de pagamento.');
+  });
+
+  it('rejects cash_on_delivery when deliveryType is pickup', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Pomada pickup',
+      description: 'Fixacao media',
+      price: 34.9,
+      image: '',
+      category: 'Finalizacao',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Paula',
+        customerPhone: '5511999990000',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: product.price,
+          },
+        ],
+        deliveryType: 'pickup',
+        payment: {
+          method: 'cash_on_delivery',
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.message).toBe(
+      'Essa forma de pagamento nao esta disponivel para o tipo de recebimento escolhido.',
+    );
+  });
+
+  it('rejects cash_on_pickup when deliveryType is delivery', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Pomada delivery',
+      description: 'Fixacao forte',
+      price: 39.9,
+      image: '',
+      category: 'Finalizacao',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Paula',
+        customerPhone: '5511999990000',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: product.price,
+          },
+        ],
+        deliveryType: 'delivery',
+        payment: {
+          method: 'cash_on_pickup',
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.message).toBe(
+      'Essa forma de pagamento nao esta disponivel para o tipo de recebimento escolhido.',
+    );
+  });
+
+  it('normalizes legacy cash alias to cash_on_delivery for delivery orders', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Kit entrega',
+      description: 'Pedido para entrega',
+      price: 44.9,
+      image: '',
+      category: 'Kits',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Paula',
+        customerPhone: '5511999990000',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: product.price,
+          },
+        ],
+        deliveryType: 'delivery',
+        payment: {
+          method: 'cash',
+        },
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.payment.method).toBe('cash_on_delivery');
+  });
+
+  it('normalizes legacy cash alias to cash_on_pickup for pickup orders', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Kit retirada',
+      description: 'Pedido para retirada',
+      price: 31.9,
+      image: '',
+      category: 'Kits',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Paula',
+        customerPhone: '5511999990000',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: product.price,
+          },
+        ],
+        deliveryType: 'pickup',
+        payment: {
+          method: 'cash',
+        },
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.payment.method).toBe('cash_on_pickup');
+  });
+
+  it('normalizes legacy online alias to pix when the tenant has Pix enabled', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Kit online',
+      description: 'Pedido com alias legado online',
+      price: 52.9,
+      image: '',
+      category: 'Kits',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: false,
+            debitCard: false,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'manual',
+        },
+      },
+    );
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Paula',
+        customerPhone: '5511999990000',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: product.price,
+          },
+        ],
+        deliveryType: 'pickup',
+        payment: {
+          method: 'online',
+        },
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.payment.method).toBe('pix');
   });
 
   it('creates a public order with manual Pix payment and returns the Pix payload generated by the backend', async () => {
@@ -508,6 +780,7 @@ describe('Public routes', () => {
             unitPrice: product.price,
           },
         ],
+        deliveryType: 'pickup',
         payment: {
           method: 'pix',
         },
@@ -570,6 +843,7 @@ describe('Public routes', () => {
             unitPrice: product.price,
           },
         ],
+        deliveryType: 'pickup',
         payment: {
           method: 'cash_on_pickup',
         },
@@ -629,6 +903,7 @@ describe('Public routes', () => {
             unitPrice: product.price,
           },
         ],
+        deliveryType: 'pickup',
         payment: {
           method: 'pix',
         },
@@ -688,6 +963,7 @@ describe('Public routes', () => {
             unitPrice: product.price,
           },
         ],
+        deliveryType: 'pickup',
         payment: {
           method: 'credit_card',
           provider: 'asaas',
@@ -779,6 +1055,7 @@ describe('Public routes', () => {
             itemTotal: 1,
           },
         ],
+        deliveryType: 'pickup',
         payment: {
           method: 'pix',
           provider: 'asaas',
@@ -871,6 +1148,7 @@ describe('Public routes', () => {
             itemTotal: 1,
           },
         ],
+        deliveryType: 'pickup',
         payment: {
           method: 'credit_card',
           provider: 'mercado_pago',
@@ -948,6 +1226,7 @@ describe('Public routes', () => {
             unitPrice: product.price,
           },
         ],
+        deliveryType: 'delivery',
         payment: {
           method: 'cash_on_delivery',
         },
@@ -1017,6 +1296,7 @@ describe('Public routes', () => {
             unitPrice: product.price,
           },
         ],
+        deliveryType: 'pickup',
         payment: {
           method: 'debit_card',
           provider: 'mercado_pago',
@@ -1057,6 +1337,10 @@ describe('Public routes', () => {
             itemTotal: 1,
           },
         ],
+        deliveryType: 'pickup',
+        payment: {
+          method: 'cash_on_pickup',
+        },
       });
 
     expect(response.status).toBe(201);
@@ -1085,6 +1369,10 @@ describe('Public routes', () => {
             itemTotal: 5,
           },
         ],
+        deliveryType: 'pickup',
+        payment: {
+          method: 'cash_on_pickup',
+        },
       });
 
     expect(secondResponse.status).toBe(201);
@@ -1125,6 +1413,10 @@ describe('Public routes', () => {
             measurementUnit: 'unit',
           },
         ],
+        deliveryType: 'pickup',
+        payment: {
+          method: 'cash_on_pickup',
+        },
       });
 
     expect(response.status).toBe(400);

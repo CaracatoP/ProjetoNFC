@@ -150,7 +150,31 @@ function formatDateTime(value) {
   return new Date(value).toLocaleString('pt-BR');
 }
 
+function formatAnalyticsFallbackLabel(value, fallback = 'Sem rotulo') {
+  const normalized = String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .trim();
+
+  if (!normalized) {
+    return fallback;
+  }
+
+  return normalized.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 function buildClientDailySeries(dailyEvents = []) {
+  if ((dailyEvents || []).every((item) => item?.date)) {
+    return [...dailyEvents]
+      .map((item) => ({
+        date: item.date,
+        totalEvents: Number(item.totalEvents || 0),
+        pageViews: Number(item.pageViews || 0),
+        interactions: Number(item.interactions || 0),
+      }))
+      .sort((first, second) => first.date.localeCompare(second.date))
+      .slice(-7);
+  }
+
   const aggregated = new Map();
 
   (dailyEvents || []).forEach((item) => {
@@ -210,7 +234,7 @@ function ClientAnalyticsBarList({ title, description, items = [], emptyText = 'S
           {items.map((item) => (
             <div key={item.key || item.label || item.eventType} className="analytics-bar-list__item">
               <div className="analytics-bar-list__copy">
-                <strong>{item.label}</strong>
+                <strong>{formatAnalyticsFallbackLabel(item.label)}</strong>
                 {item.subtitle ? <span>{item.subtitle}</span> : null}
               </div>
               <div className="analytics-bar-list__meta">
@@ -245,6 +269,21 @@ function ClientAnalyticsTrend({ series = [] }) {
           <h2>Ritmo recente</h2>
           <p>Leitura simples dos ultimos dias para acompanhar tracao do tenant.</p>
         </div>
+      </div>
+
+      <div className="analytics-legend" aria-label="Legenda do grafico de analytics">
+        <span>
+          <i className="analytics-trend-chart__bar analytics-trend-chart__bar--events" aria-hidden="true" />
+          Eventos
+        </span>
+        <span>
+          <i className="analytics-trend-chart__bar analytics-trend-chart__bar--views" aria-hidden="true" />
+          Visitas
+        </span>
+        <span>
+          <i className="analytics-trend-chart__bar analytics-trend-chart__bar--actions" aria-hidden="true" />
+          Interacoes
+        </span>
       </div>
 
       {hasData ? (
@@ -297,8 +336,8 @@ function ClientAnalyticsRecentEvents({ events = [] }) {
           {events.map((event) => (
             <div key={event.id || `${event.eventType}-${event.occurredAt}`} className="admin-event-item admin-event-item--analytics">
               <div>
-                <strong>{event.targetLabel || event.targetType || event.eventType}</strong>
-                <span>{event.eventType}</span>
+                <strong>{formatAnalyticsFallbackLabel(event.displayLabel || event.targetLabel || event.targetTypeLabel || event.eventTypeLabel || event.eventType)}</strong>
+                <span>{formatAnalyticsFallbackLabel(event.eventTypeLabel || event.eventType, 'Evento')}</span>
               </div>
               <time dateTime={event.occurredAt}>{formatDateTime(event.occurredAt)}</time>
             </div>
@@ -334,7 +373,10 @@ function ClientAnalyticsUpgradePanel({ planCode = PLAN_TYPES.STARTER }) {
 }
 
 function ClientAnalyticsPanel({ analytics, analyticsLoading, analyticsError, scope, planCode }) {
-  const timeline = useMemo(() => buildClientDailySeries(analytics?.dailyEvents), [analytics?.dailyEvents]);
+  const timeline = useMemo(
+    () => buildClientDailySeries(analytics?.timeline || analytics?.dailyEvents),
+    [analytics?.dailyEvents, analytics?.timeline],
+  );
   const canShowBreakdowns = scope === 'basic' || scope === 'advanced' || scope === 'full';
   const canShowAdvanced = scope === 'advanced' || scope === 'full';
 
@@ -372,10 +414,11 @@ function ClientAnalyticsPanel({ analytics, analyticsLoading, analyticsError, sco
           {analytics ? (
             <div className="client-analytics-stack">
               <div className="analytics-metric-grid analytics-metric-grid--tenant">
-                <ClientAnalyticsMetricCard label="Eventos" value={formatMetricValue(analytics.totals?.totalEvents)} description="Tudo que o tenant registrou ate agora." accent="default" />
+                <ClientAnalyticsMetricCard label="Eventos" value={formatMetricValue(analytics.metrics?.totalEvents || analytics.totals?.totalEvents)} description="Tudo que o tenant registrou ate agora." accent="default" />
                 <ClientAnalyticsMetricCard label="Ultimos 7 dias" value={formatMetricValue(analytics.totals?.last7DaysEvents)} description="Atividade recente da pagina publica." accent="warning" />
-                <ClientAnalyticsMetricCard label="Visitas" value={formatMetricValue(analytics.totals?.pageViews)} description="Page views contabilizadas no periodo." accent="info" />
-                <ClientAnalyticsMetricCard label="Cliques" value={formatMetricValue((analytics.totals?.linkClicks || 0) + (analytics.totals?.ctaClicks || 0) + (analytics.totals?.copyActions || 0))} description="Links, CTAs e copias registradas." accent="accent" />
+                <ClientAnalyticsMetricCard label="Visitas" value={formatMetricValue(analytics.metrics?.pageViews || analytics.totals?.pageViews)} description="Page views contabilizadas no periodo." accent="info" />
+                <ClientAnalyticsMetricCard label="Interacoes" value={formatMetricValue(analytics.metrics?.interactions || ((analytics.totals?.linkClicks || 0) + (analytics.totals?.ctaClicks || 0) + (analytics.totals?.copyActions || 0)))} description="Links, CTAs e copias registradas." accent="accent" />
+                <ClientAnalyticsMetricCard label="Taxa de acao" value={`${Number(analytics.metrics?.actionRate || 0).toFixed(1)}%`} description="Interacoes em relacao ao total de visitas." accent="warning" />
                 {canShowAdvanced ? (
                   <ClientAnalyticsMetricCard label="Visitantes unicos" value={formatMetricValue(analytics.uniqueVisitors)} description="Base anonima estimada de visitantes reais." accent="success" />
                 ) : null}
@@ -399,7 +442,8 @@ function ClientAnalyticsPanel({ analytics, analyticsLoading, analyticsError, sco
                     description="Quais interacoes aparecem com mais frequencia no tenant."
                     items={(analytics.byEventType || []).map((item) => ({
                       key: item.eventType,
-                      label: item.label,
+                      label: item.label || item.eventType,
+                      subtitle: `${Number(item.share || 0).toFixed(1)}% do total`,
                       count: item.count,
                     }))}
                     emptyText="Nenhum tipo de evento registrado ainda."
@@ -409,8 +453,8 @@ function ClientAnalyticsPanel({ analytics, analyticsLoading, analyticsError, sco
                     description="Atalhos, links e CTAs com maior conversao no tenant."
                     items={(analytics.topTargets || []).map((item) => ({
                       key: `${item.targetType}-${item.targetLabel}`,
-                      label: item.label,
-                      subtitle: item.targetType,
+                      label: item.label || item.targetLabel || item.targetTypeLabel || item.targetType,
+                      subtitle: `${formatAnalyticsFallbackLabel(item.targetTypeLabel || item.targetType)} · ${Number(item.share || 0).toFixed(1)}%`,
                       count: item.count,
                     }))}
                     emptyText="Nenhum atalho ou link acionado ainda."

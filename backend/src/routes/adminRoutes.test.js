@@ -1039,6 +1039,9 @@ describe('Admin routes', () => {
           },
         ],
         deliveryType: 'pickup',
+        payment: {
+          method: 'cash_on_pickup',
+        },
         notes: 'Retirar as 18h',
       });
 
@@ -1120,6 +1123,7 @@ describe('Admin routes', () => {
           unitPrice: Number(product.price || 49.9),
         },
       ],
+      deliveryType: 'pickup',
       payment: {
         method: 'pix',
       },
