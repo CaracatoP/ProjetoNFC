@@ -230,6 +230,42 @@ function isPixCheckoutResult(order) {
   return order?.payment?.method === PAYMENT_METHODS.PIX && Boolean(order?.payment?.pixCopyPaste);
 }
 
+function buildCheckoutValidationErrors(checkout, cartItems, checkoutPaymentMethods) {
+  const errors = {};
+  const customerName = checkout.customerName.trim();
+  const customerPhone = normalizePhoneDigits(checkout.customerPhone);
+
+  if (!cartItems.length) {
+    errors.cart = 'Adicione pelo menos um item antes de finalizar o pedido.';
+  }
+
+  if (!customerName) {
+    errors.customerName = 'Informe seu nome.';
+  }
+
+  if (customerPhone.length < 8) {
+    errors.customerPhone = 'Informe seu telefone.';
+  }
+
+  if (!checkout.deliveryType) {
+    errors.deliveryType = 'Escolha entrega ou retirada.';
+  }
+
+  if (checkout.deliveryType === 'delivery' && !checkout.address.trim()) {
+    errors.address = 'Informe o endereco para entrega.';
+  }
+
+  if (checkoutPaymentMethods.length && (!checkout.paymentMethod || !checkoutPaymentMethods.includes(checkout.paymentMethod))) {
+    errors.paymentMethod = 'Escolha uma forma de pagamento.';
+  }
+
+  if (!checkoutPaymentMethods.length) {
+    errors.paymentMethod = 'Nenhuma forma de pagamento esta disponivel no momento.';
+  }
+
+  return errors;
+}
+
 function redirectToCheckoutUrl(url) {
   const normalizedUrl = String(url || '').trim();
 
@@ -412,7 +448,10 @@ export function BusinessCatalogSection({
   const [checkoutResult, setCheckoutResult] = useState(null);
   const [pendingPixOrder, setPendingPixOrder] = useState(null);
   const [pixCopyFeedback, setPixCopyFeedback] = useState('');
+  const [checkoutErrors, setCheckoutErrors] = useState({});
   const hydratedSlugRef = useRef('');
+  const checkoutBodyRef = useRef(null);
+  const checkoutFieldRefs = useRef({});
   const normalizedProducts = useMemo(
     () => (products || []).map((product) => normalizeProductMeasurement(product)),
     [products],
@@ -439,6 +478,7 @@ export function BusinessCatalogSection({
     setCheckoutResult(null);
     setPendingPixOrder(null);
     setPixCopyFeedback('');
+    setCheckoutErrors({});
   }, [tenantSlug]);
 
   useEffect(() => {
@@ -509,26 +549,6 @@ export function BusinessCatalogSection({
       ),
     [cartItems],
   );
-  const canSubmitOrder = useMemo(() => {
-    const customerName = checkout.customerName.trim();
-    const customerPhone = normalizePhoneDigits(checkout.customerPhone);
-
-    return Boolean(
-      cartItems.length &&
-        customerName &&
-        customerPhone.length >= 8 &&
-        checkout.deliveryType &&
-        checkout.paymentMethod &&
-        checkoutPaymentMethods.includes(checkout.paymentMethod),
-    );
-  }, [
-    cartItems.length,
-    checkout.customerName,
-    checkout.customerPhone,
-    checkout.deliveryType,
-    checkout.paymentMethod,
-    checkoutPaymentMethods,
-  ]);
   const isShowingCheckoutSuccess = Boolean(checkoutResult && !cartItems.length);
   const showPendingPixBanner = Boolean(!isCartOpen && isPixCheckoutResult(pendingPixOrder));
 
@@ -548,6 +568,25 @@ export function BusinessCatalogSection({
       };
     });
   }, [checkoutPaymentMethods]);
+
+  useEffect(() => {
+    if (!Object.keys(checkoutErrors).length) {
+      return;
+    }
+
+    const nextErrors = buildCheckoutValidationErrors(checkout, cartItems, checkoutPaymentMethods);
+    setCheckoutErrors((current) => {
+      const unresolvedErrors = Object.fromEntries(
+        Object.entries(current).filter(([field]) => nextErrors[field]),
+      );
+
+      if (Object.keys(unresolvedErrors).length === Object.keys(current).length) {
+        return current;
+      }
+
+      return unresolvedErrors;
+    });
+  }, [cartItems, checkout, checkoutErrors, checkoutPaymentMethods]);
 
   if (!normalizedProducts.length) {
     return null;
@@ -638,39 +677,39 @@ export function BusinessCatalogSection({
     updateCartQuantity(product, nextQuantity);
   }
 
+  function focusFirstCheckoutError(errors) {
+    const errorOrder = ['cart', 'customerName', 'customerPhone', 'deliveryType', 'address', 'paymentMethod'];
+    const firstErrorField = errorOrder.find((field) => errors[field]);
+    const target = checkoutFieldRefs.current[firstErrorField] || checkoutBodyRef.current;
+
+    if (!target) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      target.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      target.focus?.({ preventScroll: true });
+    });
+  }
+
   async function handleSubmitOrder(event) {
     event.preventDefault();
 
     const customerName = checkout.customerName.trim();
     const customerPhone = normalizePhoneDigits(checkout.customerPhone);
 
-    if (!cartItems.length) {
-      setFeedback('Adicione pelo menos um item antes de finalizar o pedido.');
-      return;
-    }
+    const validationErrors = buildCheckoutValidationErrors(checkout, cartItems, checkoutPaymentMethods);
 
-    if (!customerName || customerPhone.length < 8) {
-      setFeedback('Informe nome e telefone para finalizar o pedido.');
-      return;
-    }
-
-    if (!checkout.deliveryType) {
-      setFeedback('Escolha se deseja entrega ou retirada.');
-      return;
-    }
-
-    if (!checkoutPaymentMethods.length) {
-      setFeedback('Nenhuma forma de pagamento esta disponivel no momento.');
-      return;
-    }
-
-    if (!checkout.paymentMethod || !checkoutPaymentMethods.includes(checkout.paymentMethod)) {
-      setFeedback('Escolha uma forma de pagamento.');
+    if (Object.keys(validationErrors).length) {
+      setCheckoutErrors(validationErrors);
+      setFeedback('');
+      focusFirstCheckoutError(validationErrors);
       return;
     }
 
     setSubmitting(true);
     setFeedback('');
+    setCheckoutErrors({});
 
     try {
       const createdOrder = await onSubmitOrder?.({
@@ -809,8 +848,14 @@ export function BusinessCatalogSection({
                   </div>
 
                   <form className="catalog-checkout catalog-checkout--drawer" onSubmit={handleSubmitOrder}>
-                    <div className="catalog-cart-panel__body" data-testid="catalog-cart-body">
+                    <div className="catalog-cart-panel__body" data-testid="catalog-cart-body" ref={checkoutBodyRef}>
                       {feedback ? <p className="site-inline-feedback catalog-checkout__feedback">{feedback}</p> : null}
+                      {Object.keys(checkoutErrors).length ? (
+                        <div className="catalog-checkout__validation-summary" role="alert" tabIndex="-1">
+                          <strong>Preencha os campos obrigatorios para continuar.</strong>
+                          <span>Revise os campos destacados antes de finalizar o pedido.</span>
+                        </div>
+                      ) : null}
 
                       {isShowingCheckoutSuccess ? (
                         <div className="catalog-checkout__success" data-testid="catalog-checkout-success">
@@ -977,17 +1022,47 @@ export function BusinessCatalogSection({
                           </div>
 
                           <div className="admin-form-grid catalog-checkout__fields">
-                            <label className="admin-field">
+                            <label className={`admin-field${checkoutErrors.customerName ? ' admin-field--invalid' : ''}`}>
                               <span>Nome</span>
-                              <input value={checkout.customerName} onChange={(event) => setCheckout((current) => ({ ...current, customerName: event.target.value }))} />
+                              <input
+                                ref={(node) => {
+                                  checkoutFieldRefs.current.customerName = node;
+                                }}
+                                value={checkout.customerName}
+                                onChange={(event) => setCheckout((current) => ({ ...current, customerName: event.target.value }))}
+                                aria-label="Nome"
+                                aria-invalid={checkoutErrors.customerName ? 'true' : undefined}
+                                aria-describedby={checkoutErrors.customerName ? 'checkout-customer-name-error' : undefined}
+                              />
+                              {checkoutErrors.customerName ? <small id="checkout-customer-name-error">{checkoutErrors.customerName}</small> : null}
                             </label>
-                            <label className="admin-field">
+                            <label className={`admin-field${checkoutErrors.customerPhone ? ' admin-field--invalid' : ''}`}>
                               <span>Telefone</span>
-                              <input value={checkout.customerPhone} onChange={(event) => setCheckout((current) => ({ ...current, customerPhone: event.target.value }))} />
+                              <input
+                                ref={(node) => {
+                                  checkoutFieldRefs.current.customerPhone = node;
+                                }}
+                                value={checkout.customerPhone}
+                                onChange={(event) => setCheckout((current) => ({ ...current, customerPhone: event.target.value }))}
+                                aria-label="Telefone"
+                                aria-invalid={checkoutErrors.customerPhone ? 'true' : undefined}
+                                aria-describedby={checkoutErrors.customerPhone ? 'checkout-customer-phone-error' : undefined}
+                              />
+                              {checkoutErrors.customerPhone ? <small id="checkout-customer-phone-error">{checkoutErrors.customerPhone}</small> : null}
                             </label>
                           </div>
 
-                          <div className="catalog-checkout__delivery-methods" role="group" aria-labelledby="checkout-delivery-type-title">
+                          <div
+                            ref={(node) => {
+                              checkoutFieldRefs.current.deliveryType = node;
+                            }}
+                            className={`catalog-checkout__delivery-methods${checkoutErrors.deliveryType ? ' catalog-checkout__choice-group--invalid' : ''}`}
+                            role="group"
+                            aria-labelledby="checkout-delivery-type-title"
+                            aria-invalid={checkoutErrors.deliveryType ? 'true' : undefined}
+                            aria-describedby={checkoutErrors.deliveryType ? 'checkout-delivery-type-error' : undefined}
+                            tabIndex={checkoutErrors.deliveryType ? '-1' : undefined}
+                          >
                             <div className="catalog-checkout__payment-header">
                               <strong id="checkout-delivery-type-title">Como voce vai receber?</strong>
                               <span>Escolha primeiro se o pedido sera entregue ou retirado no estabelecimento.</span>
@@ -1040,17 +1115,38 @@ export function BusinessCatalogSection({
                                 );
                               })}
                             </div>
+                            {checkoutErrors.deliveryType ? <small id="checkout-delivery-type-error" className="catalog-checkout__choice-error">{checkoutErrors.deliveryType}</small> : null}
                           </div>
 
                           {checkout.deliveryType === 'delivery' ? (
-                            <label className="admin-field catalog-checkout__address">
+                            <label className={`admin-field catalog-checkout__address${checkoutErrors.address ? ' admin-field--invalid' : ''}`}>
                               <span>Endereco</span>
-                              <input value={checkout.address} onChange={(event) => setCheckout((current) => ({ ...current, address: event.target.value }))} />
+                              <input
+                                ref={(node) => {
+                                  checkoutFieldRefs.current.address = node;
+                                }}
+                                value={checkout.address}
+                                onChange={(event) => setCheckout((current) => ({ ...current, address: event.target.value }))}
+                                aria-label="Endereco"
+                                aria-invalid={checkoutErrors.address ? 'true' : undefined}
+                                aria-describedby={checkoutErrors.address ? 'checkout-address-error' : undefined}
+                              />
+                              {checkoutErrors.address ? <small id="checkout-address-error">{checkoutErrors.address}</small> : null}
                             </label>
                           ) : null}
 
                           {checkout.deliveryType ? (
-                            <div className="catalog-checkout__payment-methods" role="group" aria-labelledby="checkout-payment-methods-title">
+                            <div
+                              ref={(node) => {
+                                checkoutFieldRefs.current.paymentMethod = node;
+                              }}
+                              className={`catalog-checkout__payment-methods${checkoutErrors.paymentMethod ? ' catalog-checkout__choice-group--invalid' : ''}`}
+                              role="group"
+                              aria-labelledby="checkout-payment-methods-title"
+                              aria-invalid={checkoutErrors.paymentMethod ? 'true' : undefined}
+                              aria-describedby={checkoutErrors.paymentMethod ? 'checkout-payment-method-error' : undefined}
+                              tabIndex={checkoutErrors.paymentMethod ? '-1' : undefined}
+                            >
                               <div className="catalog-checkout__payment-header">
                                 <strong id="checkout-payment-methods-title">{getPaymentSectionTitle(checkout.deliveryType)}</strong>
                                 <span>Escolha apenas entre os metodos liberados por este estabelecimento.</span>
@@ -1082,6 +1178,7 @@ export function BusinessCatalogSection({
                                   );
                                 })}
                               </div>
+                              {checkoutErrors.paymentMethod ? <small id="checkout-payment-method-error" className="catalog-checkout__choice-error">{checkoutErrors.paymentMethod}</small> : null}
                             </div>
                           ) : null}
 
@@ -1127,7 +1224,7 @@ export function BusinessCatalogSection({
                             <span>Total do pedido</span>
                             <strong>{formatCurrency(cartTotal)}</strong>
                           </div>
-                          <Button type="submit" disabled={!canSubmitOrder || submitting || !availablePaymentMethods.length} className="catalog-cart-panel__submit">
+                          <Button type="submit" disabled={submitting} className="catalog-cart-panel__submit">
                           {submitting ? 'Enviando...' : 'Finalizar pedido'}
                           </Button>
                         </>

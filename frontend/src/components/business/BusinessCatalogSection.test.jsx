@@ -188,13 +188,62 @@ describe('BusinessCatalogSection', () => {
     const finalizacaoCard = finalizacaoGroup?.parentElement?.querySelector('.catalog-card') || screen.getByText('Pomada modeladora').closest('.catalog-card');
     await user.click(within(finalizacaoCard).getByRole('button', { name: 'Adicionar' }));
     await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
-    expect(screen.getByRole('button', { name: /Finalizar pedido/i })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
+    expect(screen.getByText('Preencha os campos obrigatorios para continuar.')).toBeInTheDocument();
+    expect(screen.getByText('Informe seu nome.')).toBeInTheDocument();
+    expect(screen.getByText('Informe seu telefone.')).toBeInTheDocument();
+    expect(screen.getByText('Escolha entrega ou retirada.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Nome')).toHaveAttribute('aria-invalid', 'true');
+    await waitFor(() => {
+      expect(screen.getByLabelText('Nome')).toHaveFocus();
+    });
     expect(onSubmitOrder).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText('Nome'), 'Carlos');
+    expect(screen.queryByText('Informe seu nome.')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Remover item Pomada modeladora/i }));
     expect(screen.getByText('Seu carrinho esta vazio')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Adicionar produtos/i })).toBeInTheDocument();
+  });
+
+  it('shows visual checkout errors for missing payment and delivery address without submitting', async () => {
+    const onSubmitOrder = vi.fn().mockResolvedValue({ status: 'received' });
+    const user = userEvent.setup();
+
+    render(
+      <BusinessCatalogSection
+        business={businessFixture}
+        tenantSlug="acougue-central"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={onSubmitOrder}
+      />,
+    );
+
+    const catalogCard = screen.getByText('Pomada modeladora').closest('.catalog-card');
+    await user.click(within(catalogCard).getByRole('button', { name: 'Adicionar' }));
+    await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
+    await user.type(screen.getByLabelText('Nome'), 'Marina');
+    await user.type(screen.getByLabelText('Telefone'), '5511987654321');
+    await user.click(screen.getByRole('button', { name: 'Entrega' }));
+    await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
+
+    expect(screen.getByText('Preencha os campos obrigatorios para continuar.')).toBeInTheDocument();
+    expect(screen.getByText('Informe o endereco para entrega.')).toBeInTheDocument();
+    expect(screen.getByText('Escolha uma forma de pagamento.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Endereco')).toHaveAttribute('aria-invalid', 'true');
+    expect(onSubmitOrder).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText('Endereco'), 'Rua das Carnes, 123');
+    expect(screen.queryByText('Informe o endereco para entrega.')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Pix/i }));
+    await waitFor(() => {
+      expect(screen.queryByText('Preencha os campos obrigatorios para continuar.')).not.toBeInTheDocument();
+    });
   });
 
   it('opens and closes the dedicated cart panel from the fixed trigger', async () => {
@@ -364,7 +413,6 @@ describe('BusinessCatalogSection', () => {
 
     await user.type(screen.getByLabelText('Nome'), 'Julia');
     await user.type(screen.getByLabelText('Telefone'), '5511977776666');
-    expect(screen.getByRole('button', { name: /Finalizar pedido/i })).toBeDisabled();
 
     await user.click(screen.getByRole('button', { name: 'Retirada' }));
 
@@ -460,6 +508,7 @@ describe('BusinessCatalogSection', () => {
     await user.click(screen.getByRole('button', { name: 'Cartao de credito' }));
     await user.type(screen.getByLabelText('Nome'), 'Julia');
     await user.type(screen.getByLabelText('Telefone'), '5511977776666');
+    await user.type(screen.getByLabelText('Endereco'), 'Rua Augusta, 100');
     await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
     await waitFor(() => {
@@ -503,14 +552,12 @@ describe('BusinessCatalogSection', () => {
     await user.click(screen.getByRole('button', { name: 'Pagamento na entrega' }));
 
     expect(screen.getByRole('button', { name: 'Pagamento na entrega' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: /Finalizar pedido/i })).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: 'Retirada' }));
 
     expect(screen.getByText('Como deseja pagar na retirada?')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Pagamento na entrega' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Pagamento na retirada' })).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByRole('button', { name: /Finalizar pedido/i })).toBeDisabled();
   });
 
   it('renders legacy cash methods with the correct manual option for each delivery type', async () => {

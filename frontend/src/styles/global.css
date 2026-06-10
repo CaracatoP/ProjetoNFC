@@ -5136,6 +5136,43 @@ img {
   margin: 0;
 }
 
+.catalog-checkout__validation-summary {
+  display: grid;
+  gap: 0.28rem;
+  padding: 0.85rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(248, 113, 113, 0.32);
+  background:
+    radial-gradient(circle at top right, rgba(248, 113, 113, 0.12), transparent 36%),
+    color-mix(in srgb, var(--theme-surface-alt) 72%, transparent);
+  color: var(--theme-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.catalog-checkout__validation-summary strong {
+  font-family: var(--font-heading);
+  font-size: 0.98rem;
+}
+
+.catalog-checkout__validation-summary span,
+.catalog-checkout__choice-error {
+  color: color-mix(in srgb, #fecaca 82%, var(--theme-text-muted));
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.catalog-checkout__choice-group--invalid {
+  border-color: rgba(248, 113, 113, 0.48);
+  box-shadow:
+    0 0 0 3px rgba(248, 113, 113, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.catalog-checkout__choice-error {
+  display: block;
+  font-weight: 700;
+}
+
 .catalog-checkout__list {
   list-style: none;
   padding: 0;

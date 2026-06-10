@@ -1373,7 +1373,7 @@ describe('DashboardHomePage', () => {
     await user.click(screen.getByRole('button', { name: /Financeiro/i }));
 
     expect(await screen.findByText('Configuracoes Financeiras')).toBeInTheDocument();
-    expect(screen.getByText('Configuracao Global da Plataforma')).toBeInTheDocument();
+    expect(await screen.findByText('Configuracao Global da Plataforma')).toBeInTheDocument();
     expect(screen.getByText('Configuracao Financeira do Tenant')).toBeInTheDocument();
     expect(screen.getByText('Criar Subconta Asaas')).toBeInTheDocument();
     expect(screen.getByText('Status financeiro do tenant')).toBeInTheDocument();
