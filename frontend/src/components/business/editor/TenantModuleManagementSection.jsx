@@ -16,17 +16,28 @@ import {
   getMeasurementUnitLabel,
   normalizeProductMeasurement,
 } from '@shared/utils/productMeasurement.js';
+import {
+  isInventoryBelowMinimum,
+  normalizeProductAvailability,
+  normalizeProductInventory,
+} from '@shared/utils/productInventory.js';
 import { Button } from '@/components/common/Button.jsx';
 import { AdminField, InlineImageUploadField, SectionEyebrow } from './TenantEditorPrimitives.jsx';
 
 const MODULE_LABELS = {
   catalog: 'Catalogo',
+  stock: 'Estoque',
   appointments: 'Agendamentos',
   cart: 'Carrinho',
   orders: 'Pedidos',
   loyalty: 'Fidelidade',
   whatsapp: 'WhatsApp',
   analytics: 'Analytics',
+};
+
+const PRODUCT_AVAILABILITY_LABELS = {
+  available: 'Disponivel',
+  unavailable: 'Indisponivel',
 };
 
 const ORDER_STATUS_ORDER = ['received', 'preparing', 'ready', 'delivered', 'cancelled'];
@@ -101,6 +112,14 @@ function initialProduct() {
     imagePublicId: '',
     category: '',
     measurementUnit: DEFAULT_PRODUCT_MEASUREMENT_UNIT,
+    isAvailable: true,
+    inventory: {
+      enabled: false,
+      quantity: 0,
+      minimumQuantity: 0,
+      unit: DEFAULT_PRODUCT_MEASUREMENT_UNIT,
+      notes: '',
+    },
     active: true,
   };
 }
@@ -120,6 +139,10 @@ function tabIsVisible(tabId, modules) {
   }
 
   if (tabId === 'catalog') {
+    return Boolean(modules.catalog);
+  }
+
+  if (tabId === 'stock') {
     return Boolean(modules.catalog);
   }
 
@@ -173,11 +196,66 @@ function matchesProductSearch(product, searchTerm) {
     product?.name,
     product?.category,
     product?.description,
+    product?.inventory?.notes,
   ]
     .map((value) => String(value || '').trim().toLowerCase())
     .join(' ');
 
   return haystack.includes(searchTerm);
+}
+
+function normalizeEditableProduct(product = {}) {
+  const normalizedProduct = normalizeProductMeasurement(product);
+
+  return {
+    ...normalizedProduct,
+    isAvailable: normalizeProductAvailability(normalizedProduct.isAvailable),
+    inventory: normalizeProductInventory(
+      normalizedProduct.inventory,
+      normalizedProduct.measurementUnit,
+    ),
+  };
+}
+
+function getProductAvailabilityState(product = {}) {
+  return product.isAvailable === false ? 'unavailable' : 'available';
+}
+
+function getProductAvailabilityLabel(product = {}) {
+  return PRODUCT_AVAILABILITY_LABELS[getProductAvailabilityState(product)];
+}
+
+function getProductInventorySummary(product = {}) {
+  const inventory = normalizeProductInventory(product.inventory, product.measurementUnit);
+
+  if (!inventory.enabled) {
+    return 'Sem controle de estoque';
+  }
+
+  const quantityLabel = `${inventory.quantity} ${getMeasurementUnitLabel(inventory.unit)}`;
+  const minimumLabel = `${inventory.minimumQuantity} ${getMeasurementUnitLabel(inventory.unit)}`;
+
+  if (isInventoryBelowMinimum(inventory)) {
+    return `Abaixo do minimo • ${quantityLabel} / minimo ${minimumLabel}`;
+  }
+
+  return `${quantityLabel} em estoque • minimo ${minimumLabel}`;
+}
+
+function syncInventoryUnitWithMeasurement(item = {}, nextMeasurementUnit) {
+  const currentMeasurementUnit = item.measurementUnit || DEFAULT_PRODUCT_MEASUREMENT_UNIT;
+  const normalizedInventory = normalizeProductInventory(item.inventory, currentMeasurementUnit);
+  const shouldFollowMeasurement =
+    !normalizedInventory.unit || normalizedInventory.unit === currentMeasurementUnit;
+
+  return {
+    ...item,
+    measurementUnit: nextMeasurementUnit,
+    inventory: {
+      ...normalizedInventory,
+      unit: shouldFollowMeasurement ? nextMeasurementUnit : normalizedInventory.unit,
+    },
+  };
 }
 
 function filterAndGroupByStatus(items = [], filterValue, statusOrder, labels) {
@@ -348,6 +426,7 @@ export function TenantModuleManagementSection({
   const [editingAppointmentServices, setEditingAppointmentServices] = useState([]);
   const [editingProducts, setEditingProducts] = useState([]);
   const [productSearchValue, setProductSearchValue] = useState('');
+  const [stockSearchValue, setStockSearchValue] = useState('');
   const [orderSearchValue, setOrderSearchValue] = useState('');
   const [orderFilter, setOrderFilter] = useState('all');
   const [orderPaymentFilter, setOrderPaymentFilter] = useState('all');
@@ -355,6 +434,7 @@ export function TenantModuleManagementSection({
   const [appointmentFilter, setAppointmentFilter] = useState('all');
   const [uploadingAssetKey, setUploadingAssetKey] = useState('');
   const [catalogProductsCollapsed, setCatalogProductsCollapsed] = useState(false);
+  const [expandedProductIds, setExpandedProductIds] = useState({});
   const [collapsedOrderGroups, setCollapsedOrderGroups] = useState(() =>
     Object.fromEntries(ORDER_STATUS_ORDER.map((status) => [status, status !== 'received'])),
   );
@@ -379,6 +459,7 @@ export function TenantModuleManagementSection({
       [
         { id: 'segment', label: 'Segmento e modulos', visible: capabilityState.canConfigureModules },
         { id: 'catalog', label: 'Catalogo', visible: capabilityState.canViewCatalog },
+        { id: 'stock', label: 'Estoque', visible: isClientMode && capabilityState.canViewCatalog },
         { id: 'orders', label: 'Pedidos', visible: capabilityState.canViewOrders },
         { id: 'appointments', label: 'Agendamentos', visible: capabilityState.canViewAppointments },
         { id: 'professionals', label: 'Profissionais', visible: capabilityState.canViewProfessionals },
@@ -391,6 +472,7 @@ export function TenantModuleManagementSection({
       capabilityState.canViewOrders,
       capabilityState.canViewProfessionals,
       capabilityState.canViewServices,
+      isClientMode,
       segmentState.modules,
     ],
   );
@@ -408,7 +490,7 @@ export function TenantModuleManagementSection({
   useEffect(() => {
     setEditingProfessionals(modulesData.professionals || []);
     setEditingAppointmentServices(modulesData.appointmentServices || []);
-    setEditingProducts((modulesData.products || []).map((product) => normalizeProductMeasurement(product)));
+    setEditingProducts((modulesData.products || []).map((product) => normalizeEditableProduct(product)));
   }, [modulesData.appointmentServices, modulesData.products, modulesData.professionals]);
 
   const categorySuggestions = useMemo(
@@ -445,6 +527,25 @@ export function TenantModuleManagementSection({
       .map((product, originalIndex) => ({ product, originalIndex }))
       .filter(({ product }) => matchesProductSearch(product, normalizedSearchTerm));
   }, [editingProducts, productSearchValue]);
+  const filteredStockProducts = useMemo(() => {
+    const normalizedSearchTerm = normalizeProductSearchTerm(stockSearchValue);
+
+    return editingProducts
+      .map((product, originalIndex) => ({ product, originalIndex }))
+      .filter(({ product }) => matchesProductSearch(product, normalizedSearchTerm));
+  }, [editingProducts, stockSearchValue]);
+  const stockSummary = useMemo(() => {
+    const controlledProducts = editingProducts.filter((product) => product.inventory?.enabled);
+    const lowStockProducts = controlledProducts.filter((product) => isInventoryBelowMinimum(product.inventory));
+    const unavailableProducts = editingProducts.filter((product) => product.isAvailable === false);
+
+    return {
+      totalProducts: editingProducts.length,
+      controlledProducts: controlledProducts.length,
+      lowStockProducts: lowStockProducts.length,
+      unavailableProducts: unavailableProducts.length,
+    };
+  }, [editingProducts]);
 
   function updateBusinessSegment(nextSegment) {
     const nextSegmentState = buildBusinessSegmentState({ segment: nextSegment });
@@ -521,6 +622,16 @@ export function TenantModuleManagementSection({
     setIsClientCreateProductOpen(false);
   }
 
+  function updateNewProductField(updater) {
+    setNewProduct((current) => normalizeEditableProduct(updater(current)));
+  }
+
+  function updateExistingProductField(index, updater) {
+    setEditingProducts((current) =>
+      updateListItem(current, index, (item) => normalizeEditableProduct(updater(item))),
+    );
+  }
+
   async function handleCreateProduct() {
     await moduleActions?.createProduct?.(newProduct);
     resetNewProductDraft();
@@ -542,6 +653,21 @@ export function TenantModuleManagementSection({
     setCollapsedOrderGroups((current) => ({
       ...current,
       [status]: !isOrderGroupCollapsed(status),
+    }));
+  }
+
+  function isProductExpanded(productId) {
+    if (!isClientMode) {
+      return true;
+    }
+
+    return Boolean(expandedProductIds[productId]);
+  }
+
+  function toggleProductExpanded(productId) {
+    setExpandedProductIds((current) => ({
+      ...current,
+      [productId]: !isProductExpanded(productId),
     }));
   }
 
@@ -876,19 +1002,23 @@ export function TenantModuleManagementSection({
                   <div className="admin-card-stack admin-product-create-card__body" data-testid="client-product-create-form">
                     <div className={productFormGridClassName}>
                       <AdminField label="Produto">
-                        <input disabled={catalogReadOnly} value={newProduct.name} onChange={(event) => setNewProduct((current) => ({ ...current, name: event.target.value }))} />
+                        <input disabled={catalogReadOnly} value={newProduct.name} onChange={(event) => updateNewProductField((current) => ({ ...current, name: event.target.value }))} />
                       </AdminField>
                       <AdminField label="Preco">
-                        <input disabled={catalogReadOnly} type="number" min="0" step="0.01" value={newProduct.price} onChange={(event) => setNewProduct((current) => ({ ...current, price: Number(event.target.value) }))} />
+                        <input disabled={catalogReadOnly} type="number" min="0" step="0.01" value={newProduct.price} onChange={(event) => updateNewProductField((current) => ({ ...current, price: Number(event.target.value) }))} />
                       </AdminField>
                       <AdminField label="Categoria">
-                        <input disabled={catalogReadOnly} list={categorySuggestionsId} value={newProduct.category} onChange={(event) => setNewProduct((current) => ({ ...current, category: event.target.value }))} />
+                        <input disabled={catalogReadOnly} list={categorySuggestionsId} value={newProduct.category} onChange={(event) => updateNewProductField((current) => ({ ...current, category: event.target.value }))} />
                       </AdminField>
                       <AdminField label="Unidade de venda">
                         <select
                           disabled={catalogReadOnly}
                           value={newProduct.measurementUnit}
-                          onChange={(event) => setNewProduct((current) => ({ ...current, measurementUnit: event.target.value }))}
+                          onChange={(event) =>
+                            updateNewProductField((current) =>
+                              syncInventoryUnitWithMeasurement(current, event.target.value),
+                            )
+                          }
                         >
                           {PRODUCT_MEASUREMENT_UNIT_VALUES.map((measurementUnit) => (
                             <option key={measurementUnit} value={measurementUnit}>
@@ -898,8 +1028,119 @@ export function TenantModuleManagementSection({
                         </select>
                       </AdminField>
                     </div>
+                    <div className="admin-product-form__toggles">
+                      <label className="admin-checkbox-field">
+                        <input
+                          type="checkbox"
+                          checked={newProduct.isAvailable !== false}
+                          onChange={(event) =>
+                            updateNewProductField((current) => ({
+                              ...current,
+                              isAvailable: event.target.checked,
+                            }))
+                          }
+                        />
+                        <span>Disponivel para venda no catalogo</span>
+                      </label>
+                      <label className="admin-checkbox-field">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(newProduct.inventory?.enabled)}
+                          onChange={(event) =>
+                            updateNewProductField((current) => ({
+                              ...current,
+                              inventory: {
+                                ...normalizeProductInventory(current.inventory, current.measurementUnit),
+                                enabled: event.target.checked,
+                              },
+                            }))
+                          }
+                        />
+                        <span>Controlar estoque</span>
+                      </label>
+                    </div>
+                    {newProduct.inventory?.enabled ? (
+                      <div className="admin-form-grid admin-product-form__inventory-grid">
+                        <AdminField label="Quantidade atual">
+                          <input
+                            disabled={catalogReadOnly}
+                            type="number"
+                            min="0"
+                            step="0.001"
+                            value={newProduct.inventory.quantity ?? 0}
+                            onChange={(event) =>
+                              updateNewProductField((current) => ({
+                                ...current,
+                                inventory: {
+                                  ...normalizeProductInventory(current.inventory, current.measurementUnit),
+                                  quantity: Number(event.target.value),
+                                },
+                              }))
+                            }
+                          />
+                        </AdminField>
+                        <AdminField label="Estoque minimo">
+                          <input
+                            disabled={catalogReadOnly}
+                            type="number"
+                            min="0"
+                            step="0.001"
+                            value={newProduct.inventory.minimumQuantity ?? 0}
+                            onChange={(event) =>
+                              updateNewProductField((current) => ({
+                                ...current,
+                                inventory: {
+                                  ...normalizeProductInventory(current.inventory, current.measurementUnit),
+                                  minimumQuantity: Number(event.target.value),
+                                },
+                              }))
+                            }
+                          />
+                        </AdminField>
+                        <AdminField label="Unidade do estoque">
+                          <select
+                            disabled={catalogReadOnly}
+                            value={newProduct.inventory.unit || newProduct.measurementUnit}
+                            onChange={(event) =>
+                              updateNewProductField((current) => ({
+                                ...current,
+                                inventory: {
+                                  ...normalizeProductInventory(current.inventory, current.measurementUnit),
+                                  unit: event.target.value,
+                                },
+                              }))
+                            }
+                          >
+                            {PRODUCT_MEASUREMENT_UNIT_VALUES.map((measurementUnit) => (
+                              <option key={`new-inventory-${measurementUnit}`} value={measurementUnit}>
+                                {getMeasurementUnitLabel(measurementUnit)}
+                              </option>
+                            ))}
+                          </select>
+                        </AdminField>
+                        <AdminField label="Observacoes de estoque">
+                          <textarea
+                            disabled={catalogReadOnly}
+                            rows="2"
+                            value={newProduct.inventory.notes || ''}
+                            onChange={(event) =>
+                              updateNewProductField((current) => ({
+                                ...current,
+                                inventory: {
+                                  ...normalizeProductInventory(current.inventory, current.measurementUnit),
+                                  notes: event.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </AdminField>
+                      </div>
+                    ) : null}
                     <p className="admin-muted-copy admin-product-form__hint">
                       O preco sera calculado conforme a unidade escolhida. Ex.: R$ 59,90/Kg permite pedido de 400g com calculo proporcional.
+                    </p>
+                    <p className="admin-muted-copy admin-product-form__hint">
+                      A disponibilidade manual continua independente do controle de estoque e prepara a estrutura para futuras entradas e saidas.
                     </p>
                     <div className="admin-product-form__support admin-product-form__support--compact">
                       <div className="admin-product-form__media">
@@ -910,26 +1151,26 @@ export function TenantModuleManagementSection({
                           uploading={capabilityState.canUploadMedia && uploadingAssetKey === 'new-product-image'}
                           uploadingLabel="Enviando imagem..."
                           disabled={catalogReadOnly || !capabilityState.canUploadMedia}
-                          onChange={(value) => setNewProduct((current) => ({ ...current, image: value, imagePublicId: '' }))}
+                          onChange={(value) => updateNewProductField((current) => ({ ...current, image: value, imagePublicId: '' }))}
                           onUpload={(file) =>
                             handleInlineUpload({
                               file,
                               assetType: 'product',
                               uploadKey: 'new-product-image',
                               onComplete: (uploaded) =>
-                                setNewProduct((current) => ({
+                                updateNewProductField((current) => ({
                                   ...current,
                                   image: uploaded?.url || '',
                                   imagePublicId: uploaded?.publicId || '',
                                 })),
                             })
                           }
-                          onRemove={() => setNewProduct((current) => ({ ...current, image: '', imagePublicId: '' }))}
+                          onRemove={() => updateNewProductField((current) => ({ ...current, image: '', imagePublicId: '' }))}
                         />
                       </div>
                       <div className="admin-product-form__description">
                         <AdminField label="Descricao">
-                          <textarea disabled={catalogReadOnly} rows={productDescriptionRows} value={newProduct.description} onChange={(event) => setNewProduct((current) => ({ ...current, description: event.target.value }))} />
+                          <textarea disabled={catalogReadOnly} rows={productDescriptionRows} value={newProduct.description} onChange={(event) => updateNewProductField((current) => ({ ...current, description: event.target.value }))} />
                         </AdminField>
                       </div>
                     </div>
@@ -949,19 +1190,23 @@ export function TenantModuleManagementSection({
             <>
               <div className={productFormGridClassName}>
                 <AdminField label="Produto">
-                  <input disabled={catalogReadOnly} value={newProduct.name} onChange={(event) => setNewProduct((current) => ({ ...current, name: event.target.value }))} />
+                  <input disabled={catalogReadOnly} value={newProduct.name} onChange={(event) => updateNewProductField((current) => ({ ...current, name: event.target.value }))} />
                 </AdminField>
                 <AdminField label="Categoria">
-                  <input disabled={catalogReadOnly} list={categorySuggestionsId} value={newProduct.category} onChange={(event) => setNewProduct((current) => ({ ...current, category: event.target.value }))} />
+                  <input disabled={catalogReadOnly} list={categorySuggestionsId} value={newProduct.category} onChange={(event) => updateNewProductField((current) => ({ ...current, category: event.target.value }))} />
                 </AdminField>
                 <AdminField label="Preco">
-                  <input disabled={catalogReadOnly} type="number" min="0" step="0.01" value={newProduct.price} onChange={(event) => setNewProduct((current) => ({ ...current, price: Number(event.target.value) }))} />
+                  <input disabled={catalogReadOnly} type="number" min="0" step="0.01" value={newProduct.price} onChange={(event) => updateNewProductField((current) => ({ ...current, price: Number(event.target.value) }))} />
                 </AdminField>
                 <AdminField label="Unidade de venda">
                   <select
                     disabled={catalogReadOnly}
                     value={newProduct.measurementUnit}
-                    onChange={(event) => setNewProduct((current) => ({ ...current, measurementUnit: event.target.value }))}
+                    onChange={(event) =>
+                      updateNewProductField((current) =>
+                        syncInventoryUnitWithMeasurement(current, event.target.value),
+                      )
+                    }
                   >
                     {PRODUCT_MEASUREMENT_UNIT_VALUES.map((measurementUnit) => (
                       <option key={measurementUnit} value={measurementUnit}>
@@ -971,8 +1216,119 @@ export function TenantModuleManagementSection({
                   </select>
                 </AdminField>
               </div>
+              <div className="admin-product-form__toggles">
+                <label className="admin-checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={newProduct.isAvailable !== false}
+                    onChange={(event) =>
+                      updateNewProductField((current) => ({
+                        ...current,
+                        isAvailable: event.target.checked,
+                      }))
+                    }
+                  />
+                  <span>Disponivel para venda no catalogo</span>
+                </label>
+                <label className="admin-checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(newProduct.inventory?.enabled)}
+                    onChange={(event) =>
+                      updateNewProductField((current) => ({
+                        ...current,
+                        inventory: {
+                          ...normalizeProductInventory(current.inventory, current.measurementUnit),
+                          enabled: event.target.checked,
+                        },
+                      }))
+                    }
+                  />
+                  <span>Controlar estoque</span>
+                </label>
+              </div>
+              {newProduct.inventory?.enabled ? (
+                <div className="admin-form-grid admin-product-form__inventory-grid">
+                  <AdminField label="Quantidade atual">
+                    <input
+                      disabled={catalogReadOnly}
+                      type="number"
+                      min="0"
+                      step="0.001"
+                      value={newProduct.inventory.quantity ?? 0}
+                      onChange={(event) =>
+                        updateNewProductField((current) => ({
+                          ...current,
+                          inventory: {
+                            ...normalizeProductInventory(current.inventory, current.measurementUnit),
+                            quantity: Number(event.target.value),
+                          },
+                        }))
+                      }
+                    />
+                  </AdminField>
+                  <AdminField label="Estoque minimo">
+                    <input
+                      disabled={catalogReadOnly}
+                      type="number"
+                      min="0"
+                      step="0.001"
+                      value={newProduct.inventory.minimumQuantity ?? 0}
+                      onChange={(event) =>
+                        updateNewProductField((current) => ({
+                          ...current,
+                          inventory: {
+                            ...normalizeProductInventory(current.inventory, current.measurementUnit),
+                            minimumQuantity: Number(event.target.value),
+                          },
+                        }))
+                      }
+                    />
+                  </AdminField>
+                  <AdminField label="Unidade do estoque">
+                    <select
+                      disabled={catalogReadOnly}
+                      value={newProduct.inventory.unit || newProduct.measurementUnit}
+                      onChange={(event) =>
+                        updateNewProductField((current) => ({
+                          ...current,
+                          inventory: {
+                            ...normalizeProductInventory(current.inventory, current.measurementUnit),
+                            unit: event.target.value,
+                          },
+                        }))
+                      }
+                    >
+                      {PRODUCT_MEASUREMENT_UNIT_VALUES.map((measurementUnit) => (
+                        <option key={`new-admin-inventory-${measurementUnit}`} value={measurementUnit}>
+                          {getMeasurementUnitLabel(measurementUnit)}
+                        </option>
+                      ))}
+                    </select>
+                  </AdminField>
+                  <AdminField label="Observacoes de estoque">
+                    <textarea
+                      disabled={catalogReadOnly}
+                      rows="2"
+                      value={newProduct.inventory.notes || ''}
+                      onChange={(event) =>
+                        updateNewProductField((current) => ({
+                          ...current,
+                          inventory: {
+                            ...normalizeProductInventory(current.inventory, current.measurementUnit),
+                            notes: event.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </AdminField>
+                </div>
+              ) : null}
               <p className="admin-muted-copy admin-product-form__hint">
                 O preco sera calculado conforme a unidade escolhida. Ex.: R$ 59,90/Kg permite pedido de 400g com calculo proporcional.
+              </p>
+              <p className="admin-muted-copy admin-product-form__hint">
+                A disponibilidade manual continua independente do controle de estoque e prepara a estrutura para futuras entradas e saidas.
               </p>
               <div className="admin-product-form__support">
                 <div className="admin-product-form__media">
@@ -983,26 +1339,26 @@ export function TenantModuleManagementSection({
                     uploading={capabilityState.canUploadMedia && uploadingAssetKey === 'new-product-image'}
                     uploadingLabel="Enviando imagem..."
                     disabled={catalogReadOnly || !capabilityState.canUploadMedia}
-                    onChange={(value) => setNewProduct((current) => ({ ...current, image: value, imagePublicId: '' }))}
+                    onChange={(value) => updateNewProductField((current) => ({ ...current, image: value, imagePublicId: '' }))}
                     onUpload={(file) =>
                       handleInlineUpload({
                         file,
                         assetType: 'product',
                         uploadKey: 'new-product-image',
                         onComplete: (uploaded) =>
-                          setNewProduct((current) => ({
+                          updateNewProductField((current) => ({
                             ...current,
                             image: uploaded?.url || '',
                             imagePublicId: uploaded?.publicId || '',
                           })),
                       })
                     }
-                    onRemove={() => setNewProduct((current) => ({ ...current, image: '', imagePublicId: '' }))}
+                    onRemove={() => updateNewProductField((current) => ({ ...current, image: '', imagePublicId: '' }))}
                   />
                 </div>
                 <div className="admin-product-form__description">
                   <AdminField label="Descricao">
-                    <textarea disabled={catalogReadOnly} rows={productDescriptionRows} value={newProduct.description} onChange={(event) => setNewProduct((current) => ({ ...current, description: event.target.value }))} />
+                    <textarea disabled={catalogReadOnly} rows={productDescriptionRows} value={newProduct.description} onChange={(event) => updateNewProductField((current) => ({ ...current, description: event.target.value }))} />
                   </AdminField>
                 </div>
               </div>
@@ -1035,38 +1391,53 @@ export function TenantModuleManagementSection({
                 {filteredEditingProducts.map(({ product, originalIndex }) => (
                 <div
                   key={product.id || originalIndex}
-                  className={`admin-repeater-card admin-repeater-card--product${compactCatalogLayout ? ' admin-repeater-card--product-compact' : ''}`}
+                  className={`admin-repeater-card admin-repeater-card--product${compactCatalogLayout ? ' admin-repeater-card--product-compact' : ''}${product.isAvailable === false ? ' admin-product-card--unavailable' : ''}`}
                 >
                   {compactCatalogLayout ? (
                     <div className="admin-product-card__header">
-                      <div className="admin-product-card__copy">
+                      <div className="admin-product-card__copy admin-product-card__copy--summary">
                         <strong>{product.name || `Produto ${originalIndex + 1}`}</strong>
-                        <span>
-                          {normalizeCategoryLabel(product.category)} / {getMeasurementUnitLabel(product.measurementUnit || DEFAULT_PRODUCT_MEASUREMENT_UNIT)}
-                        </span>
+                        <span>{normalizeCategoryLabel(product.category)} / {getMeasurementUnitLabel(product.measurementUnit || DEFAULT_PRODUCT_MEASUREMENT_UNIT)}</span>
+                        <small>{formatCurrencyValue(product.price || 0)} por {getMeasurementUnitLabel(product.measurementUnit || DEFAULT_PRODUCT_MEASUREMENT_UNIT)}</small>
+                      </div>
+                      <div className="admin-product-card__summary">
+                        <div className="admin-product-card__badges">
+                          <span className={`admin-product-status-badge admin-product-status-badge--${getProductAvailabilityState(product)}`}>
+                            {getProductAvailabilityLabel(product)}
+                          </span>
+                          <span className={`admin-product-stock-badge${product.inventory?.enabled && isInventoryBelowMinimum(product.inventory) ? ' admin-product-stock-badge--warning' : ''}`}>
+                            {getProductInventorySummary(product)}
+                          </span>
+                        </div>
+                        <Button
+                          variant="secondary"
+                          onClick={() => toggleProductExpanded(product.id || `product-${originalIndex}`)}
+                          aria-label={isProductExpanded(product.id || `product-${originalIndex}`) ? `Minimizar produto ${product.name}` : `Expandir produto ${product.name}`}
+                        >
+                          {isProductExpanded(product.id || `product-${originalIndex}`) ? 'Minimizar' : 'Editar'}
+                        </Button>
                       </div>
                     </div>
                   ) : null}
+                  {!compactCatalogLayout || isProductExpanded(product.id || `product-${originalIndex}`) ? (
+                  <>
                   <div className={productFormGridClassName}>
                     <AdminField label="Produto">
-                      <input disabled={catalogReadOnly} value={product.name || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, originalIndex, (item) => ({ ...item, name: event.target.value })))} />
+                      <input disabled={catalogReadOnly} value={product.name || ''} onChange={(event) => updateExistingProductField(originalIndex, (item) => ({ ...item, name: event.target.value }))} />
                     </AdminField>
                     <AdminField label="Preco">
-                      <input disabled={catalogReadOnly} type="number" min="0" step="0.01" value={product.price ?? 0} onChange={(event) => setEditingProducts((current) => updateListItem(current, originalIndex, (item) => ({ ...item, price: Number(event.target.value) })))} />
+                      <input disabled={catalogReadOnly} type="number" min="0" step="0.01" value={product.price ?? 0} onChange={(event) => updateExistingProductField(originalIndex, (item) => ({ ...item, price: Number(event.target.value) }))} />
                     </AdminField>
                     <AdminField label="Categoria">
-                      <input disabled={catalogReadOnly} list={categorySuggestionsId} value={product.category || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, originalIndex, (item) => ({ ...item, category: event.target.value })))} />
+                      <input disabled={catalogReadOnly} list={categorySuggestionsId} value={product.category || ''} onChange={(event) => updateExistingProductField(originalIndex, (item) => ({ ...item, category: event.target.value }))} />
                     </AdminField>
                     <AdminField label="Unidade de venda">
                       <select
                         disabled={catalogReadOnly}
                         value={product.measurementUnit || DEFAULT_PRODUCT_MEASUREMENT_UNIT}
                         onChange={(event) =>
-                          setEditingProducts((current) =>
-                            updateListItem(current, originalIndex, (item) => ({
-                              ...item,
-                              measurementUnit: event.target.value,
-                            })),
+                          updateExistingProductField(originalIndex, (item) =>
+                            syncInventoryUnitWithMeasurement(item, event.target.value),
                           )
                         }
                       >
@@ -1078,6 +1449,117 @@ export function TenantModuleManagementSection({
                       </select>
                     </AdminField>
                   </div>
+                  <div className="admin-product-form__toggles">
+                    <label className="admin-checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={product.isAvailable !== false}
+                        onChange={(event) =>
+                          updateExistingProductField(originalIndex, (item) => ({
+                            ...item,
+                            isAvailable: event.target.checked,
+                          }))
+                        }
+                      />
+                      <span>Disponivel para venda no catalogo</span>
+                    </label>
+                    <label className="admin-checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(product.inventory?.enabled)}
+                        onChange={(event) =>
+                          updateExistingProductField(originalIndex, (item) => ({
+                            ...item,
+                            inventory: {
+                              ...normalizeProductInventory(item.inventory, item.measurementUnit),
+                              enabled: event.target.checked,
+                            },
+                          }))
+                        }
+                      />
+                      <span>Controlar estoque</span>
+                    </label>
+                  </div>
+                  {product.inventory?.enabled ? (
+                    <div className="admin-form-grid admin-product-form__inventory-grid">
+                      <AdminField label="Quantidade atual">
+                        <input
+                          disabled={catalogReadOnly}
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          value={product.inventory.quantity ?? 0}
+                          onChange={(event) =>
+                            updateExistingProductField(originalIndex, (item) => ({
+                              ...item,
+                              inventory: {
+                                ...normalizeProductInventory(item.inventory, item.measurementUnit),
+                                quantity: Number(event.target.value),
+                              },
+                            }))
+                          }
+                        />
+                      </AdminField>
+                      <AdminField label="Estoque minimo">
+                        <input
+                          disabled={catalogReadOnly}
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          value={product.inventory.minimumQuantity ?? 0}
+                          onChange={(event) =>
+                            updateExistingProductField(originalIndex, (item) => ({
+                              ...item,
+                              inventory: {
+                                ...normalizeProductInventory(item.inventory, item.measurementUnit),
+                                minimumQuantity: Number(event.target.value),
+                              },
+                            }))
+                          }
+                        />
+                      </AdminField>
+                      <AdminField label="Unidade do estoque">
+                        <select
+                          disabled={catalogReadOnly}
+                          value={product.inventory.unit || product.measurementUnit || DEFAULT_PRODUCT_MEASUREMENT_UNIT}
+                          onChange={(event) =>
+                            updateExistingProductField(originalIndex, (item) => ({
+                              ...item,
+                              inventory: {
+                                ...normalizeProductInventory(item.inventory, item.measurementUnit),
+                                unit: event.target.value,
+                              },
+                            }))
+                          }
+                        >
+                          {PRODUCT_MEASUREMENT_UNIT_VALUES.map((measurementUnit) => (
+                            <option key={`${product.id || originalIndex}-inventory-${measurementUnit}`} value={measurementUnit}>
+                              {getMeasurementUnitLabel(measurementUnit)}
+                            </option>
+                          ))}
+                        </select>
+                      </AdminField>
+                      <AdminField label="Observacoes de estoque">
+                        <textarea
+                          disabled={catalogReadOnly}
+                          rows="2"
+                          value={product.inventory.notes || ''}
+                          onChange={(event) =>
+                            updateExistingProductField(originalIndex, (item) => ({
+                              ...item,
+                              inventory: {
+                                ...normalizeProductInventory(item.inventory, item.measurementUnit),
+                                notes: event.target.value,
+                              },
+                            }))
+                          }
+                        />
+                      </AdminField>
+                    </div>
+                  ) : null}
+                  <p className="admin-muted-copy admin-product-form__hint">
+                    A disponibilidade manual continua independente do controle de estoque e prepara a integracao futura com movimentacoes.
+                  </p>
                   <div className={`admin-product-form__support${compactCatalogLayout ? ' admin-product-form__support--compact' : ''}`}>
                     <div className="admin-product-form__media">
                       <InlineImageUploadField
@@ -1088,13 +1570,11 @@ export function TenantModuleManagementSection({
                         uploadingLabel="Enviando imagem..."
                         disabled={catalogReadOnly || !capabilityState.canUploadMedia}
                         onChange={(value) =>
-                          setEditingProducts((current) =>
-                            updateListItem(current, originalIndex, (item) => ({
-                              ...item,
-                              image: value,
-                              imagePublicId: value ? item.imagePublicId || '' : '',
-                            })),
-                          )
+                          updateExistingProductField(originalIndex, (item) => ({
+                            ...item,
+                            image: value,
+                            imagePublicId: value ? item.imagePublicId || '' : '',
+                          }))
                         }
                         onUpload={(file) =>
                           handleInlineUpload({
@@ -1102,29 +1582,25 @@ export function TenantModuleManagementSection({
                             assetType: 'product',
                             uploadKey: `product-${originalIndex}`,
                             onComplete: (uploaded) =>
-                              setEditingProducts((current) =>
-                                updateListItem(current, originalIndex, (item) => ({
-                                  ...item,
-                                  image: uploaded?.url || '',
-                                  imagePublicId: uploaded?.publicId || '',
-                                })),
-                              ),
+                              updateExistingProductField(originalIndex, (item) => ({
+                                ...item,
+                                image: uploaded?.url || '',
+                                imagePublicId: uploaded?.publicId || '',
+                              })),
                           })
                         }
                         onRemove={() =>
-                          setEditingProducts((current) =>
-                            updateListItem(current, originalIndex, (item) => ({
-                              ...item,
-                              image: '',
-                              imagePublicId: '',
-                            })),
-                          )
+                          updateExistingProductField(originalIndex, (item) => ({
+                            ...item,
+                            image: '',
+                            imagePublicId: '',
+                          }))
                         }
                       />
                     </div>
                     <div className="admin-product-form__description">
                       <AdminField label="Descricao">
-                        <textarea disabled={catalogReadOnly} rows={productDescriptionRows} value={product.description || ''} onChange={(event) => setEditingProducts((current) => updateListItem(current, originalIndex, (item) => ({ ...item, description: event.target.value })))} />
+                        <textarea disabled={catalogReadOnly} rows={productDescriptionRows} value={product.description || ''} onChange={(event) => updateExistingProductField(originalIndex, (item) => ({ ...item, description: event.target.value }))} />
                       </AdminField>
                     </div>
                   </div>
@@ -1136,6 +1612,8 @@ export function TenantModuleManagementSection({
                       {busyKey === 'delete-product' ? 'Removendo...' : 'Remover'}
                     </Button>
                   </div>
+                  </>
+                  ) : null}
                 </div>
                 ))}
               </div>
@@ -1147,6 +1625,201 @@ export function TenantModuleManagementSection({
             <p className="admin-muted-copy">Nenhum produto encontrado com essa busca.</p>
           ) : (
             !editingProducts.length ? <p className="admin-muted-copy">Nenhum produto cadastrado</p> : null
+          )}
+        </div>
+      ) : null}
+
+      {activeTab === 'stock' ? (
+        <div className="admin-card-stack admin-stock-management">
+          <div className="admin-product-existing-section__header admin-stock-management__header">
+            <div className="admin-product-existing-section__copy">
+              <strong>Estoque integrado ao catalogo</strong>
+              <span>Controle apenas os produtos que realmente usam estoque, sem separar a base do catalogo.</span>
+            </div>
+          </div>
+
+          <div className="admin-stock-summary-grid">
+            <div className="admin-stock-summary-card">
+              <span>Produtos no catalogo</span>
+              <strong>{stockSummary.totalProducts}</strong>
+            </div>
+            <div className="admin-stock-summary-card">
+              <span>Com estoque ativo</span>
+              <strong>{stockSummary.controlledProducts}</strong>
+            </div>
+            <div className="admin-stock-summary-card admin-stock-summary-card--warning">
+              <span>Abaixo do minimo</span>
+              <strong>{stockSummary.lowStockProducts}</strong>
+            </div>
+            <div className="admin-stock-summary-card">
+              <span>Indisponiveis</span>
+              <strong>{stockSummary.unavailableProducts}</strong>
+            </div>
+          </div>
+
+          <label className="admin-field admin-product-search-field">
+            <span>Buscar item no estoque</span>
+            <input
+              type="search"
+              value={stockSearchValue}
+              onChange={(event) => setStockSearchValue(event.target.value)}
+              placeholder="Buscar produto por nome, categoria ou descricao"
+            />
+          </label>
+
+          {filteredStockProducts.length ? (
+            <div className="admin-repeater-list">
+              {filteredStockProducts.map(({ product, originalIndex }) => (
+                <div
+                  key={`stock-${product.id || originalIndex}`}
+                  className={`admin-repeater-card admin-stock-card${product.isAvailable === false ? ' admin-product-card--unavailable' : ''}`}
+                >
+                  <div className="admin-product-card__header">
+                    <div className="admin-product-card__copy admin-product-card__copy--summary">
+                      <strong>{product.name || `Produto ${originalIndex + 1}`}</strong>
+                      <span>{normalizeCategoryLabel(product.category)} / {getMeasurementUnitLabel(product.measurementUnit || DEFAULT_PRODUCT_MEASUREMENT_UNIT)}</span>
+                      <small>{formatCurrencyValue(product.price || 0)} por {getMeasurementUnitLabel(product.measurementUnit || DEFAULT_PRODUCT_MEASUREMENT_UNIT)}</small>
+                    </div>
+                    <div className="admin-product-card__badges">
+                      <span className={`admin-product-status-badge admin-product-status-badge--${getProductAvailabilityState(product)}`}>
+                        {getProductAvailabilityLabel(product)}
+                      </span>
+                      <span className={`admin-product-stock-badge${product.inventory?.enabled && isInventoryBelowMinimum(product.inventory) ? ' admin-product-stock-badge--warning' : ''}`}>
+                        {getProductInventorySummary(product)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="admin-product-form__toggles">
+                    <label className="admin-checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={product.isAvailable !== false}
+                        disabled={catalogReadOnly}
+                        onChange={(event) =>
+                          updateExistingProductField(originalIndex, (item) => ({
+                            ...item,
+                            isAvailable: event.target.checked,
+                          }))
+                        }
+                      />
+                      <span>Disponivel para venda</span>
+                    </label>
+                    <label className="admin-checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(product.inventory?.enabled)}
+                        disabled={catalogReadOnly}
+                        onChange={(event) =>
+                          updateExistingProductField(originalIndex, (item) => ({
+                            ...item,
+                            inventory: {
+                              ...normalizeProductInventory(item.inventory, item.measurementUnit),
+                              enabled: event.target.checked,
+                            },
+                          }))
+                        }
+                      />
+                      <span>Controlar estoque</span>
+                    </label>
+                  </div>
+
+                  {product.inventory?.enabled ? (
+                    <div className="admin-form-grid admin-product-form__inventory-grid">
+                      <AdminField label="Quantidade atual">
+                        <input
+                          disabled={catalogReadOnly}
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          value={product.inventory.quantity ?? 0}
+                          onChange={(event) =>
+                            updateExistingProductField(originalIndex, (item) => ({
+                              ...item,
+                              inventory: {
+                                ...normalizeProductInventory(item.inventory, item.measurementUnit),
+                                quantity: Number(event.target.value),
+                              },
+                            }))
+                          }
+                        />
+                      </AdminField>
+                      <AdminField label="Estoque minimo">
+                        <input
+                          disabled={catalogReadOnly}
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          value={product.inventory.minimumQuantity ?? 0}
+                          onChange={(event) =>
+                            updateExistingProductField(originalIndex, (item) => ({
+                              ...item,
+                              inventory: {
+                                ...normalizeProductInventory(item.inventory, item.measurementUnit),
+                                minimumQuantity: Number(event.target.value),
+                              },
+                            }))
+                          }
+                        />
+                      </AdminField>
+                      <AdminField label="Unidade do estoque">
+                        <select
+                          disabled={catalogReadOnly}
+                          value={product.inventory.unit || product.measurementUnit || DEFAULT_PRODUCT_MEASUREMENT_UNIT}
+                          onChange={(event) =>
+                            updateExistingProductField(originalIndex, (item) => ({
+                              ...item,
+                              inventory: {
+                                ...normalizeProductInventory(item.inventory, item.measurementUnit),
+                                unit: event.target.value,
+                              },
+                            }))
+                          }
+                        >
+                          {PRODUCT_MEASUREMENT_UNIT_VALUES.map((measurementUnit) => (
+                            <option key={`stock-${product.id || originalIndex}-${measurementUnit}`} value={measurementUnit}>
+                              {getMeasurementUnitLabel(measurementUnit)}
+                            </option>
+                          ))}
+                        </select>
+                      </AdminField>
+                      <AdminField label="Observacoes de estoque">
+                        <textarea
+                          disabled={catalogReadOnly}
+                          rows="2"
+                          value={product.inventory.notes || ''}
+                          onChange={(event) =>
+                            updateExistingProductField(originalIndex, (item) => ({
+                              ...item,
+                              inventory: {
+                                ...normalizeProductInventory(item.inventory, item.measurementUnit),
+                                notes: event.target.value,
+                              },
+                            }))
+                          }
+                        />
+                      </AdminField>
+                    </div>
+                  ) : (
+                    <p className="admin-muted-copy">Ative o controle de estoque apenas para produtos que exigem acompanhamento de quantidade e estoque minimo.</p>
+                  )}
+
+                  <div className="admin-inline-actions admin-product-form__actions">
+                    <Button
+                      variant="secondary"
+                      disabled={catalogReadOnly || !product.name?.trim() || busyKey === 'update-product'}
+                      onClick={() => moduleActions?.updateProduct?.(product.id, product)}
+                    >
+                      {busyKey === 'update-product' ? 'Salvando...' : 'Salvar estoque'}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="admin-muted-copy">
+              {editingProducts.length ? 'Nenhum item encontrado com essa busca.' : 'Cadastre produtos no catalogo para controlar estoque por item.'}
+            </p>
           )}
         </div>
       ) : null}
@@ -1264,7 +1937,11 @@ export function TenantModuleManagementSection({
                 {!isOrderGroupCollapsed(group.status) ? (
                 <div className="admin-repeater-list">
                   {group.items.map((order) => (
-                    <div key={order.id} className="admin-repeater-card admin-order-card" data-testid={`order-card-${group.status}`}>
+                    <div
+                      key={order.id}
+                      className={`admin-repeater-card admin-order-card admin-order-card--${order.status || 'received'}`}
+                      data-testid={`order-card-${group.status}`}
+                    >
                       <div className="admin-order-card__header">
                         <div className="admin-order-card__identity">
                           <strong>{order.customerName}</strong>

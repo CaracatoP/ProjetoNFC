@@ -58,6 +58,10 @@ import {
   normalizeMeasurementUnit,
   normalizeProductMeasurement,
 } from '../../../shared/utils/productMeasurement.js';
+import {
+  normalizeProductAvailability,
+  normalizeProductInventory,
+} from '../../../shared/utils/productInventory.js';
 import { TENANT_REALTIME_KINDS } from '../../../shared/constants/tenantRealtime.js';
 import { buildPixPayload } from '../../../shared/utils/pix.js';
 import { publishTenantUpdated } from './tenantRealtimeService.js';
@@ -145,6 +149,8 @@ function assertTenantScope(entity, businessId, resourceLabel) {
 
 function serializeProductRecord(item) {
   const record = normalizeProductMeasurement(toPlainRecord(item));
+  const isAvailable = normalizeProductAvailability(record.isAvailable);
+  const inventory = normalizeProductInventory(record.inventory, record.measurementUnit);
 
   return {
     ...record,
@@ -152,8 +158,23 @@ function serializeProductRecord(item) {
     image: record.image || '',
     imagePublicId: record.imagePublicId || '',
     category: record.category || '',
+    isAvailable,
+    inventory,
     active: record.active !== false,
     options: Array.isArray(record.options) ? record.options : [],
+  };
+}
+
+function normalizeProductMutationPayload(payload = {}, fallbackMeasurementUnit) {
+  const measurementUnit = normalizeMeasurementUnit(
+    payload.measurementUnit || fallbackMeasurementUnit,
+  );
+
+  return {
+    ...payload,
+    measurementUnit,
+    isAvailable: normalizeProductAvailability(payload.isAvailable),
+    inventory: normalizeProductInventory(payload.inventory, measurementUnit),
   };
 }
 
@@ -741,7 +762,10 @@ export async function listTenantProducts(businessId) {
 
 export async function createTenantProduct(businessId, payload) {
   const business = await assertBusinessExists(businessId);
-  const created = await createProductRecord({ ...payload, businessId });
+  const created = await createProductRecord({
+    ...normalizeProductMutationPayload(payload),
+    businessId,
+  });
   publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.PRODUCT_CREATED, 'created');
   return serializeProductRecord(created);
 }
@@ -750,7 +774,11 @@ export async function updateTenantProduct(businessId, id, payload) {
   const business = await assertBusinessExists(businessId);
   const existing = await findProductById(id);
   assertTenantScope(existing, businessId, 'Produto');
-  const updated = await updateProductRecordByBusinessId(businessId, id, payload);
+  const updated = await updateProductRecordByBusinessId(
+    businessId,
+    id,
+    normalizeProductMutationPayload(payload, existing.measurementUnit),
+  );
   publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.PRODUCT_UPDATED);
   return serializeProductRecord(updated);
 }
@@ -845,6 +873,14 @@ async function buildOrderItemsSnapshot(businessId, items = []) {
 
     if (requestedProductId && !product) {
       throw new AppError('Produto nao encontrado para este tenant.', 404, 'order_product_not_found');
+    }
+
+    if (product && product.isAvailable === false) {
+      throw new AppError(
+        'Um dos produtos selecionados esta indisponivel no momento.',
+        400,
+        'order_product_unavailable',
+      );
     }
 
     const unitPrice = Number(product?.price ?? item.unitPrice ?? 0);

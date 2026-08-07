@@ -8,10 +8,21 @@ import { businessLinkArraySchema } from './link.js';
 import { businessSectionArraySchema } from './section.js';
 import { themeSchema } from './theme.js';
 import { normalizeMeasurementUnit } from '../utils/productMeasurement.js';
+import { normalizeProductInventory } from '../utils/productInventory.js';
 
 const measurementUnitSchema = z.preprocess(
   (value) => normalizeMeasurementUnit(value),
   z.enum(PRODUCT_MEASUREMENT_UNIT_VALUES).default(DEFAULT_PRODUCT_MEASUREMENT_UNIT),
+);
+const inventorySchema = z.preprocess(
+  (value) => normalizeProductInventory(value),
+  z.object({
+    enabled: z.boolean().default(false),
+    quantity: z.number().default(0),
+    minimumQuantity: z.number().default(0),
+    unit: measurementUnitSchema,
+    notes: z.string().optional().or(z.literal('')),
+  }),
 );
 
 export const publicSitePayloadSchema = z.object({
@@ -54,6 +65,8 @@ export const publicSitePayloadSchema = z.object({
             image: z.string().optional().or(z.literal('')),
             category: z.string().optional().or(z.literal('')),
             measurementUnit: measurementUnitSchema,
+            isAvailable: z.boolean().optional(),
+            inventory: inventorySchema.optional(),
             active: z.boolean().optional(),
             options: z.array(z.any()).optional(),
           }),

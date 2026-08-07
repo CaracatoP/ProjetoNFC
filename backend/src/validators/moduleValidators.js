@@ -19,6 +19,13 @@ const optionalMeasurementUnitSchema = z.preprocess(
   },
   z.enum(PRODUCT_MEASUREMENT_UNIT_VALUES).optional(),
 );
+const productInventorySchema = z.object({
+  enabled: z.boolean().default(false),
+  quantity: z.number().min(0).default(0),
+  minimumQuantity: z.number().min(0).default(0),
+  unit: optionalMeasurementUnitSchema,
+  notes: optionalString,
+});
 const optionalPaymentMethodSchema = z.preprocess(
   (value) => {
     const normalizedValue = String(value || '').trim().toLowerCase();
@@ -80,6 +87,8 @@ export const productBodySchema = z.object({
   imagePublicId: optionalString,
   category: optionalString,
   measurementUnit: measurementUnitSchema,
+  isAvailable: z.boolean().default(true),
+  inventory: productInventorySchema.optional().default({}),
   active: z.boolean().default(true),
   options: z.array(z.any()).optional().default([]),
 });

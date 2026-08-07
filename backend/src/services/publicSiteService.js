@@ -27,6 +27,10 @@ import {
 import { buildBusinessSegmentState } from '../../../shared/utils/segments.js';
 import { normalizeBusinessContact } from '../../../shared/utils/businessContact.js';
 import { resolveBusinessPaymentSettings } from '../../../shared/utils/businessPayment.js';
+import {
+  normalizeProductAvailability,
+  normalizeProductInventory,
+} from '../../../shared/utils/productInventory.js';
 import { buildTenantTheme } from '../../../shared/utils/theme.js';
 import { normalizeProductMeasurement } from '../../../shared/utils/productMeasurement.js';
 
@@ -479,6 +483,8 @@ async function getPublicSiteByBusiness(business, options = {}) {
           image: item.image || '',
           category: item.category || '',
           measurementUnit: item.measurementUnit,
+          isAvailable: normalizeProductAvailability(item.isAvailable),
+          inventory: normalizeProductInventory(item.inventory, item.measurementUnit),
           active: item.active !== false,
           options: Array.isArray(item.options) ? item.options : [],
         }),

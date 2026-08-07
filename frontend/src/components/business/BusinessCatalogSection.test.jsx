@@ -81,6 +81,7 @@ const productsFixture = [
     image: '',
     category: 'Finalizacao',
     measurementUnit: 'unit',
+    isAvailable: true,
     active: true,
   },
   {
@@ -91,6 +92,7 @@ const productsFixture = [
     image: '',
     category: '',
     measurementUnit: 'unit',
+    isAvailable: true,
     active: true,
   },
   {
@@ -101,6 +103,7 @@ const productsFixture = [
     image: '',
     category: 'Carnes',
     measurementUnit: 'kg',
+    isAvailable: true,
     active: true,
   },
 ];
@@ -585,5 +588,53 @@ describe('BusinessCatalogSection', () => {
     await user.click(screen.getByRole('button', { name: 'Retirada' }));
     expect(screen.getByRole('button', { name: 'Pagamento na retirada' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Pagamento na entrega' })).not.toBeInTheDocument();
+  });
+
+  it('keeps unavailable products visible, disables purchase controls, and clears stale cart entries for them', async () => {
+    const unavailableProducts = [
+      ...productsFixture,
+      {
+        id: 'product-4',
+        name: 'Costela especial',
+        description: 'Temporariamente fora da vitrine',
+        price: 45.9,
+        image: '',
+        category: 'Carnes',
+        measurementUnit: 'kg',
+        isAvailable: false,
+        active: true,
+      },
+    ];
+
+    window.localStorage.setItem('taplink:cart:acougue-central', JSON.stringify({ 'product-4': 1 }));
+
+    render(
+      <BusinessCatalogSection
+        business={{
+          ...businessFixture,
+          slug: 'acougue-central',
+          name: 'Acougue Central',
+        }}
+        tenantSlug="acougue-central"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={unavailableProducts}
+        onSubmitOrder={vi.fn()}
+      />,
+    );
+
+    const meatsSection = screen.getByRole('heading', { name: 'Carnes' }).closest('section');
+    const unavailableCard = within(meatsSection).getByText('Costela especial').closest('.catalog-card');
+
+    expect(unavailableCard).toHaveClass('catalog-card--unavailable');
+    expect(within(unavailableCard).getAllByText('Indisponivel').length).toBeGreaterThan(0);
+    expect(within(unavailableCard).getByRole('button', { name: 'Indisponivel' })).toBeDisabled();
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem('taplink:cart:acougue-central')).toBeNull();
+    });
+
+    const cartTrigger = screen.getByRole('button', { name: /Abrir carrinho/i });
+    expect(within(cartTrigger).getByText('0')).toBeInTheDocument();
   });
 });

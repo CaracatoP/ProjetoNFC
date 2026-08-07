@@ -49,6 +49,10 @@ import {
 import { buildBusinessSegmentState } from '../../../shared/utils/segments.js';
 import { buildTenantTheme } from '../../../shared/utils/theme.js';
 import {
+  normalizeProductAvailability,
+  normalizeProductInventory,
+} from '../../../shared/utils/productInventory.js';
+import {
   buildLegacyDisplayQuantity,
   calculateMeasuredItemTotal,
   normalizeMeasurementUnit,
@@ -752,6 +756,8 @@ async function hydrateEditorResponse(businessId) {
           imagePublicId: item.imagePublicId || '',
           category: item.category || '',
           measurementUnit: item.measurementUnit,
+          isAvailable: normalizeProductAvailability(item.isAvailable),
+          inventory: normalizeProductInventory(item.inventory, item.measurementUnit),
           active: item.active !== false,
           options: Array.isArray(item.options) ? item.options : [],
         }),

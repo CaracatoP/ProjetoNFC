@@ -4,6 +4,10 @@ import {
   PRODUCT_MEASUREMENT_UNIT_VALUES,
 } from '../../../shared/constants/index.js';
 import { normalizeMeasurementUnit } from '../../../shared/utils/productMeasurement.js';
+import {
+  normalizeProductAvailability,
+  normalizeProductInventory,
+} from '../../../shared/utils/productInventory.js';
 import { baseSchemaOptions } from '../utils/mongoose.js';
 
 const baseToJSONTransform = baseSchemaOptions.toJSON?.transform;
@@ -36,6 +40,19 @@ const productSchema = new mongoose.Schema(
       default: DEFAULT_PRODUCT_MEASUREMENT_UNIT,
       trim: true,
     },
+    isAvailable: { type: Boolean, default: true, index: true },
+    inventory: {
+      enabled: { type: Boolean, default: false },
+      quantity: { type: Number, default: 0, min: 0 },
+      minimumQuantity: { type: Number, default: 0, min: 0 },
+      unit: {
+        type: String,
+        enum: PRODUCT_MEASUREMENT_UNIT_VALUES,
+        default: DEFAULT_PRODUCT_MEASUREMENT_UNIT,
+        trim: true,
+      },
+      notes: { type: String, trim: true, default: '' },
+    },
     active: { type: Boolean, default: true, index: true },
     options: { type: [productOptionSchema], default: [] },
   },
@@ -46,6 +63,11 @@ const productSchema = new mongoose.Schema(
       transform: (doc, ret) => {
         const transformed = baseToJSONTransform ? baseToJSONTransform(doc, ret) : ret;
         transformed.measurementUnit = normalizeMeasurementUnit(transformed.measurementUnit);
+        transformed.isAvailable = normalizeProductAvailability(transformed.isAvailable);
+        transformed.inventory = normalizeProductInventory(
+          transformed.inventory,
+          transformed.measurementUnit,
+        );
         return transformed;
       },
     },
@@ -54,6 +76,11 @@ const productSchema = new mongoose.Schema(
       transform: (doc, ret) => {
         const transformed = baseToObjectTransform ? baseToObjectTransform(doc, ret) : ret;
         transformed.measurementUnit = normalizeMeasurementUnit(transformed.measurementUnit);
+        transformed.isAvailable = normalizeProductAvailability(transformed.isAvailable);
+        transformed.inventory = normalizeProductInventory(
+          transformed.inventory,
+          transformed.measurementUnit,
+        );
         return transformed;
       },
     },

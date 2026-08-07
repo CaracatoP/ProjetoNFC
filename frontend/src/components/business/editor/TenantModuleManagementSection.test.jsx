@@ -268,6 +268,7 @@ describe('TenantModuleManagementSection', () => {
 
     expect(screen.queryByTestId('client-product-create-form')).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole('button', { name: /Expandir produto Pomada modeladora/i }));
     const existingProductNameInput = screen.getByDisplayValue('Pomada modeladora');
     await user.clear(existingProductNameInput);
     await user.type(existingProductNameInput, 'Pomada fosca');
@@ -337,6 +338,80 @@ describe('TenantModuleManagementSection', () => {
     expect(screen.getByText('Nenhum produto encontrado com essa busca.')).toBeInTheDocument();
   });
 
+  it('shows a dedicated stock tab in client mode and persists availability plus inventory through the catalog action', async () => {
+    const user = userEvent.setup();
+    const updateProduct = vi.fn().mockResolvedValue({ id: 'product-1' });
+
+    render(
+      <TenantModuleManagementSection
+        draft={buildDraft({
+          modulesData: {
+            professionals: [],
+            appointmentServices: [],
+            appointmentRequests: [],
+            orders: [],
+            products: [
+              {
+                id: 'product-1',
+                name: 'Picanha premium',
+                category: 'Carnes',
+                price: 79.9,
+                image: '',
+                measurementUnit: 'kg',
+                description: 'Corte nobre',
+                isAvailable: true,
+                inventory: {
+                  enabled: true,
+                  quantity: 8,
+                  minimumQuantity: 3,
+                  unit: 'kg',
+                  notes: 'Camara fria principal',
+                },
+                active: true,
+              },
+            ],
+          },
+        })}
+        onDraftChange={vi.fn()}
+        moduleActions={{ updateProduct }}
+        mode="client"
+        permissions={{
+          canViewCatalog: true,
+          canEditCatalog: true,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Estoque' }));
+
+    expect(screen.getByText('Estoque integrado ao catalogo')).toBeInTheDocument();
+    expect(screen.getByText('Com estoque ativo')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('8')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('3')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Camara fria principal')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: /Disponivel para venda/i }));
+    await user.clear(screen.getByLabelText('Quantidade atual'));
+    await user.type(screen.getByLabelText('Quantidade atual'), '2');
+    await user.click(screen.getByRole('button', { name: 'Salvar estoque' }));
+
+    await waitFor(() => {
+      expect(updateProduct).toHaveBeenCalledWith(
+        'product-1',
+        expect.objectContaining({
+          isAvailable: false,
+          inventory: expect.objectContaining({
+            enabled: true,
+            quantity: 2,
+            minimumQuantity: 3,
+            unit: 'kg',
+            notes: 'Camara fria principal',
+          }),
+        }),
+      );
+    });
+  });
+
   it('lets client mode collapse existing catalog products and order status groups', async () => {
     const user = userEvent.setup();
 
@@ -397,6 +472,7 @@ describe('TenantModuleManagementSection', () => {
 
     await user.click(screen.getByRole('button', { name: 'Catalogo' }));
 
+    await user.click(screen.getByRole('button', { name: /Expandir produto Pomada modeladora/i }));
     expect(screen.getByDisplayValue('Pomada modeladora')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Minimizar produtos cadastrados/i }));
     expect(screen.queryByDisplayValue('Pomada modeladora')).not.toBeInTheDocument();
@@ -512,10 +588,12 @@ describe('TenantModuleManagementSection', () => {
     expect(screen.getAllByText('Recebido').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Criado em:/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Recebido em:/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId('order-card-received')[0]).toHaveClass('admin-order-card--received');
 
     await user.click(screen.getByRole('button', { name: /Expandir grupo Prontos/i }));
     expect(screen.getByText('Pronto/Retirado')).toBeInTheDocument();
     expect(screen.getByText(/Pronto em:/i)).toBeInTheDocument();
+    expect(screen.getByTestId('order-card-ready')).toHaveClass('admin-order-card--ready');
 
     const searchInput = screen.getByPlaceholderText(/Buscar por cliente, telefone ou item/i);
     await user.type(searchInput, 'carvao');

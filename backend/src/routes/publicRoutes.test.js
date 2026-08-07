@@ -325,7 +325,7 @@ describe('Public routes', () => {
     expect(response.body.data.modulesData.products.some((item) => item.name === 'Pomada')).toBe(true);
   });
 
-  it('returns active public products for the tenant slug', async () => {
+  it('returns active public products for the tenant slug while keeping unavailable items visible', async () => {
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
 
     await Product.create([
@@ -337,6 +337,23 @@ describe('Public routes', () => {
         image: 'https://cdn.example.com/products/pomada-premium.png',
         category: 'Finalizacao',
         measurementUnit: 'unit',
+        active: true,
+      },
+      {
+        businessId: business._id,
+        name: 'Produto indisponivel',
+        description: 'Continua visivel, mas sem compra',
+        price: 35,
+        category: 'Finalizacao',
+        measurementUnit: 'unit',
+        isAvailable: false,
+        inventory: {
+          enabled: true,
+          quantity: 0,
+          minimumQuantity: 1,
+          unit: 'unit',
+          notes: 'Aguardando reposicao',
+        },
         active: true,
       },
       {
@@ -353,8 +370,30 @@ describe('Public routes', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.some((item) => item.name === 'Pomada premium')).toBe(true);
+    expect(response.body.data.some((item) => item.name === 'Produto indisponivel')).toBe(true);
     expect(response.body.data.some((item) => item.name === 'Produto oculto')).toBe(false);
-    expect(response.body.data.find((item) => item.name === 'Pomada premium')?.measurementUnit).toBe('unit');
+    expect(response.body.data.find((item) => item.name === 'Pomada premium')).toEqual(
+      expect.objectContaining({
+        measurementUnit: 'unit',
+        isAvailable: true,
+        inventory: expect.objectContaining({
+          enabled: false,
+          quantity: 0,
+        }),
+      }),
+    );
+    expect(response.body.data.find((item) => item.name === 'Produto indisponivel')).toEqual(
+      expect.objectContaining({
+        isAvailable: false,
+        inventory: expect.objectContaining({
+          enabled: true,
+          quantity: 0,
+          minimumQuantity: 1,
+          unit: 'unit',
+          notes: 'Aguardando reposicao',
+        }),
+      }),
+    );
   });
 
   it('creates a public appointment request with pending status', async () => {
@@ -1421,6 +1460,44 @@ describe('Public routes', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('validation_error');
+  });
+
+  it('rejects public orders for unavailable products even when the request is sent manually', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Picanha indisponivel',
+      description: 'Sem venda hoje',
+      price: 69.9,
+      image: '',
+      category: 'Carnes',
+      measurementUnit: 'kg',
+      isAvailable: false,
+      active: true,
+    });
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Carlos',
+        customerPhone: '5511988887777',
+        items: [
+          {
+            productId: product.id,
+            name: 'Picanha indisponivel',
+            quantity: 0.4,
+            unitPrice: 10,
+            measurementUnit: 'kg',
+          },
+        ],
+        deliveryType: 'pickup',
+        payment: {
+          method: 'cash_on_pickup',
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('order_product_unavailable');
   });
 
   it('returns 404 when the slug does not exist', async () => {

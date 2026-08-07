@@ -18,6 +18,10 @@ import {
   normalizeProductMeasurement,
   requiresIntegerMeasurementQuantity,
 } from '@shared/utils/productMeasurement.js';
+import {
+  normalizeProductAvailability,
+  normalizeProductInventory,
+} from '@shared/utils/productInventory.js';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 import { SectionHeader } from '@/components/common/SectionHeader.jsx';
@@ -122,6 +126,19 @@ function matchesProductSearch(product, searchTerm) {
     .join(' ');
 
   return haystack.includes(searchTerm);
+}
+
+function normalizeCatalogProduct(product = {}) {
+  const normalizedProduct = normalizeProductMeasurement(product);
+
+  return {
+    ...normalizedProduct,
+    isAvailable: normalizeProductAvailability(normalizedProduct.isAvailable),
+    inventory: normalizeProductInventory(
+      normalizedProduct.inventory,
+      normalizedProduct.measurementUnit,
+    ),
+  };
 }
 
 function normalizePhoneDigits(value) {
@@ -453,7 +470,7 @@ export function BusinessCatalogSection({
   const checkoutBodyRef = useRef(null);
   const checkoutFieldRefs = useRef({});
   const normalizedProducts = useMemo(
-    () => (products || []).map((product) => normalizeProductMeasurement(product)),
+    () => (products || []).map((product) => normalizeCatalogProduct(product)),
     [products],
   );
   const normalizedSearch = useMemo(() => normalizeSearchTerm(searchValue), [searchValue]);
@@ -489,6 +506,44 @@ export function BusinessCatalogSection({
     persistStoredCart(tenantSlug, cart);
   }, [cart, tenantSlug]);
 
+  useEffect(() => {
+    const productsById = new Map(normalizedProducts.map((product) => [product.id, product]));
+    const nextCart = {};
+    let cartChanged = false;
+
+    Object.entries(cart).forEach(([productId, quantity]) => {
+      const product = productsById.get(productId);
+
+      if (!product || product.isAvailable === false) {
+        cartChanged = true;
+        return;
+      }
+
+      const normalizedQuantity = normalizeCartQuantityForProduct(product, quantity);
+
+      if (!normalizedQuantity) {
+        cartChanged = true;
+        return;
+      }
+
+      nextCart[productId] = normalizedQuantity;
+
+      if (normalizedQuantity !== quantity) {
+        cartChanged = true;
+      }
+    });
+
+    if (!cartChanged && Object.keys(nextCart).length === Object.keys(cart).length) {
+      return;
+    }
+
+    setCart(nextCart);
+
+    if (Object.keys(cart).length) {
+      setFeedback('Alguns itens indisponiveis foram removidos do carrinho.');
+    }
+  }, [cart, normalizedProducts]);
+
   const filteredProducts = useMemo(
     () => normalizedProducts.filter((product) => matchesProductSearch(product, normalizedSearch)),
     [normalizedProducts, normalizedSearch],
@@ -520,7 +575,7 @@ export function BusinessCatalogSection({
           product,
           quantity: normalizeCartQuantityForProduct(product, cart[product.id]),
         }))
-        .filter(({ quantity }) => quantity > 0)
+        .filter(({ product, quantity }) => quantity > 0 && product.isAvailable !== false)
         .map(({ product, quantity }) => ({
           productId: product.id,
           name: product.name,
@@ -593,6 +648,11 @@ export function BusinessCatalogSection({
   }
 
   function updateCartQuantity(product, quantity) {
+    if (product?.isAvailable === false) {
+      setFeedback('Este produto esta indisponivel no momento.');
+      return;
+    }
+
     setCheckoutResult(null);
     setPixCopyFeedback('');
     setFeedback('');
@@ -646,6 +706,11 @@ export function BusinessCatalogSection({
   }
 
   function addFractionalProductToCart(product) {
+    if (product?.isAvailable === false) {
+      setFeedback('Este produto esta indisponivel no momento.');
+      return;
+    }
+
     const inputValue = getFractionInputValue(product);
     const quantityToAdd = convertInputValueToCartQuantity(product, inputValue);
 
@@ -1272,12 +1337,19 @@ export function BusinessCatalogSection({
                     height: 720,
                     fit: 'fill',
                   });
+                  const productIsAvailable = product.isAvailable !== false;
 
                   return (
-                    <article key={product.id} className="catalog-card">
+                    <article
+                      key={product.id}
+                      className={`catalog-card${productIsAvailable ? '' : ' catalog-card--unavailable'}`}
+                    >
                       {imageUrl ? (
                         <div className="catalog-card__media">
                           <img src={imageUrl} alt={product.name} width="720" height="720" loading="lazy" decoding="async" />
+                          {!productIsAvailable ? (
+                            <span className="catalog-card__media-badge">Indisponivel</span>
+                          ) : null}
                         </div>
                       ) : null}
                       <div className="catalog-card__content">
@@ -1287,11 +1359,25 @@ export function BusinessCatalogSection({
                             {formatCurrency(product.price)} / {getMeasurementUnitLabel(product.measurementUnit)}
                           </strong>
                         </div>
-                        <span className="admin-section-chip admin-section-chip--muted">{group.category}</span>
+                        <div className="catalog-card__chips">
+                          <span className="admin-section-chip admin-section-chip--muted">{group.category}</span>
+                          {!productIsAvailable ? (
+                            <span className="catalog-card__availability-badge">Indisponivel</span>
+                          ) : null}
+                        </div>
                         {product.description ? <p>{product.description}</p> : null}
+                        {!productIsAvailable ? (
+                          <p className="catalog-card__unavailable-note">
+                            Este produto continua visivel no catalogo, mas esta temporariamente indisponivel para compra.
+                          </p>
+                        ) : null}
                         {modules.cart || modules.orders ? (
                           <div className="catalog-card__actions">
-                            {isFractionalMeasurementUnit(product.measurementUnit) ? (
+                            {!productIsAvailable ? (
+                              <Button type="button" disabled>
+                                Indisponivel
+                              </Button>
+                            ) : isFractionalMeasurementUnit(product.measurementUnit) ? (
                               <div className="catalog-card__fractional">
                                 <label className="admin-field">
                                   <span>{getFractionInputConfig(product.measurementUnit).label}</span>
@@ -1334,6 +1420,7 @@ export function BusinessCatalogSection({
                                   type="button"
                                   variant="secondary"
                                   aria-label={`Diminuir quantidade de ${product.name}`}
+                                  disabled={!productIsAvailable}
                                   onClick={() => updateCartQuantity(product, Number(cart[product.id] || 0) - 1)}
                                 >
                                   -
@@ -1341,6 +1428,7 @@ export function BusinessCatalogSection({
                                 <span>{cart[product.id] || 0}</span>
                                 <Button
                                   type="button"
+                                  disabled={!productIsAvailable}
                                   onClick={() => {
                                     updateCartQuantity(product, Number(cart[product.id] || 0) + 1);
                                     onTrackAction?.({

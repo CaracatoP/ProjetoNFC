@@ -449,12 +449,52 @@ describe('Client panel routes', () => {
         image: '',
         category: 'Finalizacao',
         measurementUnit: 'unit',
+        isAvailable: false,
+        inventory: {
+          enabled: true,
+          quantity: 12,
+          minimumQuantity: 4,
+          unit: 'unit',
+          notes: 'Prateleira principal',
+        },
         active: true,
       });
 
     expect(createProductResponse.status).toBe(201);
     expect(createProductResponse.body.data.name).toBe('Pomada matte');
-    expect(createProductResponse.body.data.measurementUnit).toBe('unit');
+    expect(createProductResponse.body.data).toEqual(
+      expect.objectContaining({
+        measurementUnit: 'unit',
+        isAvailable: false,
+        inventory: expect.objectContaining({
+          enabled: true,
+          quantity: 12,
+          minimumQuantity: 4,
+          unit: 'unit',
+          notes: 'Prateleira principal',
+        }),
+      }),
+    );
+
+    const listProductsResponse = await request(app)
+      .get('/api/panel/products')
+      .set('Authorization', `Bearer ${managerToken}`);
+
+    expect(listProductsResponse.status).toBe(200);
+    expect(listProductsResponse.body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'Pomada matte',
+          isAvailable: false,
+          inventory: expect.objectContaining({
+            enabled: true,
+            quantity: 12,
+            minimumQuantity: 4,
+            unit: 'unit',
+          }),
+        }),
+      ]),
+    );
 
     const basicsResponse = await request(app)
       .put('/api/panel/business/basics')
@@ -1059,5 +1099,50 @@ describe('Client panel routes', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('validation_error');
+  });
+
+  it('returns fallback availability and inventory defaults for legacy products in the client panel snapshot', async () => {
+    const ownerToken = await login('owner@cliente.local', 'owner123456');
+
+    const legacyProduct = await Product.create({
+      businessId: primaryBusiness._id,
+      name: 'Produto legado',
+      description: 'Sem campos novos gravados',
+      price: 19.9,
+      image: '',
+      category: 'Teste',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    await Product.updateOne(
+      { _id: legacyProduct._id },
+      {
+        $unset: {
+          isAvailable: 1,
+          inventory: 1,
+        },
+      },
+    );
+
+    const response = await request(app)
+      .get('/api/panel/business')
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.modulesData.products).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'Produto legado',
+          isAvailable: true,
+          inventory: expect.objectContaining({
+            enabled: false,
+            quantity: 0,
+            minimumQuantity: 0,
+            unit: 'unit',
+          }),
+        }),
+      ]),
+    );
   });
 });
