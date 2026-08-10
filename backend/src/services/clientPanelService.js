@@ -1,4 +1,21 @@
 import {
+  countAppointmentRequestsByBusinessId,
+  countAppointmentRequestsByBusinessIdAndStatus,
+} from '../repositories/appointmentRequestRepository.js';
+import { countAppointmentServicesByBusinessId } from '../repositories/appointmentServiceRepository.js';
+import { getBusinessAnalyticsSummary } from '../repositories/adminRepository.js';
+import {
+  countOrdersByBusinessId,
+  countOrdersByBusinessIdAndStatus,
+} from '../repositories/orderRepository.js';
+import {
+  countProductsByBusinessId,
+  countInventoryControlledProductsByBusinessId,
+  countLowStockProductsByBusinessId,
+  countUnavailableProductsByBusinessId,
+} from '../repositories/productRepository.js';
+import { countProfessionalsByBusinessId } from '../repositories/professionalRepository.js';
+import {
   canEditCatalog,
   canEditProfessionals,
   canEditServices,
@@ -17,7 +34,6 @@ import {
 } from '../../../shared/utils/access.js';
 import { normalizeBusinessContact } from '../../../shared/utils/businessContact.js';
 import { ROLE_LEVELS } from '../../../shared/constants/access.js';
-import { getBusinessAnalyticsSummary } from '../repositories/adminRepository.js';
 import { uploadAdminImage } from './adminUploadService.js';
 import { getAdminBusinessEditor, updateAdminBusiness } from './adminBusinessService.js';
 import {
@@ -88,6 +104,28 @@ function buildAccessContextFromSession(session) {
     business: session.business,
     userBusinessId: session.user?.businessId || '',
   };
+}
+
+function parseBooleanFlag(value, defaultValue = true) {
+  if (value === undefined || value === null || value === '') {
+    return defaultValue;
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+
+  if (['0', 'false', 'no', 'off'].includes(normalized)) {
+    return false;
+  }
+
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+    return true;
+  }
+
+  return defaultValue;
 }
 
 async function resolveClientPanelContext(sessionUser) {
@@ -273,10 +311,57 @@ function sanitizeClientModulesData(editor = {}, sessionUser, accessContext) {
 function buildClientPanelEditor(editor, sessionUser, accessContext) {
   return {
     business: sanitizeClientBusinessForPanel(editor.business || {}, sessionUser, accessContext),
-    theme: {},
+    theme: editor.theme || {},
     links: [],
     sections: [],
     modulesData: sanitizeClientModulesData(editor, sessionUser, accessContext),
+  };
+}
+
+async function buildClientPanelSummary(context) {
+  const modules = context.accessContext.modules || {};
+  const [totalProducts, unavailableProducts, controlledStockProducts, lowStockProducts, totalOrders, receivedOrders, preparingOrders, readyOrders, totalAppointments, pendingAppointments, totalProfessionals, totalServices] = await Promise.all([
+    modules.catalog ? countProductsByBusinessId(context.businessId) : Promise.resolve(0),
+    modules.catalog ? countUnavailableProductsByBusinessId(context.businessId) : Promise.resolve(0),
+    modules.catalog ? countInventoryControlledProductsByBusinessId(context.businessId) : Promise.resolve(0),
+    modules.catalog ? countLowStockProductsByBusinessId(context.businessId) : Promise.resolve(0),
+    modules.orders || modules.cart ? countOrdersByBusinessId(context.businessId) : Promise.resolve(0),
+    modules.orders || modules.cart ? countOrdersByBusinessIdAndStatus(context.businessId, 'received') : Promise.resolve(0),
+    modules.orders || modules.cart ? countOrdersByBusinessIdAndStatus(context.businessId, 'preparing') : Promise.resolve(0),
+    modules.orders || modules.cart ? countOrdersByBusinessIdAndStatus(context.businessId, 'ready') : Promise.resolve(0),
+    modules.appointments ? countAppointmentRequestsByBusinessId(context.businessId) : Promise.resolve(0),
+    modules.appointments ? countAppointmentRequestsByBusinessIdAndStatus(context.businessId, 'pending') : Promise.resolve(0),
+    modules.appointments ? countProfessionalsByBusinessId(context.businessId) : Promise.resolve(0),
+    modules.appointments ? countAppointmentServicesByBusinessId(context.businessId) : Promise.resolve(0),
+  ]);
+
+  return {
+    products: {
+      total: totalProducts,
+      unavailable: unavailableProducts,
+      controlledStock: controlledStockProducts,
+      lowStock: lowStockProducts,
+    },
+    orders: {
+      total: totalOrders,
+      received: receivedOrders,
+      preparing: preparingOrders,
+      ready: readyOrders,
+      open: receivedOrders + preparingOrders + readyOrders,
+    },
+    appointments: {
+      total: totalAppointments,
+      pending: pendingAppointments,
+    },
+    professionals: {
+      total: totalProfessionals,
+    },
+    services: {
+      total: totalServices,
+    },
+    activeModules: Object.values(modules).filter(Boolean).length,
+    billingStatus: context.accessContext.billingStatus || 'active',
+    generatedAt: new Date().toISOString(),
   };
 }
 
@@ -294,11 +379,25 @@ function resolveClientPanelUploadOptions(context, options = {}) {
   };
 }
 
-export async function getClientPanelBusiness(sessionUser) {
+export async function getClientPanelBusiness(sessionUser, options = {}) {
   const context = await resolveClientPanelContext(sessionUser);
   assertBillingAllowsPanelAccess(sessionUser, context.accessContext);
-  const editor = await getAdminBusinessEditor(context.businessId);
-  return buildClientPanelEditor(editor, sessionUser, context.accessContext);
+  const includeModules = parseBooleanFlag(options.includeModules, true);
+  const includeAnalytics = parseBooleanFlag(options.includeAnalytics, true);
+  const includeHistory = parseBooleanFlag(options.includeHistory, true);
+  const [editor, summary] = await Promise.all([
+    getAdminBusinessEditor(context.businessId, {
+      includeModules,
+      includeAnalytics,
+      includeHistory,
+    }),
+    buildClientPanelSummary(context),
+  ]);
+
+  return {
+    ...buildClientPanelEditor(editor, sessionUser, context.accessContext),
+    summary,
+  };
 }
 
 export async function updateClientPanelBusinessBasics(sessionUser, payload) {

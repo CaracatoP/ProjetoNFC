@@ -30,7 +30,7 @@ import { requireSessionAuth } from '../middlewares/requireSessionAuth.js';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import { AppError } from '../utils/appError.js';
 import { isAcceptedImageFile } from '../utils/imageValidation.js';
-import { clientPanelBusinessBasicsBodySchema } from '../validators/clientPanelValidators.js';
+import { clientPanelBusinessBasicsBodySchema, clientPanelBusinessQuerySchema } from '../validators/clientPanelValidators.js';
 import {
   appointmentRequestStatusBodySchema,
   appointmentServiceBodySchema,
@@ -60,7 +60,7 @@ const upload = multer({
 
 router.use(requireSessionAuth);
 
-router.get('/business', getClientPanelBusinessController);
+router.get('/business', validateRequest({ query: clientPanelBusinessQuerySchema }), getClientPanelBusinessController);
 router.put('/business/basics', validateRequest({ body: clientPanelBusinessBasicsBodySchema }), updateClientPanelBusinessBasicsController);
 router.get('/analytics', getClientPanelAnalyticsController);
 

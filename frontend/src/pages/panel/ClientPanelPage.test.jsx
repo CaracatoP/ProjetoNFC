@@ -15,6 +15,11 @@ vi.mock('@/services/clientPanelService.js', () => ({
   fetchClientPanelBusiness: vi.fn(),
   updateClientPanelBusinessBasics: vi.fn(),
   fetchClientPanelAnalytics: vi.fn(),
+  fetchClientPanelProducts: vi.fn(),
+  fetchClientPanelOrders: vi.fn(),
+  fetchClientPanelAppointmentRequests: vi.fn(),
+  fetchClientPanelAppointmentServices: vi.fn(),
+  fetchClientPanelProfessionals: vi.fn(),
   uploadClientPanelImage: vi.fn(),
   createClientPanelProduct: vi.fn(),
   updateClientPanelProduct: vi.fn(),
@@ -35,7 +40,7 @@ vi.mock('@/services/tenantRealtimeService.js', () => ({
   subscribeToTenantUpdates: vi.fn(),
 }));
 
-const editorFixture = {
+const bootstrapFixture = {
   business: {
     id: 'business-1',
     name: 'Barbearia Estilo Vivo',
@@ -107,13 +112,37 @@ const editorFixture = {
       imageUrl: '',
     },
   },
+  summary: {
+    products: {
+      total: 3,
+      unavailable: 1,
+      controlledStock: 2,
+      lowStock: 1,
+    },
+    orders: {
+      total: 4,
+      received: 2,
+      preparing: 1,
+      ready: 0,
+      open: 3,
+    },
+    appointments: {
+      total: 2,
+      pending: 1,
+    },
+    professionals: {
+      total: 1,
+    },
+    services: {
+      total: 2,
+    },
+    activeModules: 6,
+    billingStatus: 'paid',
+    generatedAt: '2026-08-10T10:00:00.000Z',
+  },
   theme: {},
   links: [],
-  sections: [
-    { id: 'section-cta', key: 'cta', type: 'cta', settings: { primaryAction: { href: 'https://example.com' } }, items: [] },
-    { id: 'section-gallery', key: 'gallery', type: 'gallery', settings: {}, items: [] },
-    { id: 'section-services', key: 'services', type: 'services', settings: {}, items: [] },
-  ],
+  sections: [],
   modulesData: {
     professionals: [],
     appointmentServices: [],
@@ -123,25 +152,173 @@ const editorFixture = {
   },
 };
 
+const productsFixture = [
+  {
+    id: 'product-1',
+    name: 'Pomada modeladora',
+    category: 'Finalizacao',
+    price: 39.9,
+    image: '',
+    measurementUnit: 'unit',
+    description: 'Fixacao media',
+    isAvailable: true,
+    inventory: {
+      enabled: true,
+      quantity: 4,
+      minimumQuantity: 2,
+      unit: 'unit',
+      notes: 'Prateleira principal',
+    },
+    active: true,
+  },
+];
+
+const ordersFixture = [
+  {
+    id: 'order-1',
+    customerName: 'Carlos',
+    customerPhone: '5511999999999',
+    deliveryType: 'pickup',
+    total: 79.8,
+    status: 'received',
+    createdAt: '2026-08-10T08:30:00.000Z',
+    receivedAt: '2026-08-10T08:30:00.000Z',
+    payment: {
+      method: 'pix',
+      status: 'pending',
+      provider: 'manual',
+      amount: 79.8,
+      pixCopyPaste: 'pix-code',
+    },
+    items: [{ name: 'Pomada', quantity: 2, unitPrice: 39.9, measurementUnit: 'unit', itemTotal: 79.8 }],
+    notes: '',
+  },
+];
+
+const appointmentRequestsFixture = [
+  {
+    id: 'appointment-1',
+    customerName: 'Marina',
+    customerPhone: '5511988887777',
+    requestedDate: '2026-08-11',
+    requestedTime: '14:00',
+    serviceName: 'Corte classico',
+    professionalName: 'Lia',
+    status: 'pending',
+    notes: '',
+  },
+];
+
+const analyticsFixture = {
+  scope: 'advanced',
+  baselineAt: '2026-08-01T00:00:00.000Z',
+  totals: {
+    totalEvents: 24,
+    last7DaysEvents: 10,
+    pageViews: 16,
+  },
+  metrics: {
+    totalEvents: 24,
+    pageViews: 16,
+    interactions: 8,
+    actionRate: 50,
+  },
+  timeline: [
+    { date: '2026-08-04', totalEvents: 2, pageViews: 1, interactions: 1 },
+    { date: '2026-08-05', totalEvents: 3, pageViews: 2, interactions: 1 },
+    { date: '2026-08-06', totalEvents: 3, pageViews: 2, interactions: 1 },
+    { date: '2026-08-07', totalEvents: 4, pageViews: 3, interactions: 1 },
+    { date: '2026-08-08', totalEvents: 4, pageViews: 3, interactions: 1 },
+    { date: '2026-08-09', totalEvents: 4, pageViews: 2, interactions: 2 },
+    { date: '2026-08-10', totalEvents: 4, pageViews: 3, interactions: 1 },
+  ],
+  byEventType: [
+    { eventType: 'page_view', label: 'Page View', count: 16, share: 66.7 },
+    { eventType: 'link_click', label: 'Link Click', count: 8, share: 33.3 },
+  ],
+  topTargets: [
+    { targetType: 'whatsapp', targetTypeLabel: 'Whatsapp', label: 'Whatsapp', count: 5, share: 62.5 },
+  ],
+  recentEvents: [
+    {
+      id: 'event-1',
+      eventType: 'link_click',
+      eventTypeLabel: 'Link Click',
+      targetType: 'whatsapp',
+      targetTypeLabel: 'Whatsapp',
+      targetLabel: '',
+      displayLabel: 'Whatsapp',
+      occurredAt: '2026-08-10T09:15:00.000Z',
+    },
+  ],
+  uniqueVisitors: 6,
+};
+
+function buildOwnerAuth(overrides = {}) {
+  return {
+    token: 'client-token',
+    user: { displayName: 'Cliente Dono', roleLevel: 2 },
+    subscription: { plan: { name: 'Premium', code: 'premium' } },
+    access: {
+      billingStatus: 'paid',
+      analyticsScope: 'advanced',
+      capabilities: {
+        canEditTenantBasics: true,
+        canUploadMedia: true,
+        canViewCatalog: true,
+        canEditCatalog: true,
+        canViewOrders: true,
+        canManageOrders: true,
+        canViewAppointments: true,
+        canManageAppointments: true,
+        canViewProfessionals: true,
+        canEditProfessionals: true,
+        canViewServices: true,
+        canEditServices: true,
+        canViewAnalytics: true,
+      },
+    },
+    isSuspendedClientAccess: false,
+    logout: vi.fn(),
+    refreshSession: vi.fn(),
+    ...overrides,
+  };
+}
+
+function getSidebarNavButton(label) {
+  const navigation = screen.getByRole('navigation', { name: /Navegacao do painel do cliente/i });
+  const button = within(navigation)
+    .getAllByRole('button')
+    .find((candidate) => within(candidate).queryByText(label));
+
+  if (!button) {
+    throw new Error(`Botao de navegacao "${label}" nao encontrado.`);
+  }
+
+  return button;
+}
+
 describe('ClientPanelPage', () => {
   let realtimeCallbacks;
   let realtimeCleanup;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    window.requestIdleCallback = vi.fn(() => 1);
+    window.cancelIdleCallback = vi.fn();
+
     realtimeCallbacks = {};
     realtimeCleanup = vi.fn();
 
-    clientPanelService.fetchClientPanelBusiness.mockResolvedValue(editorFixture);
-    clientPanelService.updateClientPanelBusinessBasics.mockResolvedValue(editorFixture);
-    clientPanelService.fetchClientPanelAnalytics.mockResolvedValue({
-      scope: 'advanced',
-      totals: {
-        totalEvents: 24,
-        last7DaysEvents: 10,
-        pageViews: 16,
-      },
-    });
+    clientPanelService.fetchClientPanelBusiness.mockResolvedValue(bootstrapFixture);
+    clientPanelService.updateClientPanelBusinessBasics.mockResolvedValue(bootstrapFixture);
+    clientPanelService.fetchClientPanelProducts.mockResolvedValue(productsFixture);
+    clientPanelService.fetchClientPanelOrders.mockResolvedValue(ordersFixture);
+    clientPanelService.fetchClientPanelAppointmentRequests.mockResolvedValue(appointmentRequestsFixture);
+    clientPanelService.fetchClientPanelAppointmentServices.mockResolvedValue([]);
+    clientPanelService.fetchClientPanelProfessionals.mockResolvedValue([]);
+    clientPanelService.fetchClientPanelAnalytics.mockResolvedValue(analyticsFixture);
+
     tenantRealtimeService.subscribeToTenantUpdates.mockImplementation((_target, callbacks = {}) => {
       realtimeCallbacks = callbacks;
       return realtimeCleanup;
@@ -153,7 +330,7 @@ describe('ClientPanelPage', () => {
     useAuth.mockReturnValue({
       token: 'client-token',
       user: { displayName: 'Cliente', roleLevel: 2 },
-      subscription: { plan: { name: 'Premium' } },
+      subscription: { plan: { name: 'Premium', code: 'premium' } },
       access: { billingStatus: 'suspended', analyticsScope: 'none', capabilities: {} },
       isSuspendedClientAccess: true,
       logout,
@@ -169,34 +346,9 @@ describe('ClientPanelPage', () => {
     expect(clientPanelService.fetchClientPanelBusiness).not.toHaveBeenCalled();
   });
 
-  it('loads the client panel and saves basic business settings for level 2', async () => {
+  it('uses a lightweight bootstrap and lazy-loads the catalog only when the user opens that area', async () => {
     const user = userEvent.setup();
-    useAuth.mockReturnValue({
-      token: 'client-token',
-      user: { displayName: 'Cliente Dono', roleLevel: 2 },
-      subscription: { plan: { name: 'Premium' } },
-      access: {
-        billingStatus: 'paid',
-        analyticsScope: 'advanced',
-        capabilities: {
-          canEditTenantBasics: true,
-          canUploadMedia: true,
-          canViewCatalog: true,
-          canEditCatalog: true,
-          canViewOrders: true,
-          canManageOrders: true,
-          canViewAppointments: true,
-          canManageAppointments: true,
-          canViewProfessionals: true,
-          canEditProfessionals: true,
-          canViewServices: true,
-          canEditServices: true,
-          canViewAnalytics: true,
-        },
-      },
-      isSuspendedClientAccess: false,
-      logout: vi.fn(),
-    });
+    useAuth.mockReturnValue(buildOwnerAuth());
 
     render(
       <MemoryRouter>
@@ -204,9 +356,39 @@ describe('ClientPanelPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Operacao do tenant')).toBeInTheDocument();
+    expect(await screen.findByText('Visao geral do tenant')).toBeInTheDocument();
+    expect(clientPanelService.fetchClientPanelBusiness).toHaveBeenCalledWith('client-token', {
+      includeModules: false,
+      includeAnalytics: false,
+      includeHistory: false,
+    });
+    expect(clientPanelService.fetchClientPanelProducts).not.toHaveBeenCalled();
+
+    await user.click(getSidebarNavButton('Catalogo'));
+
+    expect(await screen.findByRole('button', { name: /Expandir produto Pomada modeladora/i })).toBeInTheDocument();
+    expect(clientPanelService.fetchClientPanelProducts).toHaveBeenCalledTimes(1);
+
+    await user.click(getSidebarNavButton('Visao geral'));
+    await user.click(getSidebarNavButton('Catalogo'));
+
+    expect(clientPanelService.fetchClientPanelProducts).toHaveBeenCalledTimes(1);
+  });
+
+  it('saves basic business settings from the dedicated settings view', async () => {
+    const user = userEvent.setup();
+    useAuth.mockReturnValue(buildOwnerAuth());
+
+    render(
+      <MemoryRouter>
+        <ClientPanelPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Visao geral do tenant')).toBeInTheDocument();
+
+    await user.click(getSidebarNavButton('Configuracoes'));
     expect(await screen.findByText('Dados publicos do negocio')).toBeInTheDocument();
-    expect(await screen.findByText('Visao do tenant')).toBeInTheDocument();
 
     const nameInput = screen.getByLabelText('Nome do negocio');
     await user.clear(nameInput);
@@ -228,38 +410,8 @@ describe('ClientPanelPage', () => {
     });
   });
 
-  it('lets the tenant owner configure manual Pix and mark manual payments as paid from the panel', async () => {
+  it('loads orders on demand and lets authorized operators mark manual tenant payments as paid', async () => {
     const user = userEvent.setup();
-    const editorWithOrders = {
-      ...editorFixture,
-      modulesData: {
-        ...editorFixture.modulesData,
-        orders: [
-          {
-            id: 'order-1',
-            customerName: 'Carlos',
-            customerPhone: '5511999999999',
-            deliveryType: 'pickup',
-            total: 79.8,
-            status: 'received',
-            payment: {
-              method: 'pix',
-              status: 'pending',
-              provider: 'manual',
-              amount: 79.8,
-              pixCopyPaste: 'pix-code',
-            },
-            items: [{ name: 'Pomada', quantity: 2, unitPrice: 39.9, measurementUnit: 'unit', itemTotal: 79.8 }],
-            notes: '',
-          },
-        ],
-      },
-    };
-
-    clientPanelService.fetchClientPanelBusiness.mockResolvedValueOnce({
-      ...editorWithOrders,
-    });
-    clientPanelService.updateClientPanelBusinessBasics.mockResolvedValue(editorWithOrders);
     clientPanelService.updateClientPanelOrderPaymentStatus.mockResolvedValue({
       id: 'order-1',
       payment: {
@@ -269,32 +421,7 @@ describe('ClientPanelPage', () => {
         amount: 79.8,
       },
     });
-    useAuth.mockReturnValue({
-      token: 'client-token',
-      user: { displayName: 'Cliente Dono', roleLevel: 2 },
-      subscription: { plan: { name: 'Premium' } },
-      access: {
-        billingStatus: 'paid',
-        analyticsScope: 'advanced',
-        capabilities: {
-          canEditTenantBasics: true,
-          canUploadMedia: true,
-          canViewCatalog: true,
-          canEditCatalog: true,
-          canViewOrders: true,
-          canManageOrders: true,
-          canViewAppointments: true,
-          canManageAppointments: true,
-          canViewProfessionals: true,
-          canEditProfessionals: true,
-          canViewServices: true,
-          canEditServices: true,
-          canViewAnalytics: true,
-        },
-      },
-      isSuspendedClientAccess: false,
-      logout: vi.fn(),
-    });
+    useAuth.mockReturnValue(buildOwnerAuth());
 
     render(
       <MemoryRouter>
@@ -302,37 +429,12 @@ describe('ClientPanelPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Operacao do tenant')).toBeInTheDocument();
+    expect(await screen.findByText('Visao geral do tenant')).toBeInTheDocument();
 
-    await user.clear(screen.getByLabelText('Chave Pix'));
-    await user.type(screen.getByLabelText('Chave Pix'), 'novo-pix@cliente.local');
-    await user.click(screen.getByRole('button', { name: /Salvar dados basicos/i }));
-
-    await waitFor(() => {
-      expect(clientPanelService.updateClientPanelBusinessBasics).toHaveBeenCalledWith(
-        'client-token',
-        expect.objectContaining({
-          business: expect.objectContaining({
-            paymentSettings: expect.objectContaining({
-              methods: expect.objectContaining({
-                pix: true,
-              }),
-              pix: expect.objectContaining({
-                key: 'novo-pix@cliente.local',
-              }),
-            }),
-            contact: expect.objectContaining({
-              pix: expect.objectContaining({
-                key: 'novo-pix@cliente.local',
-              }),
-            }),
-          }),
-        }),
-      );
-    });
-
-    await user.click(screen.getByRole('button', { name: 'Pedidos' }));
+    await user.click(getSidebarNavButton('Pedidos'));
     const receivedOrderCard = await screen.findByTestId('order-card-received');
+
+    expect(clientPanelService.fetchClientPanelOrders).toHaveBeenCalledTimes(1);
     expect(within(receivedOrderCard).getByText('Pix')).toBeInTheDocument();
     expect(within(receivedOrderCard).getByText('Pendente')).toBeInTheDocument();
 
@@ -347,60 +449,12 @@ describe('ClientPanelPage', () => {
     });
   });
 
-  it('lets client mode minimize and expand the basic settings card', async () => {
-    const user = userEvent.setup();
-    useAuth.mockReturnValue({
-      token: 'client-token',
-      user: { displayName: 'Cliente Dono', roleLevel: 2 },
-      subscription: { plan: { name: 'Premium' } },
-      access: {
-        billingStatus: 'paid',
-        analyticsScope: 'advanced',
-        capabilities: {
-          canEditTenantBasics: true,
-          canUploadMedia: true,
-          canViewCatalog: true,
-          canEditCatalog: true,
-          canViewOrders: true,
-          canManageOrders: true,
-          canViewAppointments: true,
-          canManageAppointments: true,
-          canViewProfessionals: true,
-          canEditProfessionals: true,
-          canViewServices: true,
-          canEditServices: true,
-          canViewAnalytics: true,
-        },
-      },
-      isSuspendedClientAccess: false,
-      logout: vi.fn(),
-    });
-
-    render(
-      <MemoryRouter>
-        <ClientPanelPage />
-      </MemoryRouter>,
-    );
-
-    expect(await screen.findByText('Dados publicos do negocio')).toBeInTheDocument();
-    expect(screen.getByLabelText('Nome do negocio')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /Minimizar configuracoes basicas/i }));
-
-    expect(screen.queryByLabelText('Nome do negocio')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Expandir configuracoes basicas/i })).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /Expandir configuracoes basicas/i }));
-
-    expect(screen.getByLabelText('Nome do negocio')).toBeInTheDocument();
-  });
-
-  it('keeps the panel read-only for level 5 users', async () => {
+  it('keeps the panel read-only for level 5 users while preserving tenant-safe views', async () => {
     const user = userEvent.setup();
     useAuth.mockReturnValue({
       token: 'client-token',
       user: { displayName: 'Visualizador', roleLevel: 5 },
-      subscription: { plan: { name: 'Pro' } },
+      subscription: { plan: { name: 'Pro', code: 'pro' } },
       access: {
         billingStatus: 'paid',
         analyticsScope: 'none',
@@ -430,41 +484,28 @@ describe('ClientPanelPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Operacao do tenant')).toBeInTheDocument();
-    expect(screen.queryByText('Dados publicos do negocio')).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /Catalogo/i }));
-    expect(await screen.findByText(/pode visualizar o catalogo, mas nao editar produtos/i)).toBeInTheDocument();
+    expect(await screen.findByText('Visao geral do tenant')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Configuracoes/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Profissionais/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Servicos/i })).not.toBeInTheDocument();
+
+    await user.click(getSidebarNavButton('Catalogo'));
+    expect(await screen.findByText(/pode visualizar o catalogo, mas nao editar produtos/i)).toBeInTheDocument();
   });
 
-  it('shows an upgrade message when the tenant plan does not include analytics yet', async () => {
+  it('shows the analytics upgrade panel without calling the analytics endpoint when access is not enabled yet', async () => {
+    const user = userEvent.setup();
     useAuth.mockReturnValue({
-      token: 'client-token',
-      user: { displayName: 'Cliente Dono', roleLevel: 2 },
+      ...buildOwnerAuth(),
       subscription: { plan: { name: 'Starter', code: 'starter' } },
       access: {
         billingStatus: 'paid',
         analyticsScope: 'none',
         capabilities: {
-          canEditTenantBasics: true,
-          canUploadMedia: true,
-          canViewCatalog: true,
-          canEditCatalog: true,
-          canViewOrders: true,
-          canManageOrders: true,
-          canViewAppointments: true,
-          canManageAppointments: true,
-          canViewProfessionals: true,
-          canEditProfessionals: true,
-          canViewServices: true,
-          canEditServices: true,
+          ...buildOwnerAuth().access.capabilities,
           canViewAnalytics: false,
         },
       },
-      isSuspendedClientAccess: false,
-      logout: vi.fn(),
     });
 
     render(
@@ -473,41 +514,30 @@ describe('ClientPanelPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Operacao do tenant')).toBeInTheDocument();
+    expect(await screen.findByText('Visao geral do tenant')).toBeInTheDocument();
+
+    await user.click(getSidebarNavButton('Analytics'));
+
     expect(await screen.findByText('Analytics indisponivel no plano atual')).toBeInTheDocument();
-    expect(screen.getAllByText(/Starter/).length).toBeGreaterThan(0);
-    expect(screen.queryByText('Eventos recentes')).not.toBeInTheDocument();
+    expect(clientPanelService.fetchClientPanelAnalytics).not.toHaveBeenCalled();
   });
 
-  it('refreshes the session after plan updates and reloads analytics with the new scope', async () => {
+  it('refreshes session state after plan updates and only loads analytics when the user opens that area', async () => {
+    const user = userEvent.setup();
     let forceAuthRerender = () => {};
     const authState = {
-      token: 'client-token',
-      user: { displayName: 'Cliente Dono', roleLevel: 2 },
-      subscription: { plan: { name: 'Starter' } },
+      ...buildOwnerAuth(),
+      subscription: { plan: { name: 'Starter', code: 'starter' } },
       access: {
         billingStatus: 'paid',
         analyticsScope: 'none',
         capabilities: {
-          canEditTenantBasics: true,
-          canUploadMedia: true,
-          canViewCatalog: true,
-          canEditCatalog: true,
-          canViewOrders: true,
-          canManageOrders: true,
-          canViewAppointments: true,
-          canManageAppointments: true,
-          canViewProfessionals: true,
-          canEditProfessionals: true,
-          canViewServices: true,
-          canEditServices: true,
+          ...buildOwnerAuth().access.capabilities,
           canViewAnalytics: false,
         },
       },
-      isSuspendedClientAccess: false,
-      logout: vi.fn(),
       refreshSession: vi.fn(async () => {
-        authState.subscription = { plan: { name: 'Premium' } };
+        authState.subscription = { plan: { name: 'Premium', code: 'premium' } };
         authState.access = {
           billingStatus: 'paid',
           analyticsScope: 'advanced',
@@ -526,14 +556,6 @@ describe('ClientPanelPage', () => {
     };
 
     useAuth.mockImplementation(() => authState);
-    clientPanelService.fetchClientPanelAnalytics.mockResolvedValue({
-      scope: 'advanced',
-      totals: {
-        totalEvents: 42,
-        last7DaysEvents: 11,
-        pageViews: 27,
-      },
-    });
 
     function AuthRerenderHarness() {
       const [, setVersion] = useState(0);
@@ -554,9 +576,7 @@ describe('ClientPanelPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Operacao do tenant')).toBeInTheDocument();
-    expect(screen.getAllByText('Sem analytics').length).toBeGreaterThan(0);
-    expect(screen.getByText('Analytics indisponivel no plano atual')).toBeInTheDocument();
+    expect(await screen.findByText('Visao geral do tenant')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(tenantRealtimeService.subscribeToTenantUpdates).toHaveBeenCalledWith(
@@ -574,13 +594,19 @@ describe('ClientPanelPage', () => {
       await realtimeCallbacks.onTenantUpdated?.({
         businessId: 'business-1',
         kind: 'plan_updated',
-        emittedAt: new Date().toISOString(),
+        emittedAt: new Date('2026-08-10T10:15:00.000Z').toISOString(),
       });
     });
 
     await waitFor(() => {
       expect(authState.refreshSession).toHaveBeenCalledTimes(1);
       expect(clientPanelService.fetchClientPanelBusiness).toHaveBeenCalledTimes(2);
+      expect(clientPanelService.fetchClientPanelAnalytics).not.toHaveBeenCalled();
+    });
+
+    await user.click(getSidebarNavButton('Analytics'));
+
+    await waitFor(() => {
       expect(clientPanelService.fetchClientPanelAnalytics).toHaveBeenCalledTimes(1);
       expect(screen.getByText('Visao do tenant')).toBeInTheDocument();
       expect(screen.getAllByText('Avancado').length).toBeGreaterThan(0);
@@ -589,39 +615,14 @@ describe('ClientPanelPage', () => {
 
   it('refetches the tenant after realtime updates without discarding unsaved basic edits and cleans up on unmount', async () => {
     const user = userEvent.setup();
-    useAuth.mockReturnValue({
-      token: 'client-token',
-      user: { displayName: 'Cliente Dono', roleLevel: 2 },
-      subscription: { plan: { name: 'Premium' } },
-      access: {
-        billingStatus: 'paid',
-        analyticsScope: 'advanced',
-        capabilities: {
-          canEditTenantBasics: true,
-          canUploadMedia: true,
-          canViewCatalog: true,
-          canEditCatalog: true,
-          canViewOrders: true,
-          canManageOrders: true,
-          canViewAppointments: true,
-          canManageAppointments: true,
-          canViewProfessionals: true,
-          canEditProfessionals: true,
-          canViewServices: true,
-          canEditServices: true,
-          canViewAnalytics: true,
-        },
-      },
-      isSuspendedClientAccess: false,
-      logout: vi.fn(),
-    });
+    useAuth.mockReturnValue(buildOwnerAuth());
 
     clientPanelService.fetchClientPanelBusiness
-      .mockResolvedValueOnce(editorFixture)
+      .mockResolvedValueOnce(bootstrapFixture)
       .mockResolvedValueOnce({
-        ...editorFixture,
+        ...bootstrapFixture,
         business: {
-          ...editorFixture.business,
+          ...bootstrapFixture.business,
           description: 'Atualizado pelo backend',
         },
       });
@@ -632,21 +633,10 @@ describe('ClientPanelPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Operacao do tenant')).toBeInTheDocument();
+    expect(await screen.findByText('Visao geral do tenant')).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(tenantRealtimeService.subscribeToTenantUpdates).toHaveBeenCalledWith(
-        {
-          businessId: 'business-1',
-          slug: 'barbearia-estilo-vivo',
-        },
-        expect.objectContaining({
-          onTenantUpdated: expect.any(Function),
-        }),
-      );
-    });
-
-    const nameInput = screen.getByLabelText('Nome do negocio');
+    await user.click(getSidebarNavButton('Configuracoes'));
+    const nameInput = await screen.findByLabelText('Nome do negocio');
     await user.clear(nameInput);
     await user.type(nameInput, 'Edicao local preservada');
 
@@ -654,51 +644,26 @@ describe('ClientPanelPage', () => {
       await realtimeCallbacks.onTenantUpdated?.({
         businessId: 'business-1',
         kind: 'order_created',
-        emittedAt: new Date().toISOString(),
+        emittedAt: new Date('2026-08-10T10:30:00.000Z').toISOString(),
       });
     });
 
     await waitFor(() => {
       expect(clientPanelService.fetchClientPanelBusiness).toHaveBeenCalledTimes(2);
-      expect(clientPanelService.fetchClientPanelAnalytics).toHaveBeenCalledTimes(2);
     });
 
     expect(screen.getByLabelText('Nome do negocio')).toHaveValue('Edicao local preservada');
 
     view.unmount();
-
     expect(realtimeCleanup).toHaveBeenCalledTimes(1);
   });
 
-  it('renders safe fallback labels for unknown analytics tokens in the client panel', async () => {
-    useAuth.mockReturnValue({
-      token: 'client-token',
-      user: { displayName: 'Cliente Dono', roleLevel: 2 },
-      subscription: { plan: { name: 'Premium' } },
-      access: {
-        billingStatus: 'paid',
-        analyticsScope: 'advanced',
-        capabilities: {
-          canEditTenantBasics: true,
-          canUploadMedia: true,
-          canViewCatalog: true,
-          canEditCatalog: true,
-          canViewOrders: true,
-          canManageOrders: true,
-          canViewAppointments: true,
-          canManageAppointments: true,
-          canViewProfessionals: true,
-          canEditProfessionals: true,
-          canViewServices: true,
-          canEditServices: true,
-          canViewAnalytics: true,
-        },
-      },
-      isSuspendedClientAccess: false,
-      logout: vi.fn(),
-    });
+  it('renders safe fallback labels for unknown analytics tokens in the dedicated analytics view', async () => {
+    const user = userEvent.setup();
+    useAuth.mockReturnValue(buildOwnerAuth());
     clientPanelService.fetchClientPanelAnalytics.mockResolvedValueOnce({
       scope: 'advanced',
+      baselineAt: '2026-08-01T00:00:00.000Z',
       totals: {
         totalEvents: 4,
         last7DaysEvents: 4,
@@ -711,13 +676,13 @@ describe('ClientPanelPage', () => {
         actionRate: 100,
       },
       timeline: [
-        { date: '2026-06-01', totalEvents: 4, pageViews: 2, interactions: 2 },
+        { date: '2026-08-10', totalEvents: 4, pageViews: 2, interactions: 2 },
       ],
       byEventType: [
         { eventType: 'mystery_event', label: '', count: 2, share: 50 },
       ],
       topTargets: [
-        { targetType: 'special_offer', targetTypeLabel: '', targetLabel: '', count: 2, share: 50 },
+        { targetType: 'special_offer', targetTypeLabel: '', targetLabel: '', label: '', count: 2, share: 50 },
       ],
       recentEvents: [
         {
@@ -728,7 +693,7 @@ describe('ClientPanelPage', () => {
           targetTypeLabel: '',
           targetLabel: '',
           displayLabel: '',
-          occurredAt: '2026-06-01T12:00:00.000Z',
+          occurredAt: '2026-08-10T12:00:00.000Z',
         },
       ],
       uniqueVisitors: 2,
@@ -740,7 +705,10 @@ describe('ClientPanelPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Operacao do tenant')).toBeInTheDocument();
+    expect(await screen.findByText('Visao geral do tenant')).toBeInTheDocument();
+
+    await user.click(getSidebarNavButton('Analytics'));
+
     expect(await screen.findByText('Mystery Event')).toBeInTheDocument();
     expect(await screen.findAllByText('Special Offer')).not.toHaveLength(0);
     expect(screen.getByLabelText('Legenda do grafico de analytics')).toBeInTheDocument();

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ANALYTICS_SCOPE_LABELS,
   BILLING_ACCESS_LABELS,
@@ -14,6 +14,8 @@ import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 import { EmptyState } from '@/components/common/EmptyState.jsx';
 import { AppShell } from '@/components/layout/AppShell.jsx';
+import { useClientPanelWorkspace } from '@/hooks/useClientPanelWorkspace.js';
+import { useTenantTheme } from '@/hooks/useTenantTheme.js';
 import {
   AdminField,
   InlineImageUploadField,
@@ -27,28 +29,6 @@ import {
   newHourItem,
 } from '@/components/business/editor/tenantEditorUtils.js';
 import { useAuth } from '@/context/AuthContext.jsx';
-import { subscribeToTenantUpdates } from '@/services/tenantRealtimeService.js';
-import {
-  createClientPanelAppointmentService,
-  createClientPanelProduct,
-  createClientPanelProfessional,
-  deleteClientPanelAppointmentService,
-  deleteClientPanelOrder,
-  deleteClientPanelProduct,
-  deleteClientPanelProfessional,
-  fetchClientPanelAnalytics,
-  fetchClientPanelBusiness,
-  updateClientPanelOrderPaymentStatus,
-  updateClientPanelAppointmentRequestStatus,
-  updateClientPanelAppointmentService,
-  updateClientPanelBusinessBasics,
-  updateClientPanelOrderStatus,
-  updateClientPanelProduct,
-  updateClientPanelProfessional,
-  uploadClientPanelImage,
-} from '@/services/clientPanelService.js';
-
-const ACCESS_REFRESH_EVENT_KINDS = new Set(['plan_updated', 'billing_updated', 'client_access_updated']);
 
 const BASIC_ERROR_PREFIXES = [
   'business.name',
@@ -72,27 +52,6 @@ function extractBasicValidationErrors(validationErrors = {}) {
   );
 }
 
-function buildBasicBusinessPayload(draft) {
-  return {
-    business: {
-      name: draft.business?.name || '',
-      legalName: draft.business?.legalName || '',
-      description: draft.business?.description || '',
-      logoUrl: draft.business?.logoUrl || '',
-      logoPublicId: draft.business?.logoPublicId || '',
-      bannerUrl: draft.business?.bannerUrl || '',
-      bannerPublicId: draft.business?.bannerPublicId || '',
-      badge: draft.business?.badge || '',
-      rating: draft.business?.rating || '',
-      address: draft.business?.address || {},
-      hours: draft.business?.hours || [],
-      contact: draft.business?.contact || {},
-      paymentSettings: draft.business?.paymentSettings || {},
-      seo: draft.business?.seo || {},
-    },
-  };
-}
-
 function getErrorMessage(error) {
   if (Array.isArray(error?.details) && error.details.length) {
     return error.details
@@ -102,40 +61,6 @@ function getErrorMessage(error) {
   }
 
   return error?.message || 'Nao foi possivel concluir esta operacao.';
-}
-
-function hasUnsavedDraft(currentDraft, currentEditor) {
-  return JSON.stringify(currentDraft || null) !== JSON.stringify(currentEditor || null);
-}
-
-function mergeBasicDraftIntoEditor(nextEditor, currentDraft) {
-  if (!currentDraft) {
-    return cloneDeep(nextEditor);
-  }
-
-  const basicDraft = buildBasicBusinessPayload(currentDraft).business;
-
-  return {
-    ...cloneDeep(nextEditor),
-    business: {
-      ...(nextEditor?.business || {}),
-      ...basicDraft,
-      address: basicDraft.address || nextEditor?.business?.address || {},
-      hours: basicDraft.hours || nextEditor?.business?.hours || [],
-      contact: basicDraft.contact || nextEditor?.business?.contact || {},
-      seo: basicDraft.seo || nextEditor?.business?.seo || {},
-    },
-  };
-}
-
-function AnalyticsMetric({ label, value, description }) {
-  return (
-    <div className="admin-mini-stat-card">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{description}</small>
-    </div>
-  );
 }
 
 function formatMetricValue(value) {
@@ -1099,6 +1024,252 @@ function BasicSettingsCard({
   );
 }
 
+const CLIENT_PANEL_VIEW_COPY = Object.freeze({
+  overview: {
+    label: 'Visao geral',
+    title: 'Visao geral do tenant',
+    description: 'Leitura rapida do que importa agora e atalhos para agir sem navegar demais.',
+  },
+  settings: {
+    label: 'Configuracoes',
+    title: 'Configuracoes basicas',
+    description: 'Dados publicos, contato, horarios, SEO e meios de pagamento do tenant.',
+  },
+  catalog: {
+    label: 'Catalogo',
+    title: 'Catalogo e disponibilidade',
+    description: 'Produtos, categorias e disponibilidade com uma operacao mais compacta.',
+  },
+  stock: {
+    label: 'Estoque',
+    title: 'Estoque',
+    description: 'Controle rapido de quantidade, minimo e itens que merecem atencao.',
+  },
+  orders: {
+    label: 'Pedidos',
+    title: 'Pedidos',
+    description: 'Fila operacional com foco em status, pagamento e proxima acao.',
+  },
+  appointments: {
+    label: 'Agendamentos',
+    title: 'Agendamentos',
+    description: 'Pedidos de agenda centralizados no contexto do tenant autenticado.',
+  },
+  professionals: {
+    label: 'Profissionais',
+    title: 'Profissionais',
+    description: 'Equipe vinculada ao modulo de agendamentos.',
+  },
+  services: {
+    label: 'Servicos',
+    title: 'Servicos',
+    description: 'Oferta de servicos organizada sem recarregar o workspace inteiro.',
+  },
+  analytics: {
+    label: 'Analytics',
+    title: 'Analytics',
+    description: 'Uso real do site publico respeitando plano, nivel e baseline do tenant.',
+  },
+});
+
+function buildClientPanelViews({ editor, capabilities, canSeeAnalyticsSection }) {
+  const modules = editor?.business?.modules || {};
+  const views = [{ id: 'overview', ...CLIENT_PANEL_VIEW_COPY.overview }];
+
+  if (capabilities.canEditTenantBasics) {
+    views.push({ id: 'settings', ...CLIENT_PANEL_VIEW_COPY.settings });
+  }
+
+  if (modules.catalog && capabilities.canViewCatalog) {
+    views.push({ id: 'catalog', ...CLIENT_PANEL_VIEW_COPY.catalog });
+    views.push({ id: 'stock', ...CLIENT_PANEL_VIEW_COPY.stock });
+  }
+
+  if ((modules.orders || modules.cart) && capabilities.canViewOrders) {
+    views.push({ id: 'orders', ...CLIENT_PANEL_VIEW_COPY.orders });
+  }
+
+  if (modules.appointments && capabilities.canViewAppointments) {
+    views.push({ id: 'appointments', ...CLIENT_PANEL_VIEW_COPY.appointments });
+  }
+
+  if (modules.appointments && capabilities.canViewProfessionals) {
+    views.push({ id: 'professionals', ...CLIENT_PANEL_VIEW_COPY.professionals });
+  }
+
+  if (modules.appointments && capabilities.canViewServices) {
+    views.push({ id: 'services', ...CLIENT_PANEL_VIEW_COPY.services });
+  }
+
+  if (modules.analytics && canSeeAnalyticsSection) {
+    views.push({ id: 'analytics', ...CLIENT_PANEL_VIEW_COPY.analytics });
+  }
+
+  return views;
+}
+
+function getDomainStateForView(viewId, domainState = {}) {
+  if (viewId === 'catalog' || viewId === 'stock') {
+    return domainState.products;
+  }
+
+  if (viewId === 'orders') {
+    return domainState.orders;
+  }
+
+  if (viewId === 'appointments') {
+    return domainState.appointmentRequests;
+  }
+
+  if (viewId === 'professionals') {
+    return domainState.professionals;
+  }
+
+  if (viewId === 'services') {
+    return domainState.appointmentServices;
+  }
+
+  return null;
+}
+
+function ClientPanelSectionSkeleton({ title, description }) {
+  return (
+    <Card className="admin-panel-card client-panel-workspace">
+      <div className="client-panel-workspace__header">
+        <div>
+          <span className="section-eyebrow">Carregando</span>
+          <h2>{title}</h2>
+          <p>{description}</p>
+        </div>
+      </div>
+      <div className="client-panel-skeleton-grid">
+        <div className="client-panel-skeleton-card" />
+        <div className="client-panel-skeleton-card" />
+        <div className="client-panel-skeleton-card client-panel-skeleton-card--wide" />
+      </div>
+    </Card>
+  );
+}
+
+function OverviewKpiCard({ label, value, hint, tone = 'default' }) {
+  return (
+    <div className={`client-panel-kpi client-panel-kpi--${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{hint}</small>
+    </div>
+  );
+}
+
+function ClientPanelOverview({
+  editor,
+  subscription,
+  access,
+  user,
+  onNavigate,
+  onCopyPublicUrl,
+  publicUrl,
+}) {
+  const summary = editor?.summary || {};
+  const productSummary = summary.products || {};
+  const orderSummary = summary.orders || {};
+  const appointmentSummary = summary.appointments || {};
+  const lowStock = Number(productSummary.lowStock || 0);
+  const unavailableProducts = Number(productSummary.unavailable || 0);
+  const openOrders = Number(orderSummary.open || 0);
+  const pendingAppointments = Number(appointmentSummary.pending || 0);
+
+  return (
+    <div className="client-panel-overview-stack">
+      <Card className="admin-panel-card client-panel-hero-card">
+        <div className="client-panel-hero">
+          <div className="client-panel-hero__copy">
+            <span className="section-eyebrow">Tenant conectado</span>
+            <h2>{editor?.business?.name || 'Painel do cliente'}</h2>
+            <p>
+              Logado como <strong>{user?.displayName || 'Usuario'}</strong>. O painel responde ao plano, ao status financeiro e ao tenant autenticado sem depender de recarga manual.
+            </p>
+            <div className="client-panel-chip-row">
+              <span className="client-panel-chip">{subscription?.plan?.name || subscription?.plan?.code || 'Plano'}</span>
+              <span className="client-panel-chip client-panel-chip--muted">{BILLING_ACCESS_LABELS[access?.billingStatus] || access?.billingStatus || 'Pago'}</span>
+              <span className="client-panel-chip client-panel-chip--accent">{ROLE_LEVEL_LABELS[user?.roleLevel] || `Nivel ${user?.roleLevel ?? '-'}`}</span>
+              <span className="client-panel-chip client-panel-chip--info">{ANALYTICS_SCOPE_LABELS[access?.analyticsScope] || 'Sem analytics'}</span>
+            </div>
+          </div>
+          <div className="client-panel-hero__actions">
+            {publicUrl ? (
+              <Button href={publicUrl} target="_blank" rel="noreferrer">
+                Abrir site
+              </Button>
+            ) : null}
+            {editor?.business?.modules?.catalog ? (
+              <Button variant="secondary" onClick={() => onNavigate('catalog')}>
+                Ver catalogo
+              </Button>
+            ) : null}
+            <Button variant="secondary" onClick={onCopyPublicUrl} disabled={!publicUrl}>
+              Copiar link
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      <div className="client-panel-kpi-grid">
+        <OverviewKpiCard label="Pedidos em aberto" value={formatMetricValue(openOrders)} hint="Recebidos, em preparo e prontos." tone="info" />
+        <OverviewKpiCard label="Estoque baixo" value={formatMetricValue(lowStock)} hint="Itens controlados abaixo do minimo." tone={lowStock ? 'warning' : 'default'} />
+        <OverviewKpiCard label="Produtos indisponiveis" value={formatMetricValue(unavailableProducts)} hint="Visiveis no site, mas fora de venda." tone={unavailableProducts ? 'danger' : 'default'} />
+        <OverviewKpiCard label="Agendamentos pendentes" value={formatMetricValue(pendingAppointments)} hint="Demandas aguardando resposta do tenant." tone={pendingAppointments ? 'accent' : 'default'} />
+      </div>
+
+      <div className="client-panel-overview-grid">
+        <Card className="admin-panel-card client-panel-subpanel">
+          <div className="client-panel-subpanel__header">
+            <div>
+              <span className="section-eyebrow">Acoes rapidas</span>
+              <h3>Atalhos operacionais</h3>
+              <p>Os caminhos mais comuns ficam a um clique do dashboard.</p>
+            </div>
+          </div>
+          <div className="client-panel-quick-actions">
+            <Button onClick={() => onNavigate('settings')}>Editar dados basicos</Button>
+            {editor?.business?.modules?.catalog ? <Button variant="secondary" onClick={() => onNavigate('stock')}>Atualizar estoque</Button> : null}
+            {(editor?.business?.modules?.orders || editor?.business?.modules?.cart) ? <Button variant="secondary" onClick={() => onNavigate('orders')}>Abrir pedidos</Button> : null}
+            {editor?.business?.modules?.appointments ? <Button variant="secondary" onClick={() => onNavigate('appointments')}>Ver agenda</Button> : null}
+          </div>
+        </Card>
+
+        <Card className="admin-panel-card client-panel-subpanel">
+          <div className="client-panel-subpanel__header">
+            <div>
+              <span className="section-eyebrow">Contexto do tenant</span>
+              <h3>Estado atual</h3>
+              <p>Resumo leve para orientar a operacao sem abrir cada area.</p>
+            </div>
+          </div>
+          <div className="client-panel-context-list">
+            <div>
+              <strong>Modulos ativos</strong>
+              <span>{formatMetricValue(summary.activeModules || 0)} habilitado(s) neste tenant.</span>
+            </div>
+            <div>
+              <strong>Produtos com estoque</strong>
+              <span>{formatMetricValue(productSummary.controlledStock || 0)} item(ns) com controle ativo.</span>
+            </div>
+            <div>
+              <strong>Profissionais</strong>
+              <span>{formatMetricValue(summary.professionals?.total || 0)} cadastrado(s) no modulo de agenda.</span>
+            </div>
+            <div>
+              <strong>Servicos</strong>
+              <span>{formatMetricValue(summary.services?.total || 0)} oferta(s) prontas para operacao.</span>
+            </div>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 export function ClientPanelPage() {
   const {
     token,
@@ -1109,234 +1280,111 @@ export function ClientPanelPage() {
     refreshSession,
     isSuspendedClientAccess,
   } = useAuth();
-  const [editor, setEditor] = useState(null);
-  const [draft, setDraft] = useState(null);
-  const [analytics, setAnalytics] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [activeView, setActiveView] = useState('overview');
   const [savingBasics, setSavingBasics] = useState(false);
-  const [moduleBusyKey, setModuleBusyKey] = useState('');
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [analyticsError, setAnalyticsError] = useState('');
-  const editorRef = useRef(null);
-  const draftRef = useRef(null);
-  const skipNextAnalyticsEffectRef = useRef(false);
-
   const capabilities = access?.capabilities || {};
   const analyticsScope = access?.analyticsScope || 'none';
   const planCode = subscription?.plan?.code || PLAN_TYPES.STARTER;
   const canSeeAnalyticsSection = (user?.roleLevel ?? 5) <= 4;
+  const {
+    editor,
+    draft,
+    setDraft,
+    analytics,
+    loading,
+    analyticsLoading,
+    analyticsError,
+    message,
+    error,
+    moduleBusyKey,
+    domainState,
+    saveBasics,
+    handleUpload,
+    moduleActions,
+    ensureViewData,
+    setMessage,
+    setError,
+  } = useClientPanelWorkspace({
+    token,
+    access,
+    refreshSession,
+    isSuspendedClientAccess,
+  });
+
+  useTenantTheme(editor?.theme);
+
+  const visibleViews = useMemo(
+    () => buildClientPanelViews({ editor, capabilities, canSeeAnalyticsSection }),
+    [capabilities, canSeeAnalyticsSection, editor],
+  );
+  const currentView = visibleViews.find((view) => view.id === activeView) || visibleViews[0] || CLIENT_PANEL_VIEW_COPY.overview;
   const validationErrors = useMemo(
     () => (draft ? extractBasicValidationErrors(buildValidationErrors(draft)) : {}),
     [draft],
   );
   const publicUrl = editor?.business?.publicUrl || (editor?.business?.slug ? `/site/${editor.business.slug}` : '');
   const canSeeBasicsCard = Boolean(capabilities.canEditTenantBasics);
+  const currentDomainStatus = getDomainStateForView(activeView, domainState);
 
-  const loadBusiness = useCallback(async () => {
-    const currentEditor = editorRef.current;
-    const currentDraft = draftRef.current;
-    if (!token) {
-      return null;
-    }
-
-    const nextEditor = await fetchClientPanelBusiness(token);
-    setEditor(nextEditor);
-    setDraft(hasUnsavedDraft(currentDraft, currentEditor) ? mergeBasicDraftIntoEditor(nextEditor, currentDraft) : cloneDeep(nextEditor));
-    return nextEditor;
-  }, [token]);
-
-  const loadAnalytics = useCallback(async (accessOverride = null) => {
-    const nextAccess = accessOverride || access;
-
-    if (!token || !nextAccess?.capabilities?.canViewAnalytics) {
-      setAnalytics(null);
+  useEffect(() => {
+    if (visibleViews.some((view) => view.id === activeView)) {
       return;
     }
 
-    setAnalyticsLoading(true);
-    setAnalyticsError('');
-
-    try {
-      setAnalytics(await fetchClientPanelAnalytics(token));
-    } catch (analyticsLoadError) {
-      setAnalyticsError(getErrorMessage(analyticsLoadError));
-    } finally {
-      setAnalyticsLoading(false);
-    }
-  }, [access, token]);
+    setActiveView(visibleViews[0]?.id || 'overview');
+  }, [activeView, visibleViews]);
 
   useEffect(() => {
-    let active = true;
-
-    async function bootstrapClientPanel() {
-      if (!token || isSuspendedClientAccess) {
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      setError('');
-
-      try {
-        const nextEditor = await fetchClientPanelBusiness(token);
-
-        if (!active) {
-          return;
-        }
-
-        setEditor(nextEditor);
-        setDraft(cloneDeep(nextEditor));
-      } catch (loadError) {
-        if (!active) {
-          return;
-        }
-
-        setError(getErrorMessage(loadError));
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    }
-
-    bootstrapClientPanel();
-
-    return () => {
-      active = false;
-    };
-  }, [isSuspendedClientAccess, token]);
-
-  useEffect(() => {
-    if (skipNextAnalyticsEffectRef.current) {
-      skipNextAnalyticsEffectRef.current = false;
+    if (!editor?.business?.id) {
       return;
     }
 
-    loadAnalytics();
-  }, [loadAnalytics]);
+    if (['overview', 'settings'].includes(activeView)) {
+      return;
+    }
+
+    void ensureViewData(activeView);
+  }, [activeView, editor?.business?.id, ensureViewData]);
 
   useEffect(() => {
-    editorRef.current = editor;
-  }, [editor]);
-
-  useEffect(() => {
-    draftRef.current = draft;
-  }, [draft]);
-
-  useEffect(() => {
-    if (!token || isSuspendedClientAccess || !editor?.business?.id) {
+    if (!editor?.business?.id || loading) {
       return undefined;
     }
 
-    let active = true;
+    const prefetchTarget = visibleViews.find((view) => view.id === 'orders') || visibleViews.find((view) => view.id === 'catalog');
 
-    const unsubscribe = subscribeToTenantUpdates(
-      {
-        businessId: editor.business.id,
-        slug: editor.business.slug,
-      },
-      {
-        async onTenantUpdated(event = {}) {
-          if (!active) {
-            return;
-          }
+    if (!prefetchTarget || prefetchTarget.id === activeView) {
+      return undefined;
+    }
 
-          try {
-            if (ACCESS_REFRESH_EVENT_KINDS.has(event.kind) && typeof refreshSession === 'function') {
-              const nextSession = await refreshSession();
-
-              if (!active) {
-                return;
-              }
-
-              const nextAccess = nextSession?.access || access;
-              const nextBillingStatus = nextAccess?.billingStatus || '';
-
-              if (nextBillingStatus === 'suspended' || nextBillingStatus === 'cancelled') {
-                setAnalytics(null);
-                return;
-              }
-
-              skipNextAnalyticsEffectRef.current = true;
-              await Promise.all([loadBusiness(), loadAnalytics(nextAccess)]);
-              return;
-            }
-
-            await Promise.all([loadBusiness(), loadAnalytics()]);
-          } catch (refreshError) {
-            if (!active) {
-              return;
-            }
-
-            setError(getErrorMessage(refreshError));
-          }
-        },
-      },
-    );
-
-    return () => {
-      active = false;
-      unsubscribe?.();
+    const runPrefetch = () => {
+      void ensureViewData(prefetchTarget.id).catch(() => {});
     };
-  }, [access, editor?.business?.id, editor?.business?.slug, isSuspendedClientAccess, loadAnalytics, loadBusiness, refreshSession, token]);
 
-  const refreshAfterModuleAction = useCallback(
-    async (busyKey, action, successMessage) => {
-      setModuleBusyKey(busyKey);
-      setMessage('');
+    if (typeof window.requestIdleCallback === 'function') {
+      const idleId = window.requestIdleCallback(runPrefetch, { timeout: 1200 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timeoutId = window.setTimeout(runPrefetch, 900);
+    return () => window.clearTimeout(timeoutId);
+  }, [activeView, editor?.business?.id, ensureViewData, loading, visibleViews]);
+
+  const handleCopyPublicUrl = useCallback(async () => {
+    if (!publicUrl || !navigator?.clipboard?.writeText) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      setMessage('Link publico copiado com sucesso.');
       setError('');
+    } catch {
+      setError('Nao foi possivel copiar o link publico.');
+    }
+  }, [publicUrl, setError, setMessage]);
 
-      try {
-        await action();
-        await loadBusiness();
-        await loadAnalytics();
-        if (successMessage) {
-          setMessage(successMessage);
-        }
-      } catch (actionError) {
-        setError(getErrorMessage(actionError));
-      } finally {
-        setModuleBusyKey('');
-      }
-    },
-    [loadAnalytics, loadBusiness],
-  );
-
-  const moduleActions = useMemo(
-    () => ({
-      createProduct: (payload) =>
-        refreshAfterModuleAction('create-product', () => createClientPanelProduct(token, payload), 'Produto salvo com sucesso.'),
-      updateProduct: (productId, payload) =>
-        refreshAfterModuleAction('update-product', () => updateClientPanelProduct(token, productId, payload), 'Produto atualizado com sucesso.'),
-      deleteProduct: (productId) =>
-        refreshAfterModuleAction('delete-product', () => deleteClientPanelProduct(token, productId), 'Produto removido com sucesso.'),
-      createProfessional: (payload) =>
-        refreshAfterModuleAction('create-professional', () => createClientPanelProfessional(token, payload), 'Profissional salvo com sucesso.'),
-      updateProfessional: (professionalId, payload) =>
-        refreshAfterModuleAction('update-professional', () => updateClientPanelProfessional(token, professionalId, payload), 'Profissional atualizado com sucesso.'),
-      deleteProfessional: (professionalId) =>
-        refreshAfterModuleAction('delete-professional', () => deleteClientPanelProfessional(token, professionalId), 'Profissional removido com sucesso.'),
-      createAppointmentService: (payload) =>
-        refreshAfterModuleAction('create-appointment-service', () => createClientPanelAppointmentService(token, payload), 'Servico salvo com sucesso.'),
-      updateAppointmentService: (serviceId, payload) =>
-        refreshAfterModuleAction('update-appointment-service', () => updateClientPanelAppointmentService(token, serviceId, payload), 'Servico atualizado com sucesso.'),
-      deleteAppointmentService: (serviceId) =>
-        refreshAfterModuleAction('delete-appointment-service', () => deleteClientPanelAppointmentService(token, serviceId), 'Servico removido com sucesso.'),
-      updateOrderStatus: (orderId, status) =>
-        refreshAfterModuleAction('update-order-status', () => updateClientPanelOrderStatus(token, orderId, status), 'Status do pedido atualizado com sucesso.'),
-      updateOrderPaymentStatus: (orderId, status) =>
-        refreshAfterModuleAction('update-order-payment-status', () => updateClientPanelOrderPaymentStatus(token, orderId, status), 'Status do pagamento atualizado com sucesso.'),
-      deleteOrder: (orderId) =>
-        refreshAfterModuleAction('delete-order', () => deleteClientPanelOrder(token, orderId), 'Pedido arquivado com sucesso.'),
-      updateAppointmentRequestStatus: (requestId, status) =>
-        refreshAfterModuleAction('update-appointment-request-status', () => updateClientPanelAppointmentRequestStatus(token, requestId, status), 'Status do agendamento atualizado com sucesso.'),
-    }),
-    [refreshAfterModuleAction, token],
-  );
-
-  async function handleSaveBasics() {
+  const handleSaveBasics = useCallback(async () => {
     if (!draft || !capabilities.canEditTenantBasics) {
       return;
     }
@@ -1347,32 +1395,16 @@ export function ClientPanelPage() {
     }
 
     setSavingBasics(true);
-    setMessage('');
     setError('');
 
     try {
-      const updatedEditor = await updateClientPanelBusinessBasics(token, buildBasicBusinessPayload(draft));
-      setEditor(updatedEditor);
-      setDraft(cloneDeep(updatedEditor));
-      setMessage('Dados basicos atualizados com sucesso.');
+      await saveBasics(draft);
     } catch (saveError) {
       setError(getErrorMessage(saveError));
     } finally {
       setSavingBasics(false);
     }
-  }
-
-  async function handleUpload(file, options = {}) {
-    setMessage('');
-    setError('');
-
-    try {
-      return await uploadClientPanelImage(token, file, options);
-    } catch (uploadError) {
-      setError(getErrorMessage(uploadError));
-      throw uploadError;
-    }
-  }
+  }, [capabilities.canEditTenantBasics, draft, saveBasics, setError, validationErrors]);
 
   if (isSuspendedClientAccess) {
     return (
@@ -1380,9 +1412,9 @@ export function ClientPanelPage() {
         eyebrow="TapLink Painel"
         title="Acesso temporariamente suspenso"
         description="Seu tenant continua vinculado ao painel, mas o acesso esta bloqueado ate a regularizacao com o suporte."
-        shellClassName="dashboard-shell"
-        heroClassName="dashboard-shell__hero"
-        contentClassName="dashboard-shell__content"
+        shellClassName="dashboard-shell client-panel-shell"
+        heroClassName="dashboard-shell__hero client-panel-shell__hero"
+        contentClassName="dashboard-shell__content client-panel-shell__content"
         pageTitle="TapLink | Acesso suspenso"
       >
         <Card className="admin-panel-card admin-panel-card--hero">
@@ -1406,87 +1438,137 @@ export function ClientPanelPage() {
     <AppShell
       eyebrow="TapLink Painel"
       title={editor?.business?.name || 'Painel do cliente'}
-      description="Acompanhe pedidos, agendamentos, catalogo e dados basicos do seu tenant com acesso limitado por nivel, plano e status financeiro."
-      shellClassName="dashboard-shell"
-      heroClassName="dashboard-shell__hero"
-      contentClassName="dashboard-shell__content"
+      description="Bootstrap leve, cache por dominio e sincronizacao seletiva deixam o tenant mais rapido e conectado ao site publico."
+      shellClassName="dashboard-shell client-panel-shell"
+      heroClassName="dashboard-shell__hero client-panel-shell__hero"
+      contentClassName="dashboard-shell__content client-panel-shell__content"
       pageTitle={`TapLink | ${editor?.business?.name || 'Painel do cliente'}`}
     >
-      <Card className="admin-panel-card admin-panel-card--hero">
-        <div className="admin-editor-header">
-          <div>
-            <h2>Operacao do tenant</h2>
-            <p>
-              Logado como <strong>{user?.displayName || 'Usuario'}</strong>. Este painel respeita seu nivel de acesso, o plano do tenant e o status financeiro atual.
-            </p>
-          </div>
-          <div className="admin-toolbar">
-            <div className="admin-toolbar__group">
-              {publicUrl ? (
-                <Button href={publicUrl} target="_blank" rel="noreferrer">
-                  Abrir pagina publica
-                </Button>
-              ) : null}
+      {message ? <p className="admin-status-banner admin-status-banner--success">{message}</p> : null}
+      {error ? <p className="admin-status-banner admin-status-banner--error">{error}</p> : null}
+      <BillingBanner billingStatus={access?.billingStatus} />
+
+      {loading && !editor ? (
+        <div className="client-panel-shell__layout">
+          <Card className="admin-panel-card client-panel-sidebar">
+            <div className="client-panel-sidebar__brand" />
+            <div className="client-panel-sidebar__skeleton-list">
+              <span />
+              <span />
+              <span />
+              <span />
             </div>
-            <div className="admin-toolbar__group admin-toolbar__group--end">
+          </Card>
+          <div className="client-panel-shell__workspace">
+            <ClientPanelSectionSkeleton title="Carregando painel do tenant" description="Buscando bootstrap, resumo do tenant e contexto seguro do usuario autenticado." />
+          </div>
+        </div>
+      ) : editor && draft ? (
+        <div className="client-panel-shell__layout">
+          <aside className="admin-panel-card client-panel-sidebar">
+            <div className="client-panel-sidebar__brand">
+              <div className="client-panel-sidebar__brand-badge">{editor.business?.name?.slice(0, 2).toUpperCase() || 'TL'}</div>
+              <div>
+                <strong>{editor.business?.name || 'Tenant'}</strong>
+                <span>{subscription?.plan?.name || subscription?.plan?.code || 'Plano'} • {BILLING_ACCESS_LABELS[access?.billingStatus] || access?.billingStatus || 'Pago'}</span>
+              </div>
+            </div>
+
+            <nav className="client-panel-sidebar__nav" aria-label="Navegacao do painel do cliente">
+              {visibleViews.map((view) => (
+                <button
+                  key={view.id}
+                  type="button"
+                  className={`client-panel-sidebar__nav-button${activeView === view.id ? ' is-active' : ''}`}
+                  onClick={() => setActiveView(view.id)}
+                >
+                  <span>{view.label}</span>
+                  <small>{view.description}</small>
+                </button>
+              ))}
+            </nav>
+
+            <div className="client-panel-sidebar__footer">
+              <div>
+                <strong>{ROLE_LEVEL_LABELS[user?.roleLevel] || `Nivel ${user?.roleLevel ?? '-'}`}</strong>
+                <span>{ANALYTICS_SCOPE_LABELS[analyticsScope] || 'Sem analytics'}</span>
+              </div>
               <Button variant="secondary" onClick={logout}>
                 Sair
               </Button>
             </div>
+          </aside>
+
+          <div className="client-panel-shell__workspace">
+            <Card className="admin-panel-card client-panel-page-header">
+              <div className="client-panel-page-header__copy">
+                <span className="section-eyebrow">{currentView.label}</span>
+                <h2>{currentView.title}</h2>
+                <p>{currentView.description}</p>
+              </div>
+              <div className="client-panel-page-header__meta">
+                <span className="client-panel-chip">{subscription?.plan?.name || subscription?.plan?.code || 'Plano'}</span>
+                <span className="client-panel-chip client-panel-chip--muted">{BILLING_ACCESS_LABELS[access?.billingStatus] || access?.billingStatus || 'Pago'}</span>
+              </div>
+            </Card>
+
+            {activeView === 'overview' ? (
+              <ClientPanelOverview
+                editor={editor}
+                subscription={subscription}
+                access={access}
+                user={user}
+                onNavigate={setActiveView}
+                onCopyPublicUrl={handleCopyPublicUrl}
+                publicUrl={publicUrl}
+              />
+            ) : null}
+
+            {activeView === 'settings' && canSeeBasicsCard ? (
+              <BasicSettingsCard
+                draft={draft}
+                validationErrors={validationErrors}
+                saving={savingBasics}
+                canEdit={Boolean(capabilities.canEditTenantBasics)}
+                canUploadMedia={Boolean(capabilities.canUploadMedia)}
+                onChange={(updater) => setDraft((current) => (typeof updater === 'function' ? updater(cloneDeep(current)) : updater))}
+                onUpload={handleUpload}
+                onSave={handleSaveBasics}
+                collapsible
+              />
+            ) : null}
+
+            {['catalog', 'stock', 'orders', 'appointments', 'professionals', 'services'].includes(activeView) ? (
+              currentDomainStatus?.status === 'ready' ? (
+                <Card className="admin-panel-card client-panel-workspace">
+                  <TenantModuleManagementSection
+                    draft={draft}
+                    onDraftChange={setDraft}
+                    moduleActions={moduleActions}
+                    busyKey={moduleBusyKey}
+                    onUpload={handleUpload}
+                    mode="client"
+                    permissions={capabilities}
+                    activeTab={activeView}
+                    onActiveTabChange={setActiveView}
+                    showTabs={false}
+                  />
+                </Card>
+              ) : (
+                <ClientPanelSectionSkeleton title={currentView.title} description={currentView.description} />
+              )
+            ) : null}
+
+            {activeView === 'analytics' ? (
+              <ClientAnalyticsPanel
+                analytics={analytics}
+                analyticsLoading={analyticsLoading}
+                analyticsError={analyticsError}
+                scope={analytics?.scope || analyticsScope}
+                planCode={planCode}
+              />
+            ) : null}
           </div>
-        </div>
-
-        <div className="admin-mini-stats">
-          <AnalyticsMetric label="Plano" value={subscription?.plan?.name || subscription?.plan?.code || 'Plano'} description="Plano resolvido pelo tenant vinculado." />
-          <AnalyticsMetric label="Status financeiro" value={BILLING_ACCESS_LABELS[access?.billingStatus] || access?.billingStatus || 'Pago'} description="Bloqueios operacionais seguem este status." />
-          <AnalyticsMetric label="Nivel de acesso" value={ROLE_LEVEL_LABELS[user?.roleLevel] || `Nivel ${user?.roleLevel ?? '-'}`} description="Seu escopo de leitura e edicao no painel." />
-          <AnalyticsMetric label="Analytics" value={ANALYTICS_SCOPE_LABELS[access?.analyticsScope] || 'Sem analytics'} description="Escopo combinado entre plano e nivel do usuario." />
-        </div>
-      </Card>
-
-      <BillingBanner billingStatus={access?.billingStatus} />
-      {message ? <p className="admin-status-banner admin-status-banner--success">{message}</p> : null}
-      {error ? <p className="admin-status-banner admin-status-banner--error">{error}</p> : null}
-
-      {loading && !editor ? (
-        <EmptyState title="Carregando painel do tenant" description="Buscando dados do seu negocio, modulos ativos e permissoes do seu acesso." />
-      ) : editor && draft ? (
-        <div className="admin-dashboard-flow">
-          {canSeeBasicsCard ? (
-            <BasicSettingsCard
-              draft={draft}
-              validationErrors={validationErrors}
-              saving={savingBasics}
-              canEdit={Boolean(capabilities.canEditTenantBasics)}
-              canUploadMedia={Boolean(capabilities.canUploadMedia)}
-              onChange={(updater) => setDraft((current) => (typeof updater === 'function' ? updater(cloneDeep(current)) : updater))}
-              onUpload={handleUpload}
-              onSave={handleSaveBasics}
-              collapsible
-            />
-          ) : null}
-
-          <Card className="admin-panel-card">
-            <TenantModuleManagementSection
-              draft={draft}
-              onDraftChange={setDraft}
-              moduleActions={moduleActions}
-              busyKey={moduleBusyKey}
-              onUpload={handleUpload}
-              mode="client"
-              permissions={capabilities}
-            />
-          </Card>
-
-          {canSeeAnalyticsSection ? (
-            <ClientAnalyticsPanel
-              analytics={analytics}
-              analyticsLoading={analyticsLoading}
-              analyticsError={analyticsError}
-              scope={analytics?.scope || analyticsScope}
-              planCode={planCode}
-            />
-          ) : null}
         </div>
       ) : (
         <EmptyState title="Nao foi possivel abrir o tenant" description="Recarregue a pagina ou entre em contato com o suporte se o problema persistir." />

@@ -283,6 +283,37 @@ describe('Client panel routes', () => {
     expect(updateResponse.body.data.business.slug).toBe('barbearia-estilo-vivo');
   });
 
+  it('returns a lightweight bootstrap when the client panel disables modules, analytics, and history explicitly', async () => {
+    const ownerToken = await login('owner@cliente.local', 'owner123456');
+
+    const response = await request(app)
+      .get('/api/panel/business?includeModules=0&includeAnalytics=0&includeHistory=0')
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.business.slug).toBe('barbearia-estilo-vivo');
+    expect(response.body.data.summary).toEqual(
+      expect.objectContaining({
+        products: expect.objectContaining({
+          total: expect.any(Number),
+        }),
+        orders: expect.objectContaining({
+          total: expect.any(Number),
+        }),
+        generatedAt: expect.any(String),
+      }),
+    );
+    expect(response.body.data.modulesData).toEqual({
+      professionals: [],
+      appointmentServices: [],
+      appointmentRequests: [],
+      products: [],
+      orders: [],
+    });
+    expect(response.body.data.analytics).toBeUndefined();
+    expect(response.body.data.history).toBeUndefined();
+  });
+
   it('keeps Mercado Pago encrypted credentials out of the client panel payload', async () => {
     await Business.updateOne(
       { _id: primaryBusiness._id },

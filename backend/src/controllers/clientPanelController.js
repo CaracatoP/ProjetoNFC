@@ -34,9 +34,13 @@ function getBody(req) {
   return req.validated?.body || req.body || {};
 }
 
+function getQuery(req) {
+  return req.validated?.query || req.query || {};
+}
+
 export async function getClientPanelBusinessController(req, res, next) {
   try {
-    return successResponse(res, await getClientPanelBusiness(req.sessionUser));
+    return successResponse(res, await getClientPanelBusiness(req.sessionUser, getQuery(req)));
   } catch (error) {
     return next(error);
   }

@@ -4,8 +4,23 @@ import { buildSessionAuthHeaders } from '@/services/authService.js';
 import { normalizeEditorPayload } from '@/services/mediaNormalizer.js';
 import { resolveMediaUrl } from '@/utils/formatters.js';
 
-export async function fetchClientPanelBusiness(token) {
-  const response = await apiRequest(`${appConfig.apiBaseUrl}/panel/business`, {
+function buildClientPanelQuery(options = {}) {
+  const params = new URLSearchParams();
+
+  Object.entries(options).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') {
+      return;
+    }
+
+    params.set(key, typeof value === 'boolean' ? String(Number(value)) : String(value));
+  });
+
+  return params.toString();
+}
+
+export async function fetchClientPanelBusiness(token, options = {}) {
+  const query = buildClientPanelQuery(options);
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/panel/business${query ? `?${query}` : ''}`, {
     headers: buildSessionAuthHeaders(token),
   });
 
@@ -24,6 +39,46 @@ export async function updateClientPanelBusinessBasics(token, payload) {
 
 export async function fetchClientPanelAnalytics(token) {
   const response = await apiRequest(`${appConfig.apiBaseUrl}/panel/analytics`, {
+    headers: buildSessionAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
+export async function fetchClientPanelProducts(token) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/panel/products`, {
+    headers: buildSessionAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
+export async function fetchClientPanelProfessionals(token) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/panel/professionals`, {
+    headers: buildSessionAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
+export async function fetchClientPanelAppointmentServices(token) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/panel/appointment-services`, {
+    headers: buildSessionAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
+export async function fetchClientPanelOrders(token) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/panel/orders`, {
+    headers: buildSessionAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
+export async function fetchClientPanelAppointmentRequests(token) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/panel/appointment-requests`, {
     headers: buildSessionAuthHeaders(token),
   });
 

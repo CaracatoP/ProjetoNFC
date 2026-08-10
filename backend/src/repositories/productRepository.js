@@ -10,6 +10,28 @@ export function listProductsByBusinessId(businessId, options = {}) {
   return Product.find(filter).sort({ active: -1, createdAt: -1 }).lean();
 }
 
+export function countProductsByBusinessId(businessId) {
+  return Product.countDocuments({ businessId });
+}
+
+export function countUnavailableProductsByBusinessId(businessId) {
+  return Product.countDocuments({ businessId, isAvailable: false });
+}
+
+export function countInventoryControlledProductsByBusinessId(businessId) {
+  return Product.countDocuments({ businessId, 'inventory.enabled': true });
+}
+
+export function countLowStockProductsByBusinessId(businessId) {
+  return Product.countDocuments({
+    businessId,
+    'inventory.enabled': true,
+    $expr: {
+      $lte: ['$inventory.quantity', '$inventory.minimumQuantity'],
+    },
+  });
+}
+
 export function createProductRecord(payload) {
   return Product.create(payload);
 }

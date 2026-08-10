@@ -4386,6 +4386,429 @@ img {
   line-height: 1.7;
 }
 
+.dashboard-shell.client-panel-shell {
+  --client-panel-sidebar-width: minmax(280px, 320px);
+}
+
+.dashboard-shell .client-panel-shell__layout {
+  display: grid;
+  grid-template-columns: var(--client-panel-sidebar-width) minmax(0, 1fr);
+  gap: clamp(1rem, 2vw, 1.5rem);
+  align-items: start;
+}
+
+.dashboard-shell .client-panel-shell__workspace {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.dashboard-shell .client-panel-sidebar {
+  position: sticky;
+  top: clamp(1rem, 2vw, 1.5rem);
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem;
+  border-radius: calc(var(--radius-lg) - 0.35rem);
+  border: 1px solid color-mix(in srgb, var(--theme-border) 86%, transparent);
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--theme-primary) 18%, transparent), transparent 42%),
+    linear-gradient(165deg, color-mix(in srgb, var(--theme-surface-alt) 86%, transparent), color-mix(in srgb, var(--theme-surface) 95%, transparent));
+  box-shadow:
+    0 22px 48px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.dashboard-shell .client-panel-sidebar__brand {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: center;
+}
+
+.dashboard-shell .client-panel-sidebar__brand > div:last-child {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.dashboard-shell .client-panel-sidebar__brand strong {
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+}
+
+.dashboard-shell .client-panel-sidebar__brand span,
+.dashboard-shell .client-panel-sidebar__footer span {
+  color: var(--theme-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.dashboard-shell .client-panel-sidebar__brand-badge {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--theme-primary) 24%, var(--theme-border));
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--theme-primary) 20%, transparent), color-mix(in srgb, var(--theme-accent-solid) 12%, transparent)),
+    color-mix(in srgb, var(--theme-surface) 88%, transparent);
+  color: var(--theme-text);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.dashboard-shell .client-panel-sidebar__nav {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.dashboard-shell .client-panel-sidebar__nav-button {
+  display: grid;
+  gap: 0.22rem;
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 92%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--theme-surface) 86%, transparent);
+  color: var(--theme-text);
+  text-align: left;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.dashboard-shell .client-panel-sidebar__nav-button:hover,
+.dashboard-shell .client-panel-sidebar__nav-button:focus-visible {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--theme-primary) 26%, var(--theme-border));
+  background: color-mix(in srgb, var(--theme-surface-alt) 82%, transparent);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+}
+
+.dashboard-shell .client-panel-sidebar__nav-button.is-active {
+  border-color: color-mix(in srgb, var(--theme-primary) 38%, var(--theme-border));
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--theme-primary) 18%, transparent), color-mix(in srgb, var(--theme-accent-solid) 12%, transparent)),
+    color-mix(in srgb, var(--theme-surface-alt) 90%, transparent);
+  box-shadow:
+    0 16px 32px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.dashboard-shell .client-panel-sidebar__nav-button span {
+  font-family: var(--font-heading);
+  font-size: 0.98rem;
+}
+
+.dashboard-shell .client-panel-sidebar__nav-button small {
+  color: var(--theme-text-muted);
+  line-height: 1.45;
+}
+
+.dashboard-shell .client-panel-sidebar__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.9rem;
+  align-items: center;
+  padding-top: 0.35rem;
+  border-top: 1px solid color-mix(in srgb, var(--theme-border) 84%, transparent);
+}
+
+.dashboard-shell .client-panel-sidebar__footer > div {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.dashboard-shell .client-panel-sidebar__skeleton-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.dashboard-shell .client-panel-sidebar__skeleton-list span,
+.dashboard-shell .client-panel-sidebar__brand:empty {
+  display: block;
+  min-height: 3rem;
+  border-radius: 1rem;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+  background-size: 220% 100%;
+  animation: client-panel-skeleton-pulse 1.3s ease infinite;
+}
+
+.dashboard-shell .client-panel-sidebar__skeleton-list span {
+  min-height: 3.6rem;
+}
+
+.dashboard-shell .client-panel-page-header,
+.dashboard-shell .client-panel-workspace,
+.dashboard-shell .client-panel-subpanel,
+.dashboard-shell .client-panel-hero-card {
+  overflow: hidden;
+}
+
+.dashboard-shell .client-panel-page-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: clamp(1rem, 2vw, 1.35rem);
+  border: 1px solid color-mix(in srgb, var(--theme-border) 88%, transparent);
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--theme-primary) 16%, transparent), transparent 32%),
+    linear-gradient(150deg, color-mix(in srgb, var(--theme-surface-alt) 88%, transparent), color-mix(in srgb, var(--theme-surface) 96%, transparent));
+}
+
+.dashboard-shell .client-panel-page-header__copy {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.dashboard-shell .client-panel-page-header__copy h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+}
+
+.dashboard-shell .client-panel-page-header__copy p {
+  margin: 0;
+  color: var(--theme-text-muted);
+  line-height: 1.65;
+  max-width: 56rem;
+}
+
+.dashboard-shell .client-panel-page-header__meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.dashboard-shell .client-panel-overview-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.dashboard-shell .client-panel-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(220px, 0.85fr);
+  gap: 1.25rem;
+  align-items: center;
+  padding: clamp(1.15rem, 2vw, 1.6rem);
+}
+
+.dashboard-shell .client-panel-hero__copy {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.dashboard-shell .client-panel-hero__copy h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(1.6rem, 3vw, 2.3rem);
+}
+
+.dashboard-shell .client-panel-hero__copy p {
+  margin: 0;
+  color: var(--theme-text-muted);
+  line-height: 1.72;
+}
+
+.dashboard-shell .client-panel-hero__actions {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: stretch;
+}
+
+.dashboard-shell .client-panel-chip-row,
+.dashboard-shell .client-panel-page-header__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.dashboard-shell .client-panel-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.38rem 0.82rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 84%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-alt) 84%, transparent);
+  color: var(--theme-text);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.dashboard-shell .client-panel-chip--muted {
+  color: var(--theme-text-muted);
+}
+
+.dashboard-shell .client-panel-chip--accent {
+  border-color: color-mix(in srgb, var(--theme-primary) 34%, var(--theme-border));
+  background: color-mix(in srgb, var(--theme-primary) 18%, transparent);
+}
+
+.dashboard-shell .client-panel-chip--info {
+  border-color: color-mix(in srgb, #38bdf8 34%, var(--theme-border));
+  background: color-mix(in srgb, #38bdf8 14%, transparent);
+}
+
+.dashboard-shell .client-panel-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.85rem;
+}
+
+.dashboard-shell .client-panel-kpi {
+  display: grid;
+  gap: 0.3rem;
+  padding: 1rem 1.05rem;
+  border-radius: 1.05rem;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 90%, transparent);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--theme-surface-alt) 84%, transparent), color-mix(in srgb, var(--theme-surface) 96%, transparent));
+}
+
+.dashboard-shell .client-panel-kpi span,
+.dashboard-shell .client-panel-kpi small {
+  color: var(--theme-text-muted);
+}
+
+.dashboard-shell .client-panel-kpi strong {
+  font-family: var(--font-heading);
+  font-size: 1.7rem;
+}
+
+.dashboard-shell .client-panel-kpi--warning {
+  border-color: color-mix(in srgb, #f59e0b 34%, var(--theme-border));
+  background:
+    radial-gradient(circle at top right, rgba(245, 158, 11, 0.14), transparent 38%),
+    linear-gradient(145deg, color-mix(in srgb, var(--theme-surface-alt) 84%, transparent), color-mix(in srgb, var(--theme-surface) 96%, transparent));
+}
+
+.dashboard-shell .client-panel-kpi--danger {
+  border-color: color-mix(in srgb, #ef4444 34%, var(--theme-border));
+  background:
+    radial-gradient(circle at top right, rgba(239, 68, 68, 0.12), transparent 40%),
+    linear-gradient(145deg, color-mix(in srgb, var(--theme-surface-alt) 84%, transparent), color-mix(in srgb, var(--theme-surface) 96%, transparent));
+}
+
+.dashboard-shell .client-panel-kpi--info {
+  border-color: color-mix(in srgb, #38bdf8 34%, var(--theme-border));
+  background:
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.12), transparent 40%),
+    linear-gradient(145deg, color-mix(in srgb, var(--theme-surface-alt) 84%, transparent), color-mix(in srgb, var(--theme-surface) 96%, transparent));
+}
+
+.dashboard-shell .client-panel-kpi--accent {
+  border-color: color-mix(in srgb, var(--theme-primary) 34%, var(--theme-border));
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--theme-primary) 18%, transparent), transparent 42%),
+    linear-gradient(145deg, color-mix(in srgb, var(--theme-surface-alt) 84%, transparent), color-mix(in srgb, var(--theme-surface) 96%, transparent));
+}
+
+.dashboard-shell .client-panel-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.dashboard-shell .client-panel-subpanel {
+  display: grid;
+  gap: 1rem;
+  padding: 1.15rem;
+}
+
+.dashboard-shell .client-panel-subpanel__header {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.dashboard-shell .client-panel-subpanel__header h3 {
+  margin: 0;
+  font-family: var(--font-heading);
+}
+
+.dashboard-shell .client-panel-subpanel__header p {
+  margin: 0;
+  color: var(--theme-text-muted);
+  line-height: 1.65;
+}
+
+.dashboard-shell .client-panel-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.dashboard-shell .client-panel-context-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.dashboard-shell .client-panel-context-list > div {
+  display: grid;
+  gap: 0.22rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 0.95rem;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 86%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-alt) 80%, transparent);
+}
+
+.dashboard-shell .client-panel-context-list span {
+  color: var(--theme-text-muted);
+  line-height: 1.55;
+}
+
+.dashboard-shell .client-panel-workspace__header {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.dashboard-shell .client-panel-workspace__header h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+}
+
+.dashboard-shell .client-panel-workspace__header p {
+  margin: 0;
+  color: var(--theme-text-muted);
+}
+
+.dashboard-shell .client-panel-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.dashboard-shell .client-panel-skeleton-card {
+  min-height: 9.5rem;
+  border-radius: 1rem;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+  background-size: 220% 100%;
+  animation: client-panel-skeleton-pulse 1.3s ease infinite;
+}
+
+.dashboard-shell .client-panel-skeleton-card--wide {
+  grid-column: 1 / -1;
+  min-height: 12rem;
+}
+
+@keyframes client-panel-skeleton-pulse {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
+}
+
 @media (max-width: 1500px) {
   .dashboard-shell .analytics-layout-grid {
     grid-template-columns: 1fr;
@@ -4398,7 +4821,10 @@ img {
 
 @media (max-width: 1100px) {
   .dashboard-shell .analytics-subgrid,
-  .dashboard-shell .analytics-hero__controls {
+  .dashboard-shell .analytics-hero__controls,
+  .dashboard-shell .client-panel-shell__layout,
+  .dashboard-shell .client-panel-overview-grid,
+  .dashboard-shell .client-panel-hero {
     grid-template-columns: 1fr;
   }
 
@@ -4408,6 +4834,20 @@ img {
 
   .dashboard-shell .analytics-hero__controls .button {
     min-width: 0;
+  }
+
+  .dashboard-shell .client-panel-sidebar {
+    position: static;
+  }
+
+  .dashboard-shell .client-panel-page-header,
+  .dashboard-shell .client-panel-sidebar__footer {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-shell .client-panel-page-header,
+  .dashboard-shell .client-panel-sidebar__footer {
+    justify-content: flex-start;
   }
 }
 
@@ -4437,6 +4877,23 @@ img {
   .admin-order-card__header,
   .admin-order-card__meta {
     display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-shell .client-panel-sidebar__footer,
+  .dashboard-shell .client-panel-hero__actions,
+  .dashboard-shell .client-panel-page-header__meta,
+  .dashboard-shell .client-panel-quick-actions {
+    width: 100%;
+  }
+
+  .dashboard-shell .client-panel-hero__actions .button,
+  .dashboard-shell .client-panel-quick-actions .button,
+  .dashboard-shell .client-panel-sidebar__footer .button {
+    width: 100%;
+  }
+
+  .dashboard-shell .client-panel-skeleton-grid {
     grid-template-columns: 1fr;
   }
 }

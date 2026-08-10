@@ -4,6 +4,14 @@ export function listAppointmentRequestsByBusinessId(businessId) {
   return AppointmentRequest.find({ businessId }).sort({ createdAt: -1 }).lean();
 }
 
+export function countAppointmentRequestsByBusinessId(businessId) {
+  return AppointmentRequest.countDocuments({ businessId });
+}
+
+export function countAppointmentRequestsByBusinessIdAndStatus(businessId, status) {
+  return AppointmentRequest.countDocuments({ businessId, status });
+}
+
 export function createAppointmentRequestRecord(payload) {
   return AppointmentRequest.create(payload);
 }

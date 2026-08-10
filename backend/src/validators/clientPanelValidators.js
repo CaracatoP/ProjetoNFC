@@ -21,3 +21,9 @@ export const clientPanelBusinessBasicsBodySchema = z.object({
     })
     .partial(),
 });
+
+export const clientPanelBusinessQuerySchema = z.object({
+  includeModules: z.string().trim().optional(),
+  includeAnalytics: z.string().trim().optional(),
+  includeHistory: z.string().trim().optional(),
+});

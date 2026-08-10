@@ -10,6 +10,10 @@ export function listProfessionalsByBusinessId(businessId, options = {}) {
   return Professional.find(filter).sort({ active: -1, createdAt: 1 }).lean();
 }
 
+export function countProfessionalsByBusinessId(businessId) {
+  return Professional.countDocuments({ businessId });
+}
+
 export function createProfessionalRecord(payload) {
   return Professional.create(payload);
 }

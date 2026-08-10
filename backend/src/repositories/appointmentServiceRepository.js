@@ -10,6 +10,10 @@ export function listAppointmentServicesByBusinessId(businessId, options = {}) {
   return AppointmentService.find(filter).sort({ active: -1, createdAt: 1 }).lean();
 }
 
+export function countAppointmentServicesByBusinessId(businessId) {
+  return AppointmentService.countDocuments({ businessId });
+}
+
 export function createAppointmentServiceRecord(payload) {
   return AppointmentService.create(payload);
 }

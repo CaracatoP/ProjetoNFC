@@ -23,17 +23,7 @@ import {
 } from '@shared/utils/productInventory.js';
 import { Button } from '@/components/common/Button.jsx';
 import { AdminField, InlineImageUploadField, SectionEyebrow } from './TenantEditorPrimitives.jsx';
-
-const MODULE_LABELS = {
-  catalog: 'Catalogo',
-  stock: 'Estoque',
-  appointments: 'Agendamentos',
-  cart: 'Carrinho',
-  orders: 'Pedidos',
-  loyalty: 'Fidelidade',
-  whatsapp: 'WhatsApp',
-  analytics: 'Analytics',
-};
+import { resolveTenantModuleTabs, TENANT_MODULE_LABELS } from './tenantModuleTabs.js';
 
 const PRODUCT_AVAILABILITY_LABELS = {
   available: 'Disponivel',
@@ -131,30 +121,6 @@ function formatCurrencyValue(value) {
   })
     .format(Number(value || 0))
     .replace(/\u00a0/g, ' ');
-}
-
-function tabIsVisible(tabId, modules) {
-  if (tabId === 'segment') {
-    return true;
-  }
-
-  if (tabId === 'catalog') {
-    return Boolean(modules.catalog);
-  }
-
-  if (tabId === 'stock') {
-    return Boolean(modules.catalog);
-  }
-
-  if (tabId === 'orders') {
-    return Boolean(modules.orders || modules.cart);
-  }
-
-  if (tabId === 'appointments' || tabId === 'professionals' || tabId === 'services') {
-    return Boolean(modules.appointments);
-  }
-
-  return false;
 }
 
 function updateListItem(list, index, updater) {
@@ -412,12 +378,15 @@ export function TenantModuleManagementSection({
   onUpload,
   mode = 'admin',
   permissions = {},
+  activeTab: controlledActiveTab = null,
+  onActiveTabChange,
+  showTabs = true,
 }) {
   const isClientMode = mode === 'client';
   const segmentState = useMemo(() => buildBusinessSegmentState(draft.business), [draft.business]);
   const modulesData = draft.modulesData || {};
   const categorySuggestionsId = useId();
-  const [activeTab, setActiveTab] = useState('segment');
+  const [internalActiveTab, setInternalActiveTab] = useState('segment');
   const [newProfessional, setNewProfessional] = useState(initialProfessional);
   const [newAppointmentService, setNewAppointmentService] = useState(initialAppointmentService);
   const [newProduct, setNewProduct] = useState(initialProduct);
@@ -456,32 +425,44 @@ export function TenantModuleManagementSection({
 
   const visibleTabs = useMemo(
     () =>
-      [
-        { id: 'segment', label: 'Segmento e modulos', visible: capabilityState.canConfigureModules },
-        { id: 'catalog', label: 'Catalogo', visible: capabilityState.canViewCatalog },
-        { id: 'stock', label: 'Estoque', visible: isClientMode && capabilityState.canViewCatalog },
-        { id: 'orders', label: 'Pedidos', visible: capabilityState.canViewOrders },
-        { id: 'appointments', label: 'Agendamentos', visible: capabilityState.canViewAppointments },
-        { id: 'professionals', label: 'Profissionais', visible: capabilityState.canViewProfessionals },
-        { id: 'services', label: 'Servicos', visible: capabilityState.canViewServices },
-      ].filter((tab) => tab.visible && tabIsVisible(tab.id, segmentState.modules)),
+      resolveTenantModuleTabs({
+        mode,
+        modules: segmentState.modules,
+        permissions: {
+          canViewCatalog: capabilityState.canViewCatalog,
+          canViewOrders: capabilityState.canViewOrders,
+          canViewAppointments: capabilityState.canViewAppointments,
+          canViewProfessionals: capabilityState.canViewProfessionals,
+          canViewServices: capabilityState.canViewServices,
+        },
+      }),
     [
-      capabilityState.canConfigureModules,
       capabilityState.canViewAppointments,
       capabilityState.canViewCatalog,
       capabilityState.canViewOrders,
       capabilityState.canViewProfessionals,
       capabilityState.canViewServices,
-      isClientMode,
+      mode,
       segmentState.modules,
     ],
   );
 
+  const activeTab = controlledActiveTab || internalActiveTab;
+
   useEffect(() => {
-    if (!visibleTabs.some((tab) => tab.id === activeTab)) {
-      setActiveTab(visibleTabs[0]?.id || 'segment');
+    if (visibleTabs.some((tab) => tab.id === activeTab)) {
+      return;
     }
-  }, [activeTab, visibleTabs]);
+
+    const fallbackTabId = visibleTabs[0]?.id || 'segment';
+
+    if (controlledActiveTab) {
+      onActiveTabChange?.(fallbackTabId);
+      return;
+    }
+
+    setInternalActiveTab(fallbackTabId);
+  }, [activeTab, controlledActiveTab, onActiveTabChange, visibleTabs]);
 
   useEffect(() => {
     setIsClientCreateProductOpen(mode !== 'client');
@@ -613,6 +594,15 @@ export function TenantModuleManagementSection({
   const productFormGridClassName = `admin-form-grid admin-product-form__grid${compactCatalogLayout ? ' admin-form-grid--compact admin-product-form__grid--compact' : ''}`;
   const productDescriptionRows = compactCatalogLayout ? 2 : 3;
 
+  function changeActiveTab(nextTabId) {
+    if (controlledActiveTab) {
+      onActiveTabChange?.(nextTabId);
+      return;
+    }
+
+    setInternalActiveTab(nextTabId);
+  }
+
   function resetNewProductDraft() {
     setNewProduct(initialProduct());
   }
@@ -704,18 +694,20 @@ export function TenantModuleManagementSection({
         </div>
       </div>
 
-      <div className="admin-module-tabs">
-        {visibleTabs.map((tab) => (
-          <Button
-            key={tab.id}
-            variant={activeTab === tab.id ? 'primary' : 'secondary'}
-            className="admin-module-tabs__button"
-            onClick={() => setActiveTab(tab.id)}
-          >
-            {tab.label}
-          </Button>
-        ))}
-      </div>
+      {showTabs ? (
+        <div className="admin-module-tabs">
+          {visibleTabs.map((tab) => (
+            <Button
+              key={tab.id}
+              variant={activeTab === tab.id ? 'primary' : 'secondary'}
+              className="admin-module-tabs__button"
+              onClick={() => changeActiveTab(tab.id)}
+            >
+              {tab.label}
+            </Button>
+          ))}
+        </div>
+      ) : null}
 
       {busyMessage ? <p className="admin-muted-copy">{busyMessage}</p> : null}
 
@@ -748,7 +740,7 @@ export function TenantModuleManagementSection({
                   onChange={(event) => toggleModule(key, event.target.checked)}
                 />
                 <div>
-                  <strong>{MODULE_LABELS[key]}</strong>
+                  <strong>{TENANT_MODULE_LABELS[key]}</strong>
                   <span>{segmentState.modules[key] ? 'Ativo para este tenant.' : 'Desativado para este tenant.'}</span>
                 </div>
               </label>
@@ -761,7 +753,7 @@ export function TenantModuleManagementSection({
               {activeModules.length ? (
                 activeModules.map((key) => (
                   <span key={key} className="admin-section-chip admin-section-chip--accent">
-                    {MODULE_LABELS[key]}
+                    {TENANT_MODULE_LABELS[key]}
                   </span>
                 ))
               ) : (

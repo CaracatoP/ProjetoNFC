@@ -4,6 +4,14 @@ export function listOrdersByBusinessId(businessId) {
   return Order.find({ businessId, archivedAt: null }).sort({ createdAt: -1 }).lean();
 }
 
+export function countOrdersByBusinessId(businessId) {
+  return Order.countDocuments({ businessId, archivedAt: null });
+}
+
+export function countOrdersByBusinessIdAndStatus(businessId, status) {
+  return Order.countDocuments({ businessId, archivedAt: null, status });
+}
+
 export function createOrderRecord(payload) {
   return Order.create(payload);
 }

@@ -640,7 +640,10 @@ function serializeSummary(business, analyticsMap) {
   };
 }
 
-async function hydrateEditorResponse(businessId) {
+async function hydrateEditorResponse(businessId, options = {}) {
+  const includeAnalytics = options.includeAnalytics !== false;
+  const includeHistory = options.includeHistory !== false;
+  const includeModules = options.includeModules !== false;
   const graph = await findBusinessGraphForAdmin(businessId);
 
   if (!graph.business) {
@@ -648,19 +651,19 @@ async function hydrateEditorResponse(businessId) {
   }
 
   const [analytics, professionals, appointmentServices, appointmentRequests, products, orders] = await Promise.all([
-    getBusinessAnalyticsSummary(businessId),
-    listProfessionalsByBusinessId(businessId),
-    listAppointmentServicesByBusinessId(businessId),
-    listAppointmentRequestsByBusinessId(businessId),
-    listProductsByBusinessId(businessId),
-    listOrdersByBusinessId(businessId),
+    includeAnalytics ? getBusinessAnalyticsSummary(businessId) : Promise.resolve(null),
+    includeModules ? listProfessionalsByBusinessId(businessId) : Promise.resolve([]),
+    includeModules ? listAppointmentServicesByBusinessId(businessId) : Promise.resolve([]),
+    includeModules ? listAppointmentRequestsByBusinessId(businessId) : Promise.resolve([]),
+    includeModules ? listProductsByBusinessId(businessId) : Promise.resolve([]),
+    includeModules ? listOrdersByBusinessId(businessId) : Promise.resolve([]),
   ]);
-  const totalEvents = analytics.totals.totalEvents || 0;
-  const pageViews = analytics.totals.pageViews || 0;
-  const linkClicks = analytics.totals.linkClicks || 0;
-  const ctaClicks = analytics.totals.ctaClicks || 0;
-  const copyActions = analytics.totals.copyActions || 0;
-  const qrViews = analytics.totals.qrViews || 0;
+  const totalEvents = analytics?.totals?.totalEvents || 0;
+  const pageViews = analytics?.totals?.pageViews || 0;
+  const linkClicks = analytics?.totals?.linkClicks || 0;
+  const ctaClicks = analytics?.totals?.ctaClicks || 0;
+  const copyActions = analytics?.totals?.copyActions || 0;
+  const qrViews = analytics?.totals?.qrViews || 0;
   const interactions = linkClicks + ctaClicks + copyActions + qrViews;
 
   return {
@@ -679,43 +682,47 @@ async function hydrateEditorResponse(businessId) {
           lastResolvedAt: graph.nfcTag.lastResolvedAt || null,
         }
       : null,
-    analytics: {
-      totalEvents,
-      last7DaysEvents: analytics.totals.last7DaysEvents || 0,
-      pageViews,
-      linkClicks,
-      ctaClicks,
-      copyActions,
-      shortcutClicks: analytics.totals.shortcutClicks || 0,
-      uniqueVisitors: analytics.uniqueVisitors || 0,
-      actionRate: calculateActionRate(pageViews, interactions),
-      byEventType: buildEventTypeBreakdown(analytics.byEventType, totalEvents).map((item) => ({
-        eventType: item.eventType,
-        label: item.label,
-        count: item.count,
-        share: item.share,
-      })),
-      timeline: buildDailyTimeline(analytics.dailyEvents),
-      topLinks: buildTopTargetBreakdown(analytics.topTargets, { limit: 6 }),
-      topShortcuts: buildTopTargetBreakdown(analytics.topTargets, { limit: 6, shortcutsOnly: true }),
-      ...buildUserAgentBreakdowns(analytics.userAgents, totalEvents),
-      recentEvents: analytics.recentEvents.map((event) => ({
-        id: String(event._id),
-        eventType: event.eventType,
-        sectionType: event.sectionType,
-        targetType: event.targetType,
-        targetLabel: event.targetLabel,
-        occurredAt: event.occurredAt,
-      })),
-    },
-    history: [...(graph.business.history || [])]
-      .sort((first, second) => new Date(second.changedAt || 0).getTime() - new Date(first.changedAt || 0).getTime())
-      .map((entry) => ({
-        field: entry.field,
-        oldValue: entry.oldValue,
-        newValue: entry.newValue,
-        changedAt: entry.changedAt,
-      })),
+    analytics: includeAnalytics
+      ? {
+          totalEvents,
+          last7DaysEvents: analytics.totals.last7DaysEvents || 0,
+          pageViews,
+          linkClicks,
+          ctaClicks,
+          copyActions,
+          shortcutClicks: analytics.totals.shortcutClicks || 0,
+          uniqueVisitors: analytics.uniqueVisitors || 0,
+          actionRate: calculateActionRate(pageViews, interactions),
+          byEventType: buildEventTypeBreakdown(analytics.byEventType, totalEvents).map((item) => ({
+            eventType: item.eventType,
+            label: item.label,
+            count: item.count,
+            share: item.share,
+          })),
+          timeline: buildDailyTimeline(analytics.dailyEvents),
+          topLinks: buildTopTargetBreakdown(analytics.topTargets, { limit: 6 }),
+          topShortcuts: buildTopTargetBreakdown(analytics.topTargets, { limit: 6, shortcutsOnly: true }),
+          ...buildUserAgentBreakdowns(analytics.userAgents, totalEvents),
+          recentEvents: analytics.recentEvents.map((event) => ({
+            id: String(event._id),
+            eventType: event.eventType,
+            sectionType: event.sectionType,
+            targetType: event.targetType,
+            targetLabel: event.targetLabel,
+            occurredAt: event.occurredAt,
+          })),
+        }
+      : undefined,
+    history: includeHistory
+      ? [...(graph.business.history || [])]
+          .sort((first, second) => new Date(second.changedAt || 0).getTime() - new Date(first.changedAt || 0).getTime())
+          .map((entry) => ({
+            field: entry.field,
+            oldValue: entry.oldValue,
+            newValue: entry.newValue,
+            changedAt: entry.changedAt,
+          }))
+      : [],
     modulesData: {
       professionals: professionals.map((item) => ({
         id: String(item._id || item.id),
@@ -804,8 +811,8 @@ export async function listAdminBusinesses() {
   return businesses.map((business) => serializeSummary(business, analyticsMap));
 }
 
-export async function getAdminBusinessEditor(businessId) {
-  return hydrateEditorResponse(businessId);
+export async function getAdminBusinessEditor(businessId, options = {}) {
+  return hydrateEditorResponse(businessId, options);
 }
 
 export async function createAdminBusinessPreviewToken(adminUser, businessId) {
