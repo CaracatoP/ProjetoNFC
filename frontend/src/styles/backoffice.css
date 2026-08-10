@@ -1,0 +1,1903 @@
+.app-shell,
+.dashboard-shell {
+  --backoffice-bg: #10161d;
+  --backoffice-surface: #171d25;
+  --backoffice-surface-alt: #1b2330;
+  --backoffice-surface-muted: #1d2530;
+  --backoffice-surface-strong: #232d39;
+  --backoffice-border: #2b3644;
+  --backoffice-border-strong: #39485d;
+  --backoffice-text: #f5f7fb;
+  --backoffice-text-muted: #99a6b8;
+  --backoffice-primary: #7ea1ff;
+  --backoffice-primary-soft: rgba(126, 161, 255, 0.14);
+  --backoffice-success-soft: rgba(74, 222, 128, 0.14);
+  --backoffice-warning-soft: rgba(246, 193, 90, 0.14);
+  --backoffice-danger-soft: rgba(248, 113, 113, 0.14);
+  --backoffice-info-soft: rgba(96, 165, 250, 0.14);
+  --backoffice-shadow: 0 18px 36px rgba(4, 9, 14, 0.16);
+  color: var(--backoffice-text);
+}
+
+.app-shell {
+  background:
+    radial-gradient(circle at top left, rgba(126, 161, 255, 0.08), transparent 22%),
+    linear-gradient(180deg, color-mix(in srgb, var(--backoffice-bg) 96%, black), var(--backoffice-bg));
+}
+
+.app-shell__brand-copy span,
+.app-shell__hero p {
+  color: var(--backoffice-text-muted);
+}
+
+.dashboard-shell {
+  max-width: min(1760px, calc(100vw - 1rem));
+  padding-inline: clamp(0.75rem, 1.5vw, 1.5rem);
+  padding-top: 0.75rem;
+}
+
+.dashboard-shell__hero {
+  gap: 0.9rem;
+  padding: clamp(1.25rem, 2vw, 1.7rem);
+  border-color: var(--backoffice-border);
+  border-radius: calc(var(--radius-lg) + 0.2rem);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--backoffice-surface-strong) 88%, transparent), color-mix(in srgb, var(--backoffice-surface) 100%, transparent));
+  box-shadow: none;
+}
+
+.dashboard-shell__hero h1 {
+  max-width: 14ch;
+  font-size: clamp(2rem, 3.8vw, 3.5rem);
+  line-height: 1;
+}
+
+.dashboard-shell__content {
+  display: grid;
+  gap: clamp(1rem, 1.8vw, 1.5rem);
+}
+
+.dashboard-shell .section-eyebrow,
+.dashboard-shell .admin-editor-kicker {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 28px;
+  padding: 0.32rem 0.72rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--backoffice-primary) 20%, var(--backoffice-border));
+  background: var(--backoffice-primary-soft);
+  color: var(--backoffice-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dashboard-shell .button {
+  min-height: 42px;
+  padding: 0.74rem 1rem;
+  border-radius: 999px;
+  font-size: 0.94rem;
+}
+
+.dashboard-shell .button--primary {
+  background: var(--backoffice-primary);
+  color: #0b1118;
+  border-color: color-mix(in srgb, var(--backoffice-primary) 36%, white);
+}
+
+.dashboard-shell .button--primary:hover,
+.dashboard-shell .button--primary:focus-visible {
+  background: color-mix(in srgb, var(--backoffice-primary) 90%, white);
+}
+
+.dashboard-shell .button--secondary {
+  background: var(--backoffice-surface-muted);
+  color: var(--backoffice-text);
+  border-color: var(--backoffice-border);
+}
+
+.dashboard-shell .button--secondary:hover,
+.dashboard-shell .button--secondary:focus-visible {
+  background: var(--backoffice-surface-strong);
+  border-color: var(--backoffice-border-strong);
+}
+
+.dashboard-shell .button--danger-tone {
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.3);
+  color: #ffd8d8;
+}
+
+.dashboard-shell .button--danger-tone:hover,
+.dashboard-shell .button--danger-tone:focus-visible {
+  background: rgba(248, 113, 113, 0.18);
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.dashboard-shell input,
+.dashboard-shell select,
+.dashboard-shell textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.78rem 0.95rem;
+  border-radius: 14px;
+  border: 1px solid var(--backoffice-border);
+  background: #131922;
+  color: var(--backoffice-text);
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.dashboard-shell textarea {
+  min-height: 108px;
+  resize: vertical;
+}
+
+.dashboard-shell input::placeholder,
+.dashboard-shell textarea::placeholder {
+  color: color-mix(in srgb, var(--backoffice-text-muted) 88%, transparent);
+}
+
+.dashboard-shell input:focus-visible,
+.dashboard-shell select:focus-visible,
+.dashboard-shell textarea:focus-visible,
+.dashboard-shell .admin-sensitive-toggle:focus-visible,
+.dashboard-shell .client-panel-sidebar__nav-button:focus-visible,
+.dashboard-shell .tenant-list__item:focus-visible,
+.dashboard-shell .admin-client-list__button:focus-visible,
+.dashboard-shell .admin-stepper__item:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--backoffice-primary) 60%, var(--backoffice-border));
+  box-shadow: 0 0 0 3px rgba(126, 161, 255, 0.14);
+}
+
+.dashboard-shell input[type='file'] {
+  padding: 0.6rem;
+}
+
+.dashboard-shell input[type='file']::file-selector-button {
+  margin-right: 0.75rem;
+  padding: 0.68rem 0.9rem;
+  border: 1px solid var(--backoffice-border);
+  border-radius: 999px;
+  background: var(--backoffice-surface-muted);
+  color: var(--backoffice-text);
+  cursor: pointer;
+}
+
+.dashboard-shell input[type='file']::file-selector-button:hover {
+  background: var(--backoffice-surface-strong);
+}
+
+.dashboard-shell .admin-field {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.dashboard-shell .admin-field > span {
+  color: var(--backoffice-text);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.dashboard-shell .admin-field small,
+.dashboard-shell .admin-muted-copy,
+.dashboard-shell .admin-panel-card__header p,
+.dashboard-shell .admin-editor-header p,
+.dashboard-shell .tenant-list__meta span,
+.dashboard-shell .tenant-list__stats small,
+.dashboard-shell .admin-inline-note span,
+.dashboard-shell .admin-domain-preview-card span,
+.dashboard-shell .admin-preview-panel__meta-card span,
+.dashboard-shell .admin-preview-panel__empty span,
+.dashboard-shell .admin-event-item span,
+.dashboard-shell .analytics-bar-list__copy span,
+.dashboard-shell .analytics-breakdown-list__item span,
+.dashboard-shell .analytics-empty-state span,
+.dashboard-shell .client-panel-page-header__copy p,
+.dashboard-shell .client-panel-subpanel__header p,
+.dashboard-shell .client-panel-context-list span,
+.dashboard-shell .client-panel-chip--muted,
+.dashboard-shell .client-panel-chip--info,
+.dashboard-shell .admin-finance-help-text,
+.dashboard-shell .admin-finance-warning-list p,
+.dashboard-shell .admin-order-card__identity span,
+.dashboard-shell .admin-order-card__elapsed,
+.dashboard-shell .admin-order-card__timeline span,
+.dashboard-shell .admin-order-payment__details span,
+.dashboard-shell .admin-order-payment-events__list small {
+  color: var(--backoffice-text-muted);
+  line-height: 1.55;
+}
+
+.dashboard-shell .admin-field--invalid > span,
+.dashboard-shell .admin-field__error {
+  color: #fecaca;
+}
+
+.dashboard-shell .theme-color-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--backoffice-border);
+  border-radius: 16px;
+  background: var(--backoffice-surface-muted);
+}
+
+.dashboard-shell .theme-color-card__preview,
+.dashboard-shell .theme-color-card__picker,
+.dashboard-shell .theme-color-card__input {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.dashboard-shell .theme-color-card__preview strong {
+  font-family: var(--font-heading);
+}
+
+.dashboard-shell .theme-color-card__preview small,
+.dashboard-shell .theme-color-card__eyebrow,
+.dashboard-shell .theme-color-card__picker > span,
+.dashboard-shell .theme-color-card__input > span {
+  color: var(--backoffice-text-muted);
+}
+
+.dashboard-shell .theme-color-card__controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+  align-items: end;
+}
+
+.dashboard-shell .theme-color-card__picker input[type='color'] {
+  min-height: 52px;
+  padding: 0.25rem;
+}
+
+.dashboard-shell .theme-color-card__swatch {
+  width: 100%;
+  height: 56px;
+  border-radius: 14px;
+  border: 1px solid var(--backoffice-border);
+}
+
+.dashboard-shell .admin-input--invalid {
+  border-color: rgba(248, 113, 113, 0.72) !important;
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.12);
+}
+
+.dashboard-shell .admin-panel-card,
+.dashboard-shell .admin-stat-card,
+.dashboard-shell .client-panel-page-header,
+.dashboard-shell .client-panel-workspace,
+.dashboard-shell .client-panel-subpanel,
+.dashboard-shell .client-panel-hero-card {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--backoffice-surface-alt, var(--backoffice-surface-strong)) 28%, var(--backoffice-surface)), var(--backoffice-surface));
+  border: 1px solid var(--backoffice-border);
+  border-radius: calc(var(--radius-lg) + 0.1rem);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.dashboard-shell .admin-panel-card,
+.dashboard-shell .admin-stat-card {
+  padding: clamp(1.1rem, 1.6vw, 1.5rem);
+}
+
+.dashboard-shell .admin-panel-card--hero,
+.dashboard-shell .analytics-overview-hero,
+.dashboard-shell .client-panel-hero-card {
+  background:
+    linear-gradient(180deg, rgba(126, 161, 255, 0.08), transparent 38%),
+    linear-gradient(180deg, color-mix(in srgb, var(--backoffice-surface-strong) 88%, transparent), color-mix(in srgb, var(--backoffice-surface) 100%, transparent));
+}
+
+.dashboard-shell .admin-panel-card--controls,
+.dashboard-shell .admin-panel-card--sidebar,
+.dashboard-shell .client-panel-sidebar {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--backoffice-surface-muted) 84%, transparent), color-mix(in srgb, var(--backoffice-surface) 100%, transparent));
+}
+
+.dashboard-shell .admin-panel-card__header,
+.dashboard-shell .admin-editor-header,
+.dashboard-shell .admin-order-card__header,
+.dashboard-shell .admin-order-card__meta,
+.dashboard-shell .admin-finance-section__header,
+.dashboard-shell .admin-finance-summary-card__header,
+.dashboard-shell .admin-finance-config-card__header,
+.dashboard-shell .admin-finance-advanced-card__header,
+.dashboard-shell .admin-finance-preview-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-shell .admin-panel-card__header--compact {
+  gap: 0.85rem;
+}
+
+.dashboard-shell .admin-panel-card__header > div,
+.dashboard-shell .admin-editor-header > div,
+.dashboard-shell .admin-section-summary,
+.dashboard-shell .admin-ranked-item > div,
+.dashboard-shell .admin-event-item > div,
+.dashboard-shell .admin-inline-note,
+.dashboard-shell .admin-domain-preview-card,
+.dashboard-shell .client-panel-page-header__copy,
+.dashboard-shell .client-panel-subpanel__header,
+.dashboard-shell .admin-finance-section__header > div,
+.dashboard-shell .admin-finance-summary-card__header > div,
+.dashboard-shell .admin-finance-config-card__header > div,
+.dashboard-shell .admin-finance-advanced-card__header > div,
+.dashboard-shell .admin-finance-preview-card__header > div {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.dashboard-shell .admin-panel-card__header h2,
+.dashboard-shell .admin-editor-header h2,
+.dashboard-shell .admin-subpanel h3,
+.dashboard-shell .admin-section-summary strong,
+.dashboard-shell .admin-event-item strong,
+.dashboard-shell .analytics-panel h2,
+.dashboard-shell .analytics-panel h3,
+.dashboard-shell .client-panel-page-header__copy h2,
+.dashboard-shell .client-panel-subpanel__header h3,
+.dashboard-shell .admin-finance-section__header h3,
+.dashboard-shell .admin-finance-summary-card__header h3 {
+  margin: 0;
+  font-family: var(--font-heading);
+  line-height: 1.1;
+}
+
+.dashboard-shell .admin-dashboard-flow,
+.dashboard-shell .admin-dashboard-main,
+.dashboard-shell .admin-sidebar-stack,
+.dashboard-shell .admin-editor-stack,
+.dashboard-shell .admin-editor-column,
+.dashboard-shell .admin-card-stack,
+.dashboard-shell .admin-repeater-list,
+.dashboard-shell .admin-ranked-list,
+.dashboard-shell .admin-event-list,
+.dashboard-shell .tenant-list,
+.dashboard-shell .admin-sections-list,
+.dashboard-shell .client-panel-overview-stack,
+.dashboard-shell .client-panel-shell__workspace,
+.dashboard-shell .client-analytics-stack,
+.dashboard-shell .admin-clients-sidebar,
+.dashboard-shell .admin-finance-panel,
+.dashboard-shell .admin-finance-panel__form {
+  display: grid;
+  gap: 1rem;
+}
+
+.dashboard-shell .admin-card-stack--airy {
+  gap: 1.25rem;
+}
+
+.dashboard-shell .admin-workspace {
+  display: grid;
+  grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.dashboard-shell .admin-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(360px, 0.8fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.dashboard-shell .admin-editor-grid,
+.dashboard-shell .admin-form-grid,
+.dashboard-shell .admin-media-grid,
+.dashboard-shell .admin-split-grid,
+.dashboard-shell .admin-mini-stats,
+.dashboard-shell .admin-domain-preview-grid,
+.dashboard-shell .analytics-metric-grid,
+.dashboard-shell .analytics-layout-grid,
+.dashboard-shell .analytics-subgrid,
+.dashboard-shell .client-panel-kpi-grid,
+.dashboard-shell .client-panel-overview-grid,
+.dashboard-shell .client-panel-skeleton-grid,
+.dashboard-shell .admin-client-summary-grid,
+.dashboard-shell .admin-finance-summary-grid,
+.dashboard-shell .admin-finance-preview-grid,
+.dashboard-shell .admin-finance-preview-totals,
+.dashboard-shell .admin-stock-summary-grid,
+.dashboard-shell .admin-module-grid,
+.dashboard-shell .admin-clients-layout,
+.dashboard-shell .client-panel-shell__layout {
+  display: grid;
+  gap: 1rem;
+}
+
+.dashboard-shell .admin-editor-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.dashboard-shell .admin-panel-card--span-2,
+.dashboard-shell .analytics-panel--span-2,
+.dashboard-shell .client-panel-skeleton-card--wide {
+  grid-column: 1 / -1;
+}
+
+.dashboard-shell .admin-form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.dashboard-shell .admin-form-grid--compact,
+.dashboard-shell .admin-sidebar-filters__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-shell .admin-media-grid,
+.dashboard-shell .admin-mini-stats,
+.dashboard-shell .admin-domain-preview-grid,
+.dashboard-shell .admin-stock-summary-grid,
+.dashboard-shell .admin-client-summary-grid,
+.dashboard-shell .admin-finance-summary-grid,
+.dashboard-shell .admin-finance-preview-grid,
+.dashboard-shell .admin-finance-preview-totals {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.dashboard-shell .admin-split-grid,
+.dashboard-shell .client-panel-overview-grid,
+.dashboard-shell .analytics-layout-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-shell .analytics-subgrid {
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+}
+
+.dashboard-shell .analytics-layout-grid--client {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.dashboard-shell .admin-inline-note,
+.dashboard-shell .admin-domain-preview-card,
+.dashboard-shell .admin-preview-panel__meta-card,
+.dashboard-shell .admin-preview-panel__empty,
+.dashboard-shell .admin-media-card,
+.dashboard-shell .admin-subpanel,
+.dashboard-shell .admin-repeater-card,
+.dashboard-shell .admin-form-block,
+.dashboard-shell .admin-sections-list__item,
+.dashboard-shell .tenant-list__item,
+.dashboard-shell .admin-client-list__button,
+.dashboard-shell .analytics-metric-card,
+.dashboard-shell .analytics-bar-list__item,
+.dashboard-shell .analytics-breakdown-list__item,
+.dashboard-shell .admin-product-create-card,
+.dashboard-shell .admin-product-existing-section,
+.dashboard-shell .admin-repeater-card--product-compact,
+.dashboard-shell .admin-stock-summary-card,
+.dashboard-shell .admin-stock-card,
+.dashboard-shell .admin-module-card,
+.dashboard-shell .admin-module-status-group__header,
+.dashboard-shell .admin-order-card,
+.dashboard-shell .admin-order-payment,
+.dashboard-shell .admin-order-payment__details,
+.dashboard-shell .admin-order-payment-events__list li,
+.dashboard-shell .admin-finance-section,
+.dashboard-shell .admin-finance-summary-card,
+.dashboard-shell .admin-finance-preview-card,
+.dashboard-shell .admin-finance-config-card,
+.dashboard-shell .admin-finance-advanced-card,
+.dashboard-shell .admin-finance-summary-item,
+.dashboard-shell .admin-finance-preview-item,
+.dashboard-shell .client-panel-context-list > div {
+  border: 1px solid var(--backoffice-border);
+  border-radius: 16px;
+  background: var(--backoffice-surface-muted);
+  box-shadow: none;
+}
+
+.dashboard-shell .admin-inline-note,
+.dashboard-shell .admin-domain-preview-card,
+.dashboard-shell .admin-preview-panel__meta-card,
+.dashboard-shell .admin-preview-panel__empty,
+.dashboard-shell .admin-media-card,
+.dashboard-shell .admin-subpanel,
+.dashboard-shell .admin-repeater-card,
+.dashboard-shell .admin-form-block,
+.dashboard-shell .admin-stock-summary-card,
+.dashboard-shell .admin-stock-card,
+.dashboard-shell .admin-module-card,
+.dashboard-shell .admin-finance-section,
+.dashboard-shell .admin-finance-summary-card,
+.dashboard-shell .admin-finance-preview-card,
+.dashboard-shell .admin-finance-config-card,
+.dashboard-shell .admin-finance-advanced-card {
+  padding: 1rem;
+}
+
+.dashboard-shell .admin-inline-note strong,
+.dashboard-shell .admin-domain-preview-card strong,
+.dashboard-shell .admin-preview-panel__meta-card strong,
+.dashboard-shell .admin-preview-panel__empty strong,
+.dashboard-shell .admin-finance-summary-item strong,
+.dashboard-shell .admin-finance-preview-item strong,
+.dashboard-shell .admin-order-payment__details strong,
+.dashboard-shell .admin-order-payment-events > strong,
+.dashboard-shell .client-panel-context-list strong,
+.dashboard-shell .admin-mini-stat-card strong,
+.dashboard-shell .analytics-metric-card strong,
+.dashboard-shell .client-panel-kpi strong {
+  font-family: var(--font-heading);
+}
+
+.dashboard-shell .admin-inline-note--step {
+  background: #141a22;
+}
+
+.dashboard-shell .admin-status-banner {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  border: 1px solid var(--backoffice-border);
+}
+
+.dashboard-shell .admin-status-banner--success {
+  background: rgba(74, 222, 128, 0.12);
+  border-color: rgba(74, 222, 128, 0.28);
+  color: #dcfce7;
+}
+
+.dashboard-shell .admin-status-banner--error {
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.3);
+  color: #fecaca;
+}
+
+.dashboard-shell .admin-status-banner--warning {
+  background: rgba(246, 193, 90, 0.12);
+  border-color: rgba(246, 193, 90, 0.28);
+  color: #fde7b4;
+}
+
+.dashboard-shell .admin-toolbar,
+.dashboard-shell .admin-toolbar__group,
+.dashboard-shell .admin-inline-actions,
+.dashboard-shell .admin-editor-actions,
+.dashboard-shell .admin-sections-list__controls,
+.dashboard-shell .admin-visibility-toggle,
+.dashboard-shell .admin-module-badges,
+.dashboard-shell .client-panel-chip-row,
+.dashboard-shell .client-panel-page-header__meta,
+.dashboard-shell .client-panel-quick-actions,
+.dashboard-shell .analytics-legend,
+.dashboard-shell .analytics-tenant-header__actions,
+.dashboard-shell .catalog-checkout__success-actions,
+.dashboard-shell .admin-finance-sensitive-field__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.dashboard-shell .admin-toolbar {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.dashboard-shell .admin-toolbar__group--end,
+.dashboard-shell .client-panel-page-header__meta,
+.dashboard-shell .analytics-tenant-header__actions {
+  justify-content: flex-end;
+}
+
+.dashboard-shell .admin-editor-header--hero {
+  align-items: stretch;
+}
+
+.dashboard-shell .admin-editor-hero-main,
+.dashboard-shell .admin-editor-hero-actions {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.dashboard-shell .admin-editor-meta--hero {
+  margin-top: 0.1rem;
+}
+
+.dashboard-shell .admin-editor-public-url {
+  margin: 0;
+  color: var(--backoffice-text);
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-shell .admin-editor-meta,
+.dashboard-shell .admin-section-summary__meta,
+.dashboard-shell .admin-product-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.dashboard-shell .admin-meta-pill,
+.dashboard-shell .admin-section-chip,
+.dashboard-shell .tenant-list__status,
+.dashboard-shell .tenant-list__selection,
+.dashboard-shell .client-panel-chip,
+.dashboard-shell .admin-finance-status-badge,
+.dashboard-shell .admin-order-status-badge,
+.dashboard-shell .admin-order-payment-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 30px;
+  padding: 0.28rem 0.68rem;
+  border-radius: 999px;
+  border: 1px solid var(--backoffice-border);
+  background: #141a22;
+  color: var(--backoffice-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.dashboard-shell .admin-meta-pill,
+.dashboard-shell .admin-section-chip,
+.dashboard-shell .client-panel-chip {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.dashboard-shell .admin-section-chip--muted,
+.dashboard-shell .client-panel-chip--muted,
+.dashboard-shell .tenant-list__status--received,
+.dashboard-shell .admin-finance-status-badge--neutral,
+.dashboard-shell .admin-order-status-badge--received,
+.dashboard-shell .admin-order-payment-badge--pending {
+  color: var(--backoffice-text-muted);
+}
+
+.dashboard-shell .admin-section-chip--accent,
+.dashboard-shell .tenant-list__selection,
+.dashboard-shell .client-panel-chip--accent,
+.dashboard-shell .admin-order-status-badge--ready,
+.dashboard-shell .admin-finance-status-badge--success {
+  border-color: rgba(126, 161, 255, 0.28);
+  background: rgba(126, 161, 255, 0.12);
+}
+
+.dashboard-shell .admin-section-chip--warning,
+.dashboard-shell .admin-order-status-badge--preparing,
+.dashboard-shell .admin-order-payment-badge--manual,
+.dashboard-shell .admin-finance-status-badge--warning {
+  border-color: rgba(246, 193, 90, 0.28);
+  background: rgba(246, 193, 90, 0.12);
+  color: #f7dca1;
+}
+
+.dashboard-shell .admin-section-chip--info,
+.dashboard-shell .client-panel-chip--info {
+  border-color: rgba(96, 165, 250, 0.28);
+  background: rgba(96, 165, 250, 0.12);
+}
+
+.dashboard-shell .admin-section-chip--success,
+.dashboard-shell .tenant-list__status--active,
+.dashboard-shell .admin-order-status-badge--delivered,
+.dashboard-shell .admin-order-payment-badge--paid {
+  border-color: rgba(74, 222, 128, 0.28);
+  background: rgba(74, 222, 128, 0.12);
+  color: #d8ffe6;
+}
+
+.dashboard-shell .tenant-list__status--inactive,
+.dashboard-shell .admin-order-status-badge--cancelled,
+.dashboard-shell .admin-order-payment-badge--failed,
+.dashboard-shell .admin-order-payment-badge--cancelled,
+.dashboard-shell .admin-finance-status-badge--danger {
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.12);
+  color: #ffd8d8;
+}
+
+.dashboard-shell .tenant-list__status--draft {
+  border-color: rgba(212, 163, 106, 0.28);
+  background: rgba(212, 163, 106, 0.1);
+  color: #f0d7bc;
+}
+
+.dashboard-shell .admin-finance-status-badge i,
+.dashboard-shell .admin-order-status-badge i,
+.dashboard-shell .admin-order-payment-badge i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.dashboard-shell .admin-mini-stats {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.dashboard-shell .admin-mini-stat-card {
+  display: grid;
+  gap: 0.32rem;
+  min-height: 124px;
+  padding: 1rem;
+  border-radius: 16px;
+  border: 1px solid var(--backoffice-border);
+  background: var(--backoffice-surface-muted);
+}
+
+.dashboard-shell .admin-mini-stat-card span,
+.dashboard-shell .admin-mini-stat-card small {
+  color: var(--backoffice-text-muted);
+  line-height: 1.5;
+}
+
+.dashboard-shell .tenant-list__item,
+.dashboard-shell .admin-client-list__button,
+.dashboard-shell .admin-stepper__item,
+.dashboard-shell .client-panel-sidebar__nav-button {
+  width: 100%;
+  color: inherit;
+  text-align: left;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.dashboard-shell .tenant-list__item,
+.dashboard-shell .admin-client-list__button {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem;
+}
+
+.dashboard-shell .tenant-list__item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.dashboard-shell .tenant-list__item:hover,
+.dashboard-shell .admin-client-list__button:hover,
+.dashboard-shell .admin-stepper__item:hover,
+.dashboard-shell .client-panel-sidebar__nav-button:hover {
+  background: var(--backoffice-surface-strong);
+  border-color: var(--backoffice-border-strong);
+}
+
+.dashboard-shell .tenant-list__item--active,
+.dashboard-shell .admin-client-list__button--selected,
+.dashboard-shell .admin-stepper__item--active,
+.dashboard-shell .client-panel-sidebar__nav-button.is-active {
+  border-color: color-mix(in srgb, var(--backoffice-primary) 42%, var(--backoffice-border));
+  background: color-mix(in srgb, var(--backoffice-primary-soft) 80%, var(--backoffice-surface-strong));
+}
+
+.dashboard-shell .tenant-list__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.dashboard-shell .tenant-list__meta-copy,
+.dashboard-shell .admin-client-list__content {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.dashboard-shell .tenant-list__logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid var(--backoffice-border);
+}
+
+.dashboard-shell .tenant-list__stats {
+  display: grid;
+  justify-items: end;
+  gap: 0.4rem;
+  min-width: 118px;
+}
+
+.dashboard-shell .tenant-list__path,
+.dashboard-shell .tenant-list__foot,
+.dashboard-shell .admin-client-list__content span,
+.dashboard-shell .admin-client-list__content small {
+  color: var(--backoffice-text-muted);
+}
+
+.dashboard-shell .admin-sidebar-filters {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border: 1px solid var(--backoffice-border);
+  border-radius: 16px;
+  background: var(--backoffice-surface-muted);
+}
+
+.dashboard-shell .admin-stepper {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(220px, 1fr);
+  gap: 0.9rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+}
+
+.dashboard-shell .admin-stepper__item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.8rem;
+  align-items: start;
+  min-height: 104px;
+  padding: 1rem;
+  border: 1px solid var(--backoffice-border);
+  border-radius: 16px;
+  background: var(--backoffice-surface-muted);
+}
+
+.dashboard-shell .admin-stepper__index {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: rgba(126, 161, 255, 0.14);
+  color: var(--backoffice-text);
+  font-weight: 800;
+}
+
+.dashboard-shell .admin-stepper__copy {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.dashboard-shell .admin-stepper__copy strong {
+  font-family: var(--font-heading);
+}
+
+.dashboard-shell .admin-stepper-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+}
+
+.dashboard-shell .admin-sensitive-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.dashboard-shell .admin-sensitive-toggle {
+  min-height: 42px;
+  padding: 0 0.95rem;
+  border: 1px solid var(--backoffice-border);
+  border-radius: 999px;
+  background: var(--backoffice-surface-muted);
+  color: var(--backoffice-text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.dashboard-shell .admin-preview-panel {
+  position: sticky;
+  top: 1rem;
+}
+
+.dashboard-shell .admin-preview-panel__meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.dashboard-shell .admin-preview-panel__frame {
+  overflow: hidden;
+  min-height: 860px;
+  padding: 0.35rem;
+  border-radius: 18px;
+  border: 1px solid var(--backoffice-border);
+  background: #0b1016;
+}
+
+.dashboard-shell .admin-preview-panel__frame iframe {
+  width: 100%;
+  min-height: 828px;
+  border: 0;
+  border-radius: 14px;
+  background: #0b1016;
+}
+
+.dashboard-shell .admin-dashboard-switcher {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.35rem;
+  border: 1px solid var(--backoffice-border);
+  border-radius: 999px;
+  background: #141a22;
+}
+
+.dashboard-shell .admin-clients-layout {
+  grid-template-columns: minmax(320px, 410px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.dashboard-shell .admin-client-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.dashboard-shell .analytics-overview-hero {
+  gap: 1rem;
+}
+
+.dashboard-shell .analytics-hero__controls {
+  display: grid;
+  gap: 0.8rem;
+  align-items: end;
+  justify-items: end;
+  min-width: min(100%, 300px);
+}
+
+.dashboard-shell .analytics-hero__controls .admin-field {
+  width: 100%;
+}
+
+.dashboard-shell .analytics-hero__controls .button {
+  min-width: 200px;
+}
+
+.dashboard-shell .analytics-metric-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.dashboard-shell .analytics-metric-grid--tenant {
+  margin-bottom: 0.2rem;
+}
+
+.dashboard-shell .analytics-metric-card {
+  display: grid;
+  gap: 0.4rem;
+  min-height: 136px;
+  align-content: start;
+}
+
+.dashboard-shell .analytics-metric-card strong {
+  font-size: clamp(1.45rem, 1.2rem + 0.5vw, 1.95rem);
+  line-height: 1;
+}
+
+.dashboard-shell .analytics-metric-card--info {
+  border-color: rgba(96, 165, 250, 0.26);
+  background: rgba(96, 165, 250, 0.08);
+}
+
+.dashboard-shell .analytics-metric-card--accent {
+  border-color: rgba(126, 161, 255, 0.26);
+  background: rgba(126, 161, 255, 0.08);
+}
+
+.dashboard-shell .analytics-metric-card--success {
+  border-color: rgba(74, 222, 128, 0.26);
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.dashboard-shell .analytics-metric-card--warning {
+  border-color: rgba(246, 193, 90, 0.26);
+  background: rgba(246, 193, 90, 0.08);
+}
+
+.dashboard-shell .analytics-panel {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.dashboard-shell .analytics-trend-chart {
+  display: grid;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  gap: 0.55rem;
+  align-items: end;
+  min-height: 240px;
+}
+
+.dashboard-shell .analytics-trend-chart--compact {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  min-height: 200px;
+}
+
+.dashboard-shell .analytics-trend-chart__day {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.dashboard-shell .analytics-trend-chart__bars {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.18rem;
+  align-items: end;
+  min-height: 188px;
+  padding: 0.5rem;
+  border-radius: 14px;
+  border: 1px solid var(--backoffice-border);
+  background: #141a22;
+}
+
+.dashboard-shell .analytics-trend-chart--compact .analytics-trend-chart__bars {
+  min-height: 156px;
+}
+
+.dashboard-shell .analytics-trend-chart__bar {
+  min-height: 8px;
+  border-radius: 999px 999px 0 0;
+}
+
+.dashboard-shell .analytics-trend-chart__bar--events,
+.dashboard-shell .analytics-legend__swatch--events {
+  background: #d6deeb;
+}
+
+.dashboard-shell .analytics-trend-chart__bar--views,
+.dashboard-shell .analytics-legend__swatch--views {
+  background: #7ea1ff;
+}
+
+.dashboard-shell .analytics-trend-chart__bar--actions,
+.dashboard-shell .analytics-legend__swatch--actions {
+  background: #d4a36a;
+}
+
+.dashboard-shell .analytics-trend-chart__label {
+  display: grid;
+  gap: 0.12rem;
+  justify-items: center;
+  text-align: center;
+}
+
+.dashboard-shell .analytics-trend-chart__label strong {
+  font-size: 0.86rem;
+}
+
+.dashboard-shell .analytics-trend-chart__label span {
+  color: var(--backoffice-text-muted);
+  font-size: 0.76rem;
+}
+
+.dashboard-shell .analytics-legend {
+  color: var(--backoffice-text-muted);
+  font-size: 0.82rem;
+}
+
+.dashboard-shell .analytics-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.dashboard-shell .analytics-legend__swatch {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 999px;
+}
+
+.dashboard-shell .analytics-bar-list,
+.dashboard-shell .analytics-breakdown-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.dashboard-shell .analytics-bar-list__item,
+.dashboard-shell .analytics-breakdown-list__item {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.9rem 0.95rem;
+}
+
+.dashboard-shell .analytics-breakdown-list__item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.dashboard-shell .analytics-bar-list__copy,
+.dashboard-shell .analytics-breakdown-list__item > div {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.dashboard-shell .analytics-bar-list__meta {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.dashboard-shell .analytics-bar-list__track {
+  width: 100%;
+  height: 0.42rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #11161d;
+}
+
+.dashboard-shell .analytics-bar-list__track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7ea1ff, #d4a36a);
+}
+
+.dashboard-shell .analytics-empty-state {
+  display: grid;
+  gap: 0.3rem;
+  min-height: 160px;
+  place-content: center;
+  padding: 0.5rem 0;
+  text-align: left;
+}
+
+.dashboard-shell .analytics-empty-state--compact {
+  min-height: 0;
+}
+
+.dashboard-shell .analytics-recent-events,
+.dashboard-shell .admin-ranked-list--scroll,
+.dashboard-shell .admin-event-list--scroll {
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.dashboard-shell .analytics-baseline-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+  padding: 0.95rem 1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  background: rgba(96, 165, 250, 0.08);
+}
+
+.dashboard-shell .analytics-baseline-banner > div {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.dashboard-shell .analytics-baseline-banner strong {
+  font-family: var(--font-heading);
+}
+
+.dashboard-shell .client-panel-shell__layout {
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.dashboard-shell .client-panel-sidebar {
+  position: sticky;
+  top: 1rem;
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.dashboard-shell .client-panel-sidebar__brand {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.dashboard-shell .client-panel-sidebar__brand > div:last-child,
+.dashboard-shell .client-panel-sidebar__footer > div {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.dashboard-shell .client-panel-sidebar__brand strong {
+  font-family: var(--font-heading);
+  font-size: 1.02rem;
+}
+
+.dashboard-shell .client-panel-sidebar__brand-badge {
+  display: grid;
+  place-items: center;
+  width: 2.9rem;
+  height: 2.9rem;
+  border-radius: 14px;
+  border: 1px solid rgba(126, 161, 255, 0.26);
+  background: rgba(126, 161, 255, 0.12);
+  font-family: var(--font-heading);
+  font-weight: 700;
+}
+
+.dashboard-shell .client-panel-sidebar__nav {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.dashboard-shell .client-panel-sidebar__nav-button {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--backoffice-border);
+  border-radius: 14px;
+  background: #141a22;
+}
+
+.dashboard-shell .client-panel-sidebar__nav-button span {
+  font-family: var(--font-heading);
+  font-size: 0.96rem;
+}
+
+.dashboard-shell .client-panel-sidebar__nav-button small {
+  color: var(--backoffice-text-muted);
+  line-height: 1.45;
+}
+
+.dashboard-shell .client-panel-sidebar__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+  padding-top: 0.3rem;
+  border-top: 1px solid var(--backoffice-border);
+}
+
+.dashboard-shell .client-panel-sidebar__skeleton-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.dashboard-shell .client-panel-sidebar__skeleton-list span,
+.dashboard-shell .client-panel-sidebar__brand:empty,
+.dashboard-shell .client-panel-skeleton-card {
+  display: block;
+  border-radius: 14px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+  background-size: 220% 100%;
+  animation: client-panel-skeleton-pulse 1.25s ease infinite;
+}
+
+.dashboard-shell .client-panel-sidebar__skeleton-list span {
+  min-height: 3.4rem;
+}
+
+.dashboard-shell .client-panel-page-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 1.1rem 1.15rem;
+}
+
+.dashboard-shell .client-panel-page-header__copy h2,
+.dashboard-shell .client-panel-hero__copy h2,
+.dashboard-shell .client-panel-workspace__header h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+}
+
+.dashboard-shell .client-panel-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(220px, 0.8fr);
+  gap: 1.1rem;
+  align-items: center;
+  padding: 1.15rem;
+}
+
+.dashboard-shell .client-panel-hero__copy {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.dashboard-shell .client-panel-hero__copy h2 {
+  font-size: clamp(1.55rem, 2.8vw, 2.2rem);
+}
+
+.dashboard-shell .client-panel-hero__actions {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.dashboard-shell .client-panel-chip {
+  min-height: 30px;
+  padding: 0.28rem 0.68rem;
+}
+
+.dashboard-shell .client-panel-kpi-grid {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.dashboard-shell .client-panel-kpi {
+  display: grid;
+  gap: 0.3rem;
+  min-height: 126px;
+  padding: 1rem;
+  border-radius: 16px;
+  border: 1px solid var(--backoffice-border);
+  background: var(--backoffice-surface-muted);
+}
+
+.dashboard-shell .client-panel-kpi strong {
+  font-size: 1.65rem;
+  line-height: 1.05;
+}
+
+.dashboard-shell .client-panel-kpi--warning {
+  border-color: rgba(246, 193, 90, 0.26);
+  background: rgba(246, 193, 90, 0.08);
+}
+
+.dashboard-shell .client-panel-kpi--danger {
+  border-color: rgba(248, 113, 113, 0.26);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.dashboard-shell .client-panel-kpi--info {
+  border-color: rgba(96, 165, 250, 0.26);
+  background: rgba(96, 165, 250, 0.08);
+}
+
+.dashboard-shell .client-panel-kpi--accent {
+  border-color: rgba(126, 161, 255, 0.26);
+  background: rgba(126, 161, 255, 0.08);
+}
+
+.dashboard-shell .client-panel-subpanel {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.dashboard-shell .client-panel-context-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.dashboard-shell .client-panel-context-list > div {
+  gap: 0.18rem;
+  padding: 0.85rem 0.9rem;
+}
+
+.dashboard-shell .client-panel-workspace__header {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.dashboard-shell .client-panel-skeleton-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-shell .client-panel-skeleton-card {
+  min-height: 9rem;
+}
+
+.dashboard-shell .admin-module-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.dashboard-shell .admin-module-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.dashboard-shell .admin-module-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+
+.dashboard-shell .admin-module-card span,
+.dashboard-shell .admin-module-status-group__copy span,
+.dashboard-shell .admin-product-create-card__copy span,
+.dashboard-shell .admin-product-card__copy span,
+.dashboard-shell .admin-product-existing-section__copy span,
+.dashboard-shell .admin-product-card__copy--summary small,
+.dashboard-shell .admin-stock-summary-card span {
+  color: var(--backoffice-text-muted);
+}
+
+.dashboard-shell .admin-module-status-group {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.dashboard-shell .admin-module-status-group__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.dashboard-shell .admin-module-status-group__copy {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.dashboard-shell .admin-module-item-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--backoffice-text-muted);
+}
+
+.dashboard-shell .admin-product-management--client,
+.dashboard-shell .admin-stock-management {
+  display: grid;
+  gap: 1rem;
+}
+
+.dashboard-shell .admin-product-search-field {
+  max-width: 30rem;
+}
+
+.dashboard-shell .admin-product-management--client .admin-repeater-list {
+  gap: 0.9rem;
+}
+
+.dashboard-shell .admin-product-create-card,
+.dashboard-shell .admin-repeater-card--product-compact {
+  display: grid;
+  gap: 0.95rem;
+  padding: 1rem;
+}
+
+.dashboard-shell .admin-product-create-card__header,
+.dashboard-shell .admin-product-card__header,
+.dashboard-shell .admin-product-existing-section__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.dashboard-shell .admin-product-create-card__copy,
+.dashboard-shell .admin-product-card__copy,
+.dashboard-shell .admin-product-existing-section__copy {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.dashboard-shell .admin-product-form__grid--compact,
+.dashboard-shell .admin-product-form__inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.dashboard-shell .admin-product-form__toggles {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.9rem;
+  border: 1px solid var(--backoffice-border);
+  border-radius: 14px;
+  background: #141a22;
+}
+
+.dashboard-shell .admin-product-form__hint,
+.dashboard-shell .admin-product-form__support,
+.dashboard-shell .admin-product-form__support--compact {
+  color: var(--backoffice-text-muted);
+  line-height: 1.5;
+}
+
+.dashboard-shell .admin-product-form__media .admin-inline-image-field,
+.dashboard-shell .admin-service-image-control,
+.dashboard-shell .admin-inline-image-field {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.dashboard-shell .admin-product-form__media .admin-image-preview,
+.dashboard-shell .admin-image-preview {
+  min-height: 190px;
+  border-radius: 14px;
+  border: 1px solid var(--backoffice-border);
+  background: #121821;
+}
+
+.dashboard-shell .admin-image-preview {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.dashboard-shell .admin-image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dashboard-shell .admin-image-preview--empty,
+.dashboard-shell .admin-inline-image-field__note,
+.dashboard-shell .admin-service-image-control__label {
+  color: var(--backoffice-text-muted);
+}
+
+.dashboard-shell .admin-product-form__description textarea {
+  min-height: 92px;
+}
+
+.dashboard-shell .admin-product-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.dashboard-shell .admin-product-form__actions .button,
+.dashboard-shell .admin-product-create-card__header .button {
+  min-width: 0;
+}
+
+.dashboard-shell .admin-product-card__summary {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.dashboard-shell .admin-product-status-badge,
+.dashboard-shell .admin-product-stock-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0.24rem 0.62rem;
+  border-radius: 999px;
+  border: 1px solid var(--backoffice-border);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.dashboard-shell .admin-product-status-badge--available {
+  border-color: rgba(74, 222, 128, 0.28);
+  background: rgba(74, 222, 128, 0.12);
+  color: #d8ffe6;
+}
+
+.dashboard-shell .admin-product-status-badge--unavailable {
+  border-color: rgba(248, 113, 113, 0.28);
+  background: rgba(248, 113, 113, 0.12);
+  color: #ffd8d8;
+}
+
+.dashboard-shell .admin-product-stock-badge--warning,
+.dashboard-shell .admin-stock-summary-card--warning {
+  border-color: rgba(246, 193, 90, 0.28);
+  background: rgba(246, 193, 90, 0.12);
+}
+
+.dashboard-shell .admin-product-card--unavailable {
+  border-color: rgba(248, 113, 113, 0.26);
+}
+
+.dashboard-shell .admin-stock-summary-card {
+  display: grid;
+  gap: 0.3rem;
+  min-height: 120px;
+}
+
+.dashboard-shell .admin-stock-summary-card strong {
+  font-size: 1.5rem;
+}
+
+.dashboard-shell .admin-order-archive {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.dashboard-shell .admin-order-archive__confirm {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 14px;
+  border: 1px solid rgba(248, 113, 113, 0.26);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.dashboard-shell .admin-order-card {
+  display: grid;
+  gap: 0.95rem;
+  padding: 1rem;
+  border-left: 4px solid transparent;
+}
+
+.dashboard-shell .admin-order-card--received {
+  border-left-color: #d6deeb;
+  background: rgba(214, 222, 235, 0.05);
+}
+
+.dashboard-shell .admin-order-card--preparing {
+  border-left-color: #f6c15a;
+  background: rgba(246, 193, 90, 0.06);
+}
+
+.dashboard-shell .admin-order-card--ready {
+  border-left-color: #60a5fa;
+  background: rgba(96, 165, 250, 0.06);
+}
+
+.dashboard-shell .admin-order-card--delivered {
+  border-left-color: #4ade80;
+  background: rgba(74, 222, 128, 0.06);
+}
+
+.dashboard-shell .admin-order-card--cancelled {
+  border-left-color: #f87171;
+  background: rgba(248, 113, 113, 0.06);
+}
+
+.dashboard-shell .admin-order-card__identity {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.dashboard-shell .admin-order-card__meta strong {
+  font-size: 1rem;
+}
+
+.dashboard-shell .admin-order-card__timeline {
+  display: grid;
+  gap: 0.28rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid var(--backoffice-border);
+  background: #141a22;
+}
+
+.dashboard-shell .admin-order-payment {
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+}
+
+.dashboard-shell .admin-order-payment__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem 1rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-shell .admin-order-payment__method {
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.dashboard-shell .admin-order-payment-events {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.dashboard-shell .admin-order-payment-events__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.dashboard-shell .admin-order-payment-events__list li {
+  gap: 0.12rem;
+  padding: 0.7rem 0.8rem;
+}
+
+.dashboard-shell .admin-finance-summary-grid--platform {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.dashboard-shell .admin-finance-summary-item,
+.dashboard-shell .admin-finance-preview-item {
+  display: grid;
+  gap: 0.22rem;
+  padding: 0.82rem 0.9rem;
+}
+
+.dashboard-shell .admin-finance-summary-item span,
+.dashboard-shell .admin-finance-preview-item span {
+  color: var(--backoffice-text-muted);
+  font-size: 0.84rem;
+}
+
+.dashboard-shell .admin-finance-field-stack {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.dashboard-shell .admin-finance-sensitive-field {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.dashboard-shell .admin-finance-inline-button {
+  min-height: 40px;
+}
+
+.dashboard-shell .admin-finance-warning-list {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(246, 193, 90, 0.26);
+  background: rgba(246, 193, 90, 0.08);
+}
+
+.dashboard-shell .admin-finance-panel__toggles {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.9rem;
+  border-radius: 14px;
+  border: 1px solid var(--backoffice-border);
+  background: #141a22;
+}
+
+.dashboard-shell .admin-checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  color: var(--backoffice-text);
+}
+
+.dashboard-shell .admin-checkbox-field input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--backoffice-primary);
+}
+
+@keyframes client-panel-skeleton-pulse {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (max-width: 1500px) {
+  .dashboard-shell .admin-workspace,
+  .dashboard-shell .admin-editor-layout,
+  .dashboard-shell .analytics-layout-grid,
+  .dashboard-shell .analytics-subgrid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-shell .analytics-panel--span-2 {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 1200px) {
+  .dashboard-shell .client-panel-shell__layout,
+  .dashboard-shell .admin-clients-layout,
+  .dashboard-shell .client-panel-overview-grid,
+  .dashboard-shell .client-panel-hero,
+  .dashboard-shell .admin-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-shell .admin-panel-card--span-2 {
+    grid-column: auto;
+  }
+
+  .dashboard-shell .client-panel-sidebar,
+  .dashboard-shell .admin-preview-panel,
+  .dashboard-shell .admin-sidebar-stack {
+    position: static;
+    top: auto;
+  }
+
+  .dashboard-shell .admin-preview-panel__frame {
+    min-height: 700px;
+  }
+
+  .dashboard-shell .admin-preview-panel__frame iframe {
+    min-height: 668px;
+  }
+}
+
+@media (max-width: 900px) {
+  .dashboard-shell .admin-dashboard-switcher {
+    width: 100%;
+  }
+
+  .dashboard-shell .admin-dashboard-switcher .button {
+    flex: 1 1 0;
+  }
+
+  .dashboard-shell .admin-form-grid--compact,
+  .dashboard-shell .admin-sidebar-filters__grid,
+  .dashboard-shell .admin-product-form__grid--compact,
+  .dashboard-shell .admin-product-form__inventory-grid,
+  .dashboard-shell .client-panel-skeleton-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-shell .analytics-trend-chart {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .dashboard-shell .analytics-breakdown-list__item {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-shell .admin-order-card__header,
+  .dashboard-shell .admin-order-card__meta,
+  .dashboard-shell .analytics-baseline-banner,
+  .dashboard-shell .client-panel-page-header,
+  .dashboard-shell .client-panel-sidebar__footer {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-shell .analytics-hero__controls {
+    justify-items: stretch;
+  }
+
+  .dashboard-shell .analytics-hero__controls .button {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-shell {
+    max-width: calc(100vw - 0.5rem);
+    padding-inline: 0.25rem;
+  }
+
+  .dashboard-shell__hero {
+    padding: 1rem;
+  }
+
+  .dashboard-shell .admin-toolbar,
+  .dashboard-shell .admin-toolbar__group,
+  .dashboard-shell .admin-inline-actions,
+  .dashboard-shell .admin-sections-list__controls,
+  .dashboard-shell .tenant-list__item,
+  .dashboard-shell .client-panel-quick-actions,
+  .dashboard-shell .client-panel-hero__actions,
+  .dashboard-shell .admin-finance-sensitive-field__actions {
+    display: grid;
+    width: 100%;
+  }
+
+  .dashboard-shell .admin-toolbar .button,
+  .dashboard-shell .admin-toolbar__group .button,
+  .dashboard-shell .admin-inline-actions .button,
+  .dashboard-shell .client-panel-quick-actions .button,
+  .dashboard-shell .client-panel-hero__actions .button,
+  .dashboard-shell .client-panel-sidebar__footer .button,
+  .dashboard-shell .admin-finance-sensitive-field__actions .button {
+    width: 100%;
+  }
+
+  .dashboard-shell .admin-stepper {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    overflow: visible;
+  }
+
+  .dashboard-shell .admin-stepper-footer,
+  .dashboard-shell .admin-preview-panel__meta {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-shell .tenant-list__stats {
+    justify-items: start;
+    min-width: 0;
+  }
+
+  .dashboard-shell .client-panel-page-header__meta {
+    justify-content: flex-start;
+  }
+}
