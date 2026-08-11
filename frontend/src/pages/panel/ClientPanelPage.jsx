@@ -1399,21 +1399,25 @@ function LegacyClientPanelOverview({
       label: 'Pedidos em aberto',
       value: formatMetricValue(openOrders),
       hint: Number(orderSummary.received || 0) > 0 ? `${formatMetricValue(orderSummary.received || 0)} novo(s)` : 'Sem pedidos novos',
+      tone: 'info',
     },
     {
       label: 'Estoque baixo',
       value: formatMetricValue(lowStock),
       hint: lowStock > 0 ? 'Precisa de reposicao' : 'Tudo sob controle',
+      tone: 'warning',
     },
     {
       label: 'Produtos indisponiveis',
       value: formatMetricValue(unavailableProducts),
       hint: unavailableProducts > 0 ? 'Fora de venda' : 'Tudo disponivel',
+      tone: 'danger',
     },
     {
       label: 'Agendamentos',
       value: formatMetricValue(pendingAppointments),
       hint: pendingAppointments > 0 ? 'Aguardando resposta' : 'Sem pendencias',
+      tone: 'accent',
     },
   ];
 
@@ -1422,7 +1426,7 @@ function LegacyClientPanelOverview({
 
       <div className="client-panel-kpi-grid">
         {kpis.map((kpi) => (
-          <OverviewKpiCard key={kpi.label} label={kpi.label} value={kpi.value} hint={kpi.hint} />
+          <OverviewKpiCard key={kpi.label} label={kpi.label} value={kpi.value} hint={kpi.hint} tone={kpi.tone} />
         ))}
       </div>
 
@@ -1570,21 +1574,25 @@ function ClientPanelOverview({
       label: 'Pedidos em aberto',
       value: formatMetricValue(openOrders),
       hint: Number(orderSummary.received || 0) > 0 ? `${formatMetricValue(orderSummary.received || 0)} novo(s)` : 'Sem pedidos novos',
+      tone: 'info',
     },
     {
       label: 'Estoque baixo',
       value: formatMetricValue(lowStock),
       hint: lowStock > 0 ? 'Precisa de reposicao' : 'Tudo sob controle',
+      tone: 'warning',
     },
     {
       label: 'Produtos indisponiveis',
       value: formatMetricValue(unavailableProducts),
       hint: unavailableProducts > 0 ? 'Fora de venda' : 'Tudo disponivel',
+      tone: 'danger',
     },
     {
       label: 'Agendamentos',
       value: formatMetricValue(pendingAppointments),
       hint: pendingAppointments > 0 ? 'Aguardando resposta' : 'Sem pendencias',
+      tone: 'accent',
     },
   ];
 
@@ -1592,7 +1600,7 @@ function ClientPanelOverview({
     <div className="client-panel-overview">
       <div className="client-panel-kpi-grid">
         {kpis.map((kpi) => (
-          <OverviewKpiCard key={kpi.label} label={kpi.label} value={kpi.value} hint={kpi.hint} />
+          <OverviewKpiCard key={kpi.label} label={kpi.label} value={kpi.value} hint={kpi.hint} tone={kpi.tone} />
         ))}
       </div>
 
@@ -1998,11 +2006,11 @@ export function ClientPanelPage() {
                   </Button>
                 ) : null}
                 {publicUrl ? (
-                  <Button variant="secondary" href={publicUrl} target="_blank" rel="noreferrer">
+                  <Button href={publicUrl} target="_blank" rel="noreferrer">
                     Ver site
                   </Button>
                 ) : null}
-                <Button variant="secondary" onClick={handleCopyPublicUrl} disabled={!publicUrl}>
+                <Button variant="ghost" onClick={handleCopyPublicUrl} disabled={!publicUrl}>
                   Copiar link
                 </Button>
               </div>
