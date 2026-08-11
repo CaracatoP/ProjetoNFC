@@ -396,6 +396,7 @@ export function TenantModuleManagementSection({
   const [editingProducts, setEditingProducts] = useState([]);
   const [productSearchValue, setProductSearchValue] = useState('');
   const [stockSearchValue, setStockSearchValue] = useState('');
+  const [stockStatusFilter, setStockStatusFilter] = useState('all');
   const [orderSearchValue, setOrderSearchValue] = useState('');
   const [orderFilter, setOrderFilter] = useState('all');
   const [orderPaymentFilter, setOrderPaymentFilter] = useState('all');
@@ -513,8 +514,30 @@ export function TenantModuleManagementSection({
 
     return editingProducts
       .map((product, originalIndex) => ({ product, originalIndex }))
-      .filter(({ product }) => matchesProductSearch(product, normalizedSearchTerm));
-  }, [editingProducts, stockSearchValue]);
+      .filter(({ product }) => {
+        if (!matchesProductSearch(product, normalizedSearchTerm)) {
+          return false;
+        }
+
+        if (stockStatusFilter === 'all') {
+          return true;
+        }
+
+        if (stockStatusFilter === 'low') {
+          return Boolean(product.inventory?.enabled) && isInventoryBelowMinimum(product.inventory);
+        }
+
+        if (stockStatusFilter === 'out') {
+          return Boolean(product.inventory?.enabled) && Number(product.inventory?.quantity || 0) <= 0;
+        }
+
+        if (stockStatusFilter === 'controlled') {
+          return Boolean(product.inventory?.enabled);
+        }
+
+        return true;
+      });
+  }, [editingProducts, stockSearchValue, stockStatusFilter]);
   const stockSummary = useMemo(() => {
     const controlledProducts = editingProducts.filter((product) => product.inventory?.enabled);
     const lowStockProducts = controlledProducts.filter((product) => isInventoryBelowMinimum(product.inventory));
@@ -527,6 +550,18 @@ export function TenantModuleManagementSection({
       unavailableProducts: unavailableProducts.length,
     };
   }, [editingProducts]);
+  const productCategoryCount = categorySuggestions.length;
+  const orderSummary = useMemo(
+    () =>
+      ORDER_STATUS_ORDER.reduce(
+        (accumulator, status) => ({
+          ...accumulator,
+          [status]: (modulesData.orders || []).filter((order) => (order.status || 'received') === status).length,
+        }),
+        { total: (modulesData.orders || []).length },
+      ),
+    [modulesData.orders],
+  );
 
   function updateBusinessSegment(nextSegment) {
     const nextSegmentState = buildBusinessSegmentState({ segment: nextSegment });
@@ -591,6 +626,7 @@ export function TenantModuleManagementSection({
   const professionalsReadOnly = !capabilityState.canEditProfessionals;
   const servicesReadOnly = !capabilityState.canEditServices;
   const compactCatalogLayout = isClientMode;
+  const showModuleIntro = showTabs || mode === 'admin';
   const productFormGridClassName = `admin-form-grid admin-product-form__grid${compactCatalogLayout ? ' admin-form-grid--compact admin-product-form__grid--compact' : ''}`;
   const productDescriptionRows = compactCatalogLayout ? 2 : 3;
 
@@ -682,17 +718,19 @@ export function TenantModuleManagementSection({
 
   return (
     <div className="admin-card-stack admin-card-stack--airy">
-      <div className="admin-panel-card__header">
-        <div>
-          <SectionEyebrow>{mode === 'admin' ? 'Segmentacao' : 'Operacao do tenant'}</SectionEyebrow>
-          <h2>{mode === 'admin' ? 'Segmento e modulos' : 'Modulos ativos do tenant'}</h2>
-          <p>
-            {mode === 'admin'
-              ? 'Escolha um preset de negocio, veja os modulos sugeridos e ajuste manualmente o que precisa ficar ativo.'
-              : 'Acompanhe os modulos ativos e gerencie somente as areas liberadas para o seu nivel de acesso.'}
-          </p>
+      {showModuleIntro ? (
+        <div className="admin-panel-card__header">
+          <div>
+            <SectionEyebrow>{mode === 'admin' ? 'Segmentacao' : 'Operacao do tenant'}</SectionEyebrow>
+            <h2>{mode === 'admin' ? 'Segmento e modulos' : 'Modulos ativos do tenant'}</h2>
+            <p>
+              {mode === 'admin'
+                ? 'Escolha um preset de negocio, veja os modulos sugeridos e ajuste manualmente o que precisa ficar ativo.'
+                : 'Acompanhe os modulos ativos e gerencie somente as areas liberadas para o seu nivel de acesso.'}
+            </p>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {showTabs ? (
         <div className="admin-module-tabs">
@@ -962,6 +1000,29 @@ export function TenantModuleManagementSection({
               <option key={category} value={category} />
             ))}
           </datalist>
+
+          {isClientMode ? (
+            <section className="admin-module-toolbar admin-module-toolbar--catalog">
+              <div className="admin-module-toolbar__copy">
+                <strong>Catalogo operacional</strong>
+                <span>Busca, cadastro e edicao no mesmo fluxo, sem manter formularios enormes abertos o tempo todo.</span>
+              </div>
+              <div className="admin-module-summary-chips">
+                <span className="admin-module-summary-chip">
+                  <strong>{editingProducts.length}</strong>
+                  <small>Produtos</small>
+                </span>
+                <span className="admin-module-summary-chip">
+                  <strong>{productCategoryCount}</strong>
+                  <small>Categorias</small>
+                </span>
+                <span className="admin-module-summary-chip">
+                  <strong>{editingProducts.filter((product) => product.isAvailable !== false).length}</strong>
+                  <small>Disponiveis</small>
+                </span>
+              </div>
+            </section>
+          ) : null}
 
           <label className="admin-field admin-product-search-field">
             <span>Buscar produto</span>
@@ -1659,6 +1720,43 @@ export function TenantModuleManagementSection({
             />
           </label>
 
+          {isClientMode ? (
+            <div className="admin-filter-bar" role="tablist" aria-label="Filtros rapidos de estoque">
+              <button
+                type="button"
+                className={`admin-filter-pill${stockStatusFilter === 'all' ? ' is-active' : ''}`}
+                aria-selected={stockStatusFilter === 'all'}
+                onClick={() => setStockStatusFilter('all')}
+              >
+                Todos
+              </button>
+              <button
+                type="button"
+                className={`admin-filter-pill${stockStatusFilter === 'controlled' ? ' is-active' : ''}`}
+                aria-selected={stockStatusFilter === 'controlled'}
+                onClick={() => setStockStatusFilter('controlled')}
+              >
+                Com estoque
+              </button>
+              <button
+                type="button"
+                className={`admin-filter-pill${stockStatusFilter === 'low' ? ' is-active' : ''}`}
+                aria-selected={stockStatusFilter === 'low'}
+                onClick={() => setStockStatusFilter('low')}
+              >
+                Baixo estoque
+              </button>
+              <button
+                type="button"
+                className={`admin-filter-pill${stockStatusFilter === 'out' ? ' is-active' : ''}`}
+                aria-selected={stockStatusFilter === 'out'}
+                onClick={() => setStockStatusFilter('out')}
+              >
+                Sem estoque
+              </button>
+            </div>
+          ) : null}
+
           {filteredStockProducts.length ? (
             <div className="admin-repeater-list">
               {filteredStockProducts.map(({ product, originalIndex }) => (
@@ -1872,6 +1970,33 @@ export function TenantModuleManagementSection({
 
       {activeTab === 'orders' ? (
         <div className="admin-card-stack">
+          {isClientMode ? (
+            <section className="admin-module-toolbar admin-module-toolbar--orders">
+              <div className="admin-module-toolbar__copy">
+                <strong>Fila de pedidos</strong>
+                <span>Priorize recebidos, acompanhe pagamento e mova cada pedido sem abrir telas extras.</span>
+              </div>
+              <div className="admin-module-summary-chips">
+                <span className="admin-module-summary-chip">
+                  <strong>{orderSummary.total}</strong>
+                  <small>Total</small>
+                </span>
+                <span className="admin-module-summary-chip">
+                  <strong>{orderSummary.received || 0}</strong>
+                  <small>Recebidos</small>
+                </span>
+                <span className="admin-module-summary-chip">
+                  <strong>{orderSummary.preparing || 0}</strong>
+                  <small>Em preparo</small>
+                </span>
+                <span className="admin-module-summary-chip">
+                  <strong>{orderSummary.ready || 0}</strong>
+                  <small>Prontos</small>
+                </span>
+              </div>
+            </section>
+          ) : null}
+
           <div className="admin-form-grid">
             <AdminField label="Buscar pedidos">
               <input

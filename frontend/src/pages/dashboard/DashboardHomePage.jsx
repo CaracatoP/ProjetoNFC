@@ -724,15 +724,15 @@ export function DashboardHomePage() {
       contentClassName="dashboard-shell__content"
       pageTitle="TapLink | Dashboard"
     >
-      <Card className="admin-panel-card admin-panel-card--hero">
-        <div className="admin-editor-header">
+      <Card className="admin-panel-card admin-panel-card--hero admin-dashboard-hero">
+        <div className="admin-editor-header admin-dashboard-header">
           <div>
             <h2>Workspace da operacao</h2>
             <p>
               Logado como <strong>{user?.displayName || 'Admin'}</strong>. Sessao protegida por token, uploads no Cloudinary e operacao centralizada do TapLink.
             </p>
           </div>
-          <div className="admin-toolbar">
+          <div className="admin-toolbar admin-dashboard-header__actions">
             <div className="admin-toolbar__group">
               <Button variant="secondary" onClick={() => refreshCollections(selectedBusinessId)} disabled={loadingWorkspace}>
                 {loadingWorkspace ? 'Atualizando...' : 'Atualizar dados'}
@@ -756,7 +756,7 @@ export function DashboardHomePage() {
           </div>
         </div>
 
-        <div className="admin-mini-stats">
+        <div className="admin-mini-stats admin-dashboard-header__stats">
           <div className="admin-mini-stat-card">
             <span>Tenant em foco</span>
             <strong>{selectedSummary?.name || 'Nenhum tenant selecionado'}</strong>
@@ -798,15 +798,15 @@ export function DashboardHomePage() {
         </div>
       </Card>
 
-      <div className="admin-dashboard-flow">
+      <div className="admin-dashboard-flow admin-dashboard-flow--redesigned">
         {message ? <p className="admin-status-banner admin-status-banner--success">{message}</p> : null}
         {error ? <p className="admin-status-banner admin-status-banner--error">{error}</p> : null}
 
         {loadingWorkspace && !overview ? (
           <EmptyState title="Carregando dashboard" description="Buscando tenants, analytics e configuracoes da operacao." />
         ) : (
-          <div className="admin-dashboard-main">
-            <div className="admin-dashboard-switcher">
+          <div className="admin-dashboard-main admin-dashboard-main--redesigned">
+            <div className="admin-dashboard-switcher admin-dashboard-switcher--tabs">
               <Button variant={activeView === 'workspace' ? 'primary' : 'secondary'} onClick={() => setActiveView('workspace')}>
                 Operacao
               </Button>
@@ -824,7 +824,7 @@ export function DashboardHomePage() {
             </div>
 
             {activeView === 'workspace' ? (
-              <div className="admin-workspace">
+              <div className="admin-workspace admin-workspace--redesigned">
                 <div className="admin-sidebar-stack">
                   <TenantOnboardingForm creating={creating} onCreate={handleCreate} />
                   <TenantListPanel
