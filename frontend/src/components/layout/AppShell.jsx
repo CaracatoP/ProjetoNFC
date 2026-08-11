@@ -35,10 +35,11 @@ export function AppShell({
   heroClassName = '',
   contentClassName = '',
   pageTitle = 'TapLink',
+  headerVariant = 'hero',
 }) {
   useEffect(() => {
     document.title = pageTitle;
-    upsertThemeColor('#0f1115');
+    upsertThemeColor('#f5f7fb');
     upsertHeadLink('icon', { href: taplinkMarkUrl, type: 'image/svg+xml', sizes: 'any' });
     upsertHeadLink('alternate icon', { href: taplinkMarkUrl });
     upsertHeadLink('shortcut icon', { href: taplinkMarkUrl });
@@ -47,18 +48,34 @@ export function AppShell({
 
   return (
     <div className={['app-shell', shellClassName].filter(Boolean).join(' ')}>
-      <header className={['app-shell__hero', heroClassName].filter(Boolean).join(' ')}>
-        <div className="app-shell__brand">
-          <img src={taplinkMarkUrl} alt="TapLink" className="app-shell__brand-mark" />
-          <div className="app-shell__brand-copy">
-            <strong>TapLink</strong>
-            <span>Backoffice multi-tenant</span>
+      {headerVariant === 'topbar' ? (
+        <header className={['app-shell__topbar', heroClassName].filter(Boolean).join(' ')}>
+          <div className="app-shell__brand">
+            <img src={taplinkMarkUrl} alt="TapLink" className="app-shell__brand-mark" />
+            <div className="app-shell__brand-copy">
+              <strong>TapLink</strong>
+              <span>{eyebrow || 'Backoffice multi-tenant'}</span>
+            </div>
           </div>
-        </div>
-        {eyebrow ? <span className="section-eyebrow">{eyebrow}</span> : null}
-        <h1>{title}</h1>
-        {description ? <p>{description}</p> : null}
-      </header>
+          <div className="app-shell__topbar-copy">
+            {title ? <strong>{title}</strong> : null}
+            {description ? <span>{description}</span> : null}
+          </div>
+        </header>
+      ) : (
+        <header className={['app-shell__hero', heroClassName].filter(Boolean).join(' ')}>
+          <div className="app-shell__brand">
+            <img src={taplinkMarkUrl} alt="TapLink" className="app-shell__brand-mark" />
+            <div className="app-shell__brand-copy">
+              <strong>TapLink</strong>
+              <span>Backoffice multi-tenant</span>
+            </div>
+          </div>
+          {eyebrow ? <span className="section-eyebrow">{eyebrow}</span> : null}
+          <h1>{title}</h1>
+          {description ? <p>{description}</p> : null}
+        </header>
+      )}
       <main className={['app-shell__content', contentClassName].filter(Boolean).join(' ')}>{children}</main>
     </div>
   );

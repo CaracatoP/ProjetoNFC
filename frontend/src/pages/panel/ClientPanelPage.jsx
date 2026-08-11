@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ANALYTICS_SCOPE_LABELS,
   BILLING_ACCESS_LABELS,
-  ROLE_LEVEL_LABELS,
 } from '@shared/constants/access.js';
 import {
   PAYMENT_METHOD_LABELS,
@@ -94,12 +93,30 @@ function formatMetricValue(value) {
   return new Intl.NumberFormat('pt-BR').format(Number(value || 0));
 }
 
+function formatCurrencyValue(value) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(Number(value || 0));
+}
+
 function formatDateTime(value) {
   if (!value) {
     return '';
   }
 
   return new Date(value).toLocaleString('pt-BR');
+}
+
+function formatTimeShort(value) {
+  if (!value) {
+    return '--:--';
+  }
+
+  return new Date(value).toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function formatAnalyticsFallbackLabel(value, fallback = 'Sem rotulo') {
@@ -1092,49 +1109,58 @@ function BasicSettingsCard({
 
 const CLIENT_PANEL_VIEW_COPY = Object.freeze({
   overview: {
+    icon: 'overview',
     label: 'Visao geral',
-    title: 'Visao geral do tenant',
-    description: 'Leitura rapida do que importa agora e atalhos para agir sem navegar demais.',
+    title: 'Visao geral',
+    description: 'Veja o que precisa da sua atencao hoje.',
   },
   settings: {
+    icon: 'settings',
     label: 'Configuracoes',
-    title: 'Configuracoes basicas',
-    description: 'Dados publicos, contato, horarios, SEO e meios de pagamento do tenant.',
+    title: 'Configuracoes',
+    description: 'Atualize os dados do negocio, horarios e checkout.',
   },
   catalog: {
+    icon: 'catalog',
     label: 'Catalogo',
-    title: 'Catalogo e disponibilidade',
-    description: 'Produtos, categorias e disponibilidade com uma operacao mais compacta.',
+    title: 'Produtos',
+    description: 'Busque, filtre e edite os itens do catalogo.',
   },
   stock: {
+    icon: 'stock',
     label: 'Estoque',
     title: 'Estoque',
-    description: 'Controle rapido de quantidade, minimo e itens que merecem atencao.',
+    description: 'Ajuste quantidades e encontre itens com pouca reposicao.',
   },
   orders: {
+    icon: 'orders',
     label: 'Pedidos',
     title: 'Pedidos',
-    description: 'Fila operacional com foco em status, pagamento e proxima acao.',
+    description: 'Acompanhe status, pagamento e proxima acao.',
   },
   appointments: {
+    icon: 'appointments',
     label: 'Agendamentos',
     title: 'Agendamentos',
-    description: 'Pedidos de agenda centralizados no contexto do tenant autenticado.',
+    description: 'Veja pedidos de agenda e responda mais rapido.',
   },
   professionals: {
+    icon: 'professionals',
     label: 'Profissionais',
     title: 'Profissionais',
-    description: 'Equipe vinculada ao modulo de agendamentos.',
+    description: 'Equipe disponivel para os agendamentos.',
   },
   services: {
+    icon: 'services',
     label: 'Servicos',
     title: 'Servicos',
-    description: 'Oferta de servicos organizada sem recarregar o workspace inteiro.',
+    description: 'Organize os servicos oferecidos pelo negocio.',
   },
   analytics: {
+    icon: 'analytics',
     label: 'Analytics',
     title: 'Analytics',
-    description: 'Uso real do site publico respeitando plano, nivel e baseline do tenant.',
+    description: 'Acompanhe visitas, cliques e resultados do seu site.',
   },
 });
 
@@ -1154,6 +1180,100 @@ function buildClientNavigationGroups(views = []) {
       items: group.views.map((viewId) => viewMap.get(viewId)).filter(Boolean),
     }))
     .filter((group) => group.items.length);
+}
+
+function ClientPanelNavIcon({ icon }) {
+  const sharedProps = {
+    width: 18,
+    height: 18,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: '1.8',
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': 'true',
+  };
+
+  switch (icon) {
+    case 'orders':
+      return (
+        <svg {...sharedProps}>
+          <path d="M4 7h16" />
+          <path d="M4 12h16" />
+          <path d="M4 17h10" />
+        </svg>
+      );
+    case 'catalog':
+      return (
+        <svg {...sharedProps}>
+          <path d="M5 6h14v12H5z" />
+          <path d="M9 10h6" />
+          <path d="M9 14h6" />
+        </svg>
+      );
+    case 'stock':
+      return (
+        <svg {...sharedProps}>
+          <path d="M4 18h16" />
+          <path d="M7 18V9" />
+          <path d="M12 18V5" />
+          <path d="M17 18v-6" />
+        </svg>
+      );
+    case 'appointments':
+      return (
+        <svg {...sharedProps}>
+          <path d="M7 4v4" />
+          <path d="M17 4v4" />
+          <path d="M5 8h14" />
+          <rect x="4" y="6" width="16" height="14" rx="2" />
+        </svg>
+      );
+    case 'professionals':
+      return (
+        <svg {...sharedProps}>
+          <circle cx="9" cy="9" r="3" />
+          <path d="M4 19c1.5-3 3.5-4.5 6-4.5S14.5 16 16 19" />
+          <path d="M17 8h3" />
+          <path d="M18.5 6.5v3" />
+        </svg>
+      );
+    case 'services':
+      return (
+        <svg {...sharedProps}>
+          <path d="M5 7h14" />
+          <path d="M8 7v10" />
+          <path d="M16 7v10" />
+          <path d="M5 17h14" />
+        </svg>
+      );
+    case 'analytics':
+      return (
+        <svg {...sharedProps}>
+          <path d="M5 18V9" />
+          <path d="M12 18V5" />
+          <path d="M19 18v-7" />
+        </svg>
+      );
+    case 'settings':
+      return (
+        <svg {...sharedProps}>
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19 12a7 7 0 0 0-.1-1l2-1.4-2-3.5-2.4 1A7 7 0 0 0 15 5.3L14.6 3h-5.2L9 5.3a7 7 0 0 0-1.5.8l-2.4-1-2 3.5 2 1.4a7 7 0 0 0 0 2L3.1 13.4l2 3.5 2.4-1a7 7 0 0 0 1.5.8l.4 2.3h5.2l.4-2.3a7 7 0 0 0 1.5-.8l2.4 1 2-3.5-2-1.4c.1-.3.1-.7.1-1Z" />
+        </svg>
+      );
+    case 'overview':
+    default:
+      return (
+        <svg {...sharedProps}>
+          <path d="M4 13h7V4H4z" />
+          <path d="M13 20h7v-7h-7z" />
+          <path d="M13 11h7V4h-7z" />
+          <path d="M4 20h7v-5H4z" />
+        </svg>
+      );
+  }
 }
 
 function buildClientPanelViews({ editor, capabilities, canSeeAnalyticsSection }) {
@@ -1245,14 +1365,9 @@ function OverviewKpiCard({ label, value, hint, tone = 'default' }) {
   );
 }
 
-function ClientPanelOverview({
+function LegacyClientPanelOverview({
   editor,
-  subscription,
-  access,
-  user,
   onNavigate,
-  onCopyPublicUrl,
-  publicUrl,
 }) {
   const summary = editor?.summary || {};
   const productSummary = summary.products || {};
@@ -1263,96 +1378,52 @@ function ClientPanelOverview({
   const openOrders = Number(orderSummary.open || 0);
   const pendingAppointments = Number(appointmentSummary.pending || 0);
   const modules = editor?.business?.modules || {};
-  const moduleLabels = {
-    catalog: 'Catalogo',
-    cart: 'Carrinho',
-    orders: 'Pedidos',
-    appointments: 'Agendamentos',
-    loyalty: 'Fidelidade',
-    whatsapp: 'WhatsApp',
-    analytics: 'Analytics',
-  };
-  const activeModules = Object.entries(modules)
-    .filter(([, enabled]) => Boolean(enabled))
-    .map(([key]) => moduleLabels[key] || formatAnalyticsFallbackLabel(key));
-  const operationalRows = [
-    {
-      label: 'Pedidos recebidos',
-      value: formatMetricValue(orderSummary.received || 0),
-      detail: 'Aguardando triagem inicial da operacao.',
-      actionLabel: 'Abrir pedidos',
-      targetView: 'orders',
-    },
-    {
-      label: 'Em preparo',
-      value: formatMetricValue(orderSummary.preparing || 0),
-      detail: 'Itens que ainda exigem acompanhamento da equipe.',
-      actionLabel: 'Ver fila',
-      targetView: 'orders',
-    },
-    {
-      label: 'Prontos ou retirados',
-      value: formatMetricValue(orderSummary.ready || 0),
-      detail: 'Pedidos quase finalizados ou aguardando retirada.',
-      actionLabel: 'Checar pedidos',
-      targetView: 'orders',
-    },
-    {
-      label: 'Agendamentos pendentes',
-      value: formatMetricValue(pendingAppointments),
-      detail: 'Solicitacoes aguardando confirmacao do tenant.',
-      actionLabel: 'Abrir agenda',
-      targetView: 'appointments',
-    },
-  ].filter((row) => row.targetView !== 'appointments' || modules.appointments);
   const quickLinks = [
-    { label: 'Editar dados basicos', targetView: 'settings' },
+    { label: 'Editar negocio', targetView: 'settings' },
     { label: 'Atualizar estoque', targetView: 'stock', visible: modules.catalog },
-    { label: 'Gerenciar produtos', targetView: 'catalog', visible: modules.catalog },
+    { label: 'Novo produto', targetView: 'catalog', visible: modules.catalog },
     { label: 'Abrir pedidos', targetView: 'orders', visible: modules.orders || modules.cart },
     { label: 'Ver agenda', targetView: 'appointments', visible: modules.appointments },
   ].filter((item) => item.visible !== false);
-  const businessContact = editor?.business?.contact || {};
-  const address = editor?.business?.address?.display || 'Endereco ainda nao informado';
+  const recentOrders = [...(editor?.modulesData?.orders || [])]
+    .sort((first, second) => new Date(second.createdAt || 0).getTime() - new Date(first.createdAt || 0).getTime())
+    .slice(0, 6);
+  const alerts = [
+    lowStock > 0 ? { key: 'low-stock', text: `${formatMetricValue(lowStock)} produto(s) com estoque baixo`, targetView: 'stock' } : null,
+    unavailableProducts > 0 ? { key: 'unavailable', text: `${formatMetricValue(unavailableProducts)} produto(s) indisponivel(is)`, targetView: 'catalog' } : null,
+    Number(orderSummary.received || 0) > 0 ? { key: 'received-orders', text: `${formatMetricValue(orderSummary.received || 0)} pedido(s) novo(s)`, targetView: 'orders' } : null,
+    pendingAppointments > 0 ? { key: 'pending-appointments', text: `${formatMetricValue(pendingAppointments)} agendamento(s) pendente(s)`, targetView: 'appointments' } : null,
+  ].filter(Boolean);
+  const kpis = [
+    {
+      label: 'Pedidos em aberto',
+      value: formatMetricValue(openOrders),
+      hint: Number(orderSummary.received || 0) > 0 ? `${formatMetricValue(orderSummary.received || 0)} novo(s)` : 'Sem pedidos novos',
+    },
+    {
+      label: 'Estoque baixo',
+      value: formatMetricValue(lowStock),
+      hint: lowStock > 0 ? 'Precisa de reposicao' : 'Tudo sob controle',
+    },
+    {
+      label: 'Produtos indisponiveis',
+      value: formatMetricValue(unavailableProducts),
+      hint: unavailableProducts > 0 ? 'Fora de venda' : 'Tudo disponivel',
+    },
+    {
+      label: 'Agendamentos',
+      value: formatMetricValue(pendingAppointments),
+      hint: pendingAppointments > 0 ? 'Aguardando resposta' : 'Sem pendencias',
+    },
+  ];
 
   return (
-    <div className="client-panel-overview-stack client-panel-overview-stack--redesigned">
-      <section className="client-panel-overview-banner">
-        <div className="client-panel-overview-banner__copy">
-          <span className="section-eyebrow">Operacao do dia</span>
-          <h2>{editor?.business?.name || 'Painel do cliente'}</h2>
-          <p>
-            Logado como <strong>{user?.displayName || 'Usuario'}</strong>. Aqui ficam os indicadores principais, a fila mais urgente e os atalhos que reduzem cliques na rotina.
-          </p>
-          <div className="client-panel-chip-row">
-            <span className="client-panel-chip">{subscription?.plan?.name || subscription?.plan?.code || 'Plano'}</span>
-            <span className="client-panel-chip client-panel-chip--muted">{BILLING_ACCESS_LABELS[access?.billingStatus] || access?.billingStatus || 'Pago'}</span>
-            <span className="client-panel-chip client-panel-chip--accent">{ROLE_LEVEL_LABELS[user?.roleLevel] || `Nivel ${user?.roleLevel ?? '-'}`}</span>
-            <span className="client-panel-chip client-panel-chip--info">{ANALYTICS_SCOPE_LABELS[access?.analyticsScope] || 'Sem analytics'}</span>
-          </div>
-        </div>
-        <div className="client-panel-overview-banner__actions">
-          {publicUrl ? (
-            <Button href={publicUrl} target="_blank" rel="noreferrer">
-              Abrir site
-            </Button>
-          ) : null}
-          {editor?.business?.modules?.catalog ? (
-            <Button variant="secondary" onClick={() => onNavigate('catalog')}>
-              Gerenciar catalogo
-            </Button>
-          ) : null}
-          <Button variant="secondary" onClick={onCopyPublicUrl} disabled={!publicUrl}>
-            Copiar link
-          </Button>
-        </div>
-      </section>
+    <div className="client-panel-overview">
 
       <div className="client-panel-kpi-grid">
-        <OverviewKpiCard label="Pedidos em aberto" value={formatMetricValue(openOrders)} hint="Recebidos, em preparo e prontos." tone="info" />
-        <OverviewKpiCard label="Estoque baixo" value={formatMetricValue(lowStock)} hint="Itens controlados abaixo do minimo." tone={lowStock ? 'warning' : 'default'} />
-        <OverviewKpiCard label="Produtos indisponiveis" value={formatMetricValue(unavailableProducts)} hint="Visiveis no site, mas fora de venda." tone={unavailableProducts ? 'danger' : 'default'} />
-        <OverviewKpiCard label="Agendamentos pendentes" value={formatMetricValue(pendingAppointments)} hint="Demandas aguardando resposta do tenant." tone={pendingAppointments ? 'accent' : 'default'} />
+        {kpis.map((kpi) => (
+          <OverviewKpiCard key={kpi.label} label={kpi.label} value={kpi.value} hint={kpi.hint} />
+        ))}
       </div>
 
       <div className="client-panel-overview-grid">
@@ -1452,6 +1523,196 @@ function ClientPanelOverview({
             </div>
           </div>
         </section>
+      </div>
+    </div>
+  );
+}
+
+function ClientPanelOverview({
+  editor,
+  onNavigate,
+}) {
+  const summary = editor?.summary || {};
+  const productSummary = summary.products || {};
+  const orderSummary = summary.orders || {};
+  const appointmentSummary = summary.appointments || {};
+  const business = editor?.business || {};
+  const lowStock = Number(productSummary.lowStock || 0);
+  const unavailableProducts = Number(productSummary.unavailable || 0);
+  const openOrders = Number(orderSummary.open || 0);
+  const pendingAppointments = Number(appointmentSummary.pending || 0);
+  const modules = business.modules || {};
+  const orderStatusLabels = {
+    received: 'Recebido',
+    preparing: 'Em preparo',
+    ready: 'Pronto',
+    delivered: 'Entregue',
+    cancelled: 'Cancelado',
+  };
+  const quickLinks = [
+    { label: 'Editar negocio', targetView: 'settings' },
+    { label: 'Atualizar estoque', targetView: 'stock', visible: modules.catalog },
+    { label: 'Novo produto', targetView: 'catalog', visible: modules.catalog },
+    { label: 'Abrir pedidos', targetView: 'orders', visible: modules.orders || modules.cart },
+    { label: 'Ver agenda', targetView: 'appointments', visible: modules.appointments },
+  ].filter((item) => item.visible !== false);
+  const recentOrders = [...(editor?.modulesData?.orders || [])]
+    .sort((first, second) => new Date(second.createdAt || 0).getTime() - new Date(first.createdAt || 0).getTime())
+    .slice(0, 6);
+  const alerts = [
+    lowStock > 0 ? { key: 'low-stock', text: `${formatMetricValue(lowStock)} produto(s) com estoque baixo`, targetView: 'stock' } : null,
+    unavailableProducts > 0 ? { key: 'unavailable', text: `${formatMetricValue(unavailableProducts)} produto(s) indisponivel(is)`, targetView: 'catalog' } : null,
+    Number(orderSummary.received || 0) > 0 ? { key: 'received-orders', text: `${formatMetricValue(orderSummary.received || 0)} pedido(s) novo(s)`, targetView: 'orders' } : null,
+    pendingAppointments > 0 ? { key: 'pending-appointments', text: `${formatMetricValue(pendingAppointments)} agendamento(s) pendente(s)`, targetView: 'appointments' } : null,
+  ].filter(Boolean);
+  const kpis = [
+    {
+      label: 'Pedidos em aberto',
+      value: formatMetricValue(openOrders),
+      hint: Number(orderSummary.received || 0) > 0 ? `${formatMetricValue(orderSummary.received || 0)} novo(s)` : 'Sem pedidos novos',
+    },
+    {
+      label: 'Estoque baixo',
+      value: formatMetricValue(lowStock),
+      hint: lowStock > 0 ? 'Precisa de reposicao' : 'Tudo sob controle',
+    },
+    {
+      label: 'Produtos indisponiveis',
+      value: formatMetricValue(unavailableProducts),
+      hint: unavailableProducts > 0 ? 'Fora de venda' : 'Tudo disponivel',
+    },
+    {
+      label: 'Agendamentos',
+      value: formatMetricValue(pendingAppointments),
+      hint: pendingAppointments > 0 ? 'Aguardando resposta' : 'Sem pendencias',
+    },
+  ];
+
+  return (
+    <div className="client-panel-overview">
+      <div className="client-panel-kpi-grid">
+        {kpis.map((kpi) => (
+          <OverviewKpiCard key={kpi.label} label={kpi.label} value={kpi.value} hint={kpi.hint} />
+        ))}
+      </div>
+
+      <div className="client-panel-overview-grid">
+        <section className="client-panel-overview-main">
+          <div className="client-panel-section-heading">
+            <div>
+              <h3>Pedidos recentes</h3>
+              <p>Veja o que precisa da sua atencao hoje.</p>
+            </div>
+            {modules.orders || modules.cart ? (
+              <Button variant="secondary" size="sm" onClick={() => onNavigate('orders')}>
+                Ver todos
+              </Button>
+            ) : null}
+          </div>
+
+          {recentOrders.length ? (
+            <div className="client-panel-order-list">
+              {recentOrders.map((order, index) => (
+                <button
+                  key={order.id || `${order.customerName}-${index}`}
+                  type="button"
+                  className="client-panel-order-row"
+                  onClick={() => onNavigate('orders')}
+                >
+                  <span className="client-panel-order-row__id">#{String(index + 1).padStart(4, '0')}</span>
+                  <span className="client-panel-order-row__name">{order.customerName || 'Cliente'}</span>
+                  <span className="client-panel-order-row__value">{formatCurrencyValue(order.total || 0)}</span>
+                  <span className="client-panel-order-row__time">{formatTimeShort(order.createdAt)}</span>
+                  <span className={`client-panel-status client-panel-status--${order.status || 'received'}`}>
+                    {orderStatusLabels[order.status] || 'Recebido'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="client-panel-empty-note">
+              <strong>Nenhum pedido pendente no momento.</strong>
+              <span>Assim que um novo pedido chegar, ele aparece aqui.</span>
+            </div>
+          )}
+        </section>
+
+        <aside className="client-panel-overview-side">
+          <section className="client-panel-side-section">
+            <div className="client-panel-section-heading">
+              <h3>Acoes rapidas</h3>
+            </div>
+            <div className="client-panel-action-list">
+              {quickLinks.map((item) => (
+                <button key={item.label} type="button" className="client-panel-action-link" onClick={() => onNavigate(item.targetView)}>
+                  <span>{item.label}</span>
+                  <small>Abrir</small>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="client-panel-side-section">
+            <div className="client-panel-section-heading">
+              <h3>Precisa da sua atencao</h3>
+            </div>
+            {alerts.length ? (
+              <div className="client-panel-alert-list">
+                {alerts.map((alert) => (
+                  <button key={alert.key} type="button" className="client-panel-alert-item" onClick={() => onNavigate(alert.targetView)}>
+                    {alert.text}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="client-panel-empty-note client-panel-empty-note--inline">
+                <strong>Tudo certo por aqui.</strong>
+              </div>
+            )}
+          </section>
+
+          <section className="client-panel-side-section">
+            <div className="client-panel-section-heading">
+              <h3>Seu negocio</h3>
+            </div>
+            <div className="client-panel-identity-list">
+              <div>
+                <strong>Categoria</strong>
+                <span>{business.segment || 'Negocio local'}</span>
+              </div>
+              <div>
+                <strong>Contato</strong>
+                <span>{business.contact?.whatsapp || business.contact?.phone || 'Nao informado'}</span>
+              </div>
+              <div>
+                <strong>Endereco</strong>
+                <span>{business.address?.city || business.address?.street || 'Nao informado'}</span>
+              </div>
+            </div>
+          </section>
+
+          {modules.analytics ? (
+            <section className="client-panel-side-section">
+              <div className="client-panel-section-heading">
+                <h3>Resumo rapido</h3>
+              </div>
+              <div className="client-panel-mini-metrics">
+                <div>
+                  <strong>{formatMetricValue(summary.services?.total || 0)}</strong>
+                  <span>servico(s)</span>
+                </div>
+                <div>
+                  <strong>{formatMetricValue(summary.professionals?.total || 0)}</strong>
+                  <span>profissional(is)</span>
+                </div>
+                <div>
+                  <strong>{formatMetricValue(productSummary.total || 0)}</strong>
+                  <span>produto(s)</span>
+                </div>
+              </div>
+            </section>
+          ) : null}
+        </aside>
       </div>
     </div>
   );
@@ -1627,11 +1888,12 @@ export function ClientPanelPage() {
     <AppShell
       eyebrow="TapLink Painel"
       title={editor?.business?.name || 'Painel do cliente'}
-      description="Bootstrap leve, cache por dominio e sincronizacao seletiva deixam o tenant mais rapido e conectado ao site publico."
+      description="Painel do cliente"
       shellClassName="dashboard-shell client-panel-shell"
-      heroClassName="dashboard-shell__hero client-panel-shell__hero"
+      heroClassName="dashboard-shell__topbar client-panel-shell__topbar"
       contentClassName="dashboard-shell__content client-panel-shell__content"
       pageTitle={`TapLink | ${editor?.business?.name || 'Painel do cliente'}`}
+      headerVariant="topbar"
     >
       {message ? <p className="admin-status-banner admin-status-banner--success">{message}</p> : null}
       {error ? <p className="admin-status-banner admin-status-banner--error">{error}</p> : null}
@@ -1675,8 +1937,10 @@ export function ClientPanelPage() {
                         className={`client-panel-sidebar__nav-button${activeView === view.id ? ' is-active' : ''}`}
                         onClick={() => setActiveView(view.id)}
                       >
-                        <span>{view.label}</span>
-                        <small>{view.description}</small>
+                        <span className="client-panel-sidebar__nav-icon">
+                          <ClientPanelNavIcon icon={view.icon} />
+                        </span>
+                        <span className="client-panel-sidebar__nav-label">{view.label}</span>
                       </button>
                     ))}
                   </div>
@@ -1686,8 +1950,8 @@ export function ClientPanelPage() {
 
             <div className="client-panel-sidebar__footer">
               <div>
-                <strong>{ROLE_LEVEL_LABELS[user?.roleLevel] || `Nivel ${user?.roleLevel ?? '-'}`}</strong>
-                <span>{ANALYTICS_SCOPE_LABELS[analyticsScope] || 'Sem analytics'}</span>
+                <strong>{subscription?.plan?.name || subscription?.plan?.code || 'Plano ativo'}</strong>
+                <span>{BILLING_ACCESS_LABELS[access?.billingStatus] || access?.billingStatus || 'Pago'}</span>
               </div>
               <div className="client-panel-sidebar__footer-actions">
                 {publicUrl ? (
@@ -1719,47 +1983,35 @@ export function ClientPanelPage() {
 
             <section className="client-panel-page-header">
               <div className="client-panel-page-header__copy">
-                <span className="section-eyebrow">{currentView.label}</span>
                 <h2>{currentView.title}</h2>
                 <p>{currentView.description}</p>
               </div>
-              <div className="client-panel-page-header__meta">
-                <div className="client-panel-chip-row client-panel-chip-row--header">
-                  <span className="client-panel-chip">{subscription?.plan?.name || subscription?.plan?.code || 'Plano'}</span>
-                  <span className="client-panel-chip client-panel-chip--muted">{BILLING_ACCESS_LABELS[access?.billingStatus] || access?.billingStatus || 'Pago'}</span>
-                </div>
-                <div className="client-panel-page-header__actions">
-                  {activeView === 'settings' && canSeeBasicsCard ? (
-                    <Button disabled={!capabilities.canEditTenantBasics || savingBasics} onClick={handleSaveBasics}>
-                      {savingBasics ? 'Salvando...' : 'Salvar agora'}
-                    </Button>
-                  ) : null}
-                  {activeView !== 'settings' && publicCatalogUrl && editor.business?.modules?.catalog ? (
-                    <Button variant="secondary" href={publicCatalogUrl} target="_blank" rel="noreferrer">
-                      Ver catalogo
-                    </Button>
-                  ) : null}
-                  {publicUrl ? (
-                    <Button variant="secondary" href={publicUrl} target="_blank" rel="noreferrer">
-                      Abrir site
-                    </Button>
-                  ) : null}
-                  <Button variant="secondary" onClick={handleCopyPublicUrl} disabled={!publicUrl}>
-                    Copiar link
+              <div className="client-panel-page-header__actions">
+                {activeView === 'settings' && canSeeBasicsCard ? (
+                  <Button disabled={!capabilities.canEditTenantBasics || savingBasics} onClick={handleSaveBasics}>
+                    {savingBasics ? 'Salvando...' : 'Salvar agora'}
                   </Button>
-                </div>
+                ) : null}
+                {activeView !== 'settings' && publicCatalogUrl && editor.business?.modules?.catalog ? (
+                  <Button variant="secondary" href={publicCatalogUrl} target="_blank" rel="noreferrer">
+                    Ver catalogo
+                  </Button>
+                ) : null}
+                {publicUrl ? (
+                  <Button variant="secondary" href={publicUrl} target="_blank" rel="noreferrer">
+                    Ver site
+                  </Button>
+                ) : null}
+                <Button variant="secondary" onClick={handleCopyPublicUrl} disabled={!publicUrl}>
+                  Copiar link
+                </Button>
               </div>
             </section>
 
             {activeView === 'overview' ? (
               <ClientPanelOverview
                 editor={editor}
-                subscription={subscription}
-                access={access}
-                user={user}
                 onNavigate={setActiveView}
-                onCopyPublicUrl={handleCopyPublicUrl}
-                publicUrl={publicUrl}
               />
             ) : null}
 

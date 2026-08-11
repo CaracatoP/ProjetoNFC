@@ -395,6 +395,8 @@ export function TenantModuleManagementSection({
   const [editingAppointmentServices, setEditingAppointmentServices] = useState([]);
   const [editingProducts, setEditingProducts] = useState([]);
   const [productSearchValue, setProductSearchValue] = useState('');
+  const [productCategoryFilter, setProductCategoryFilter] = useState('all');
+  const [productAvailabilityFilter, setProductAvailabilityFilter] = useState('all');
   const [stockSearchValue, setStockSearchValue] = useState('');
   const [stockStatusFilter, setStockStatusFilter] = useState('all');
   const [orderSearchValue, setOrderSearchValue] = useState('');
@@ -507,8 +509,26 @@ export function TenantModuleManagementSection({
 
     return editingProducts
       .map((product, originalIndex) => ({ product, originalIndex }))
-      .filter(({ product }) => matchesProductSearch(product, normalizedSearchTerm));
-  }, [editingProducts, productSearchValue]);
+      .filter(({ product }) => {
+        if (!matchesProductSearch(product, normalizedSearchTerm)) {
+          return false;
+        }
+
+        if (productCategoryFilter !== 'all' && normalizeCategoryLabel(product.category) !== productCategoryFilter) {
+          return false;
+        }
+
+        if (productAvailabilityFilter === 'available') {
+          return product.isAvailable !== false;
+        }
+
+        if (productAvailabilityFilter === 'unavailable') {
+          return product.isAvailable === false;
+        }
+
+        return true;
+      });
+  }, [editingProducts, productAvailabilityFilter, productCategoryFilter, productSearchValue]);
   const filteredStockProducts = useMemo(() => {
     const normalizedSearchTerm = normalizeProductSearchTerm(stockSearchValue);
 
@@ -1024,15 +1044,34 @@ export function TenantModuleManagementSection({
             </section>
           ) : null}
 
-          <label className="admin-field admin-product-search-field">
-            <span>Buscar produto</span>
-            <input
-              type="search"
-              value={productSearchValue}
-              onChange={(event) => setProductSearchValue(event.target.value)}
-              placeholder="Buscar produto por nome, categoria ou descricao"
-            />
-          </label>
+          <div className={`admin-form-grid admin-list-toolbar${isClientMode ? ' admin-list-toolbar--client' : ''}`}>
+            <label className="admin-field admin-product-search-field">
+              <span>Buscar produto</span>
+              <input
+                type="search"
+                value={productSearchValue}
+                onChange={(event) => setProductSearchValue(event.target.value)}
+                placeholder="Buscar produto por nome, categoria ou descricao"
+              />
+            </label>
+            <AdminField label="Categoria">
+              <select value={productCategoryFilter} onChange={(event) => setProductCategoryFilter(event.target.value)}>
+                <option value="all">Todas</option>
+                {categorySuggestions.map((category) => (
+                  <option key={`filter-category-${category}`} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </AdminField>
+            <AdminField label="Disponibilidade">
+              <select value={productAvailabilityFilter} onChange={(event) => setProductAvailabilityFilter(event.target.value)}>
+                <option value="all">Todas</option>
+                <option value="available">Disponiveis</option>
+                <option value="unavailable">Indisponiveis</option>
+              </select>
+            </AdminField>
+          </div>
 
           {isClientMode ? (
             !catalogReadOnly ? (
@@ -1440,11 +1479,11 @@ export function TenantModuleManagementSection({
               ) : null}
 
               {!catalogProductsCollapsed ? (
-              <div className="admin-repeater-list">
+              <div className={`admin-repeater-list${isClientMode ? ' admin-product-list admin-product-list--client' : ''}`}>
                 {filteredEditingProducts.map(({ product, originalIndex }) => (
                 <div
                   key={product.id || originalIndex}
-                  className={`admin-repeater-card admin-repeater-card--product${compactCatalogLayout ? ' admin-repeater-card--product-compact' : ''}${product.isAvailable === false ? ' admin-product-card--unavailable' : ''}`}
+                  className={`admin-repeater-card admin-repeater-card--product${compactCatalogLayout ? ' admin-repeater-card--product-compact' : ''}${product.isAvailable === false ? ' admin-product-card--unavailable' : ''}${isClientMode ? ' admin-product-row' : ''}`}
                 >
                   {compactCatalogLayout ? (
                     <div className="admin-product-card__header">
@@ -1997,7 +2036,7 @@ export function TenantModuleManagementSection({
             </section>
           ) : null}
 
-          <div className="admin-form-grid">
+          <div className={`admin-form-grid admin-list-toolbar${isClientMode ? ' admin-list-toolbar--client' : ''}`}>
             <AdminField label="Buscar pedidos">
               <input
                 value={orderSearchValue}
@@ -2052,11 +2091,11 @@ export function TenantModuleManagementSection({
                   ) : null}
                 </div>
                 {!isOrderGroupCollapsed(group.status) ? (
-                <div className="admin-repeater-list">
+                <div className={`admin-repeater-list${isClientMode ? ' admin-order-list admin-order-list--client' : ''}`}>
                   {group.items.map((order) => (
                     <div
                       key={order.id}
-                      className={`admin-repeater-card admin-order-card admin-order-card--${order.status || 'received'}`}
+                      className={`admin-repeater-card admin-order-card admin-order-card--${order.status || 'received'}${isClientMode ? ' admin-order-card--client' : ''}`}
                       data-testid={`order-card-${group.status}`}
                     >
                       <div className="admin-order-card__header">

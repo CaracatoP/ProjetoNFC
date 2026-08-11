@@ -356,7 +356,7 @@ describe('ClientPanelPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Visao geral do tenant')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Visao geral' })).toBeInTheDocument();
     expect(clientPanelService.fetchClientPanelBusiness).toHaveBeenCalledWith('client-token', {
       includeModules: false,
       includeAnalytics: false,
@@ -385,7 +385,7 @@ describe('ClientPanelPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Visao geral do tenant')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Visao geral' })).toBeInTheDocument();
 
     await user.click(getSidebarNavButton('Configuracoes'));
     expect(await screen.findByText('Dados publicos do negocio')).toBeInTheDocument();
@@ -429,7 +429,7 @@ describe('ClientPanelPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Visao geral do tenant')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Visao geral' })).toBeInTheDocument();
 
     await user.click(getSidebarNavButton('Pedidos'));
     const receivedOrderCard = await screen.findByTestId('order-card-received');
@@ -484,7 +484,7 @@ describe('ClientPanelPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Visao geral do tenant')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Visao geral' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Configuracoes/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Profissionais/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Servicos/i })).not.toBeInTheDocument();
@@ -514,7 +514,7 @@ describe('ClientPanelPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Visao geral do tenant')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Visao geral' })).toBeInTheDocument();
 
     await user.click(getSidebarNavButton('Analytics'));
 
@@ -576,7 +576,7 @@ describe('ClientPanelPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Visao geral do tenant')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Visao geral' })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(tenantRealtimeService.subscribeToTenantUpdates).toHaveBeenCalledWith(
@@ -633,7 +633,7 @@ describe('ClientPanelPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Visao geral do tenant')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Visao geral' })).toBeInTheDocument();
 
     await user.click(getSidebarNavButton('Configuracoes'));
     const nameInput = await screen.findByLabelText('Nome do negocio');
@@ -705,7 +705,7 @@ describe('ClientPanelPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Visao geral do tenant')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Visao geral' })).toBeInTheDocument();
 
     await user.click(getSidebarNavButton('Analytics'));
 

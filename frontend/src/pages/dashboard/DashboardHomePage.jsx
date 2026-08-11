@@ -717,12 +717,13 @@ export function DashboardHomePage() {
   return (
     <AppShell
       eyebrow="TapLink Admin"
-      title="Operacao central do TapLink"
-      description="Cadastre comercios, gerencie tenants, ajuste branding, controle conteudo e acompanhe analytics em uma operacao multi-tenant centralizada."
+      title="Painel administrativo"
+      description="Operacao central"
       shellClassName="dashboard-shell"
-      heroClassName="dashboard-shell__hero"
+      heroClassName="dashboard-shell__topbar"
       contentClassName="dashboard-shell__content"
       pageTitle="TapLink | Dashboard"
+      headerVariant="topbar"
     >
       <Card className="admin-panel-card admin-panel-card--hero admin-dashboard-hero">
         <div className="admin-editor-header admin-dashboard-header">
