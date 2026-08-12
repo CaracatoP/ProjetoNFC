@@ -61,12 +61,19 @@ export const adminBusinessFinanceBodySchema = z.object({
 
 export const adminBusinessFinanceSubaccountBodySchema = z
   .object({
-    name: z.string().min(2),
-    email: z.string().email(),
-    cpfCnpj: z.string().min(11),
-    mobilePhone: z.string().min(10),
-    postalCode: z.string().min(8),
-    addressNumber: z.string().min(1),
-    province: z.string().min(2),
+    name: optionalString,
+    email: optionalString,
+    cpfCnpj: optionalString,
+    companyType: optionalString,
+    incomeValue: optionalNumber,
+    phone: optionalString,
+    mobilePhone: optionalString,
+    site: optionalString,
+    address: optionalString,
+    addressNumber: optionalString,
+    complement: optionalString,
+    province: optionalString,
+    postalCode: optionalString,
+    birthDate: optionalString,
   })
   .passthrough();

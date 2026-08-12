@@ -38,6 +38,13 @@ const TENANT_FINANCIAL_LABELS = {
   suspended: 'Suspensa',
 };
 
+const ASAAS_COMPANY_TYPE_OPTIONS = [
+  { value: 'MEI', label: 'MEI' },
+  { value: 'LIMITED', label: 'Sociedade limitada' },
+  { value: 'INDIVIDUAL', label: 'Empresario individual' },
+  { value: 'ASSOCIATION', label: 'Associacao' },
+];
+
 function buildGlobalDraft(settings = {}) {
   return {
     platformWalletId: settings.platformWalletId || '',
@@ -79,29 +86,71 @@ function buildSubaccountDraft(settings = {}) {
   return {
     name: settings.businessName || '',
     email: settings.asaas?.accountEmail || '',
-    cpfCnpj: '',
-    mobilePhone: '',
-    postalCode: '',
-    addressNumber: '',
-    province: '',
+    cpfCnpj: settings.asaas?.document || '',
+    companyType: settings.asaas?.companyType || '',
+    incomeValue: settings.asaas?.incomeValue ? String(settings.asaas.incomeValue) : '',
+    phone: settings.asaas?.phone || '',
+    mobilePhone: settings.asaas?.mobilePhone || '',
+    site: settings.asaas?.site || '',
+    address: settings.asaas?.address || '',
+    addressNumber: settings.asaas?.addressNumber || '',
+    complement: settings.asaas?.complement || '',
+    province: settings.asaas?.province || '',
+    postalCode: settings.asaas?.postalCode || '',
   };
 }
 
 function getErrorMessage(error) {
+  if (error?.code === 'SUBACCOUNT_PROVIDER_ERROR' && error?.message) {
+    return error.message;
+  }
+
   if (Array.isArray(error?.details) && error.details.length) {
     return error.details
       .filter((detail) => detail?.message)
-      .map((detail) => (detail.path ? `${detail.path}: ${detail.message}` : detail.message))
+      .map((detail) => {
+        const path = detail.path || detail.field;
+        return path ? `${path}: ${detail.message}` : detail.message;
+      })
       .join(' | ');
   }
 
   return error?.message || 'Nao foi possivel concluir esta operacao.';
 }
 
+function extractFieldErrors(error) {
+  const fieldErrors = {};
+
+  if (error?.field) {
+    fieldErrors[error.field] = error.message;
+  }
+
+  if (Array.isArray(error?.details)) {
+    error.details.forEach((detail) => {
+      const field = detail?.field || detail?.path;
+      if (field && detail?.message) {
+        fieldErrors[field] = detail.message;
+      }
+    });
+  }
+
+  return fieldErrors;
+}
+
 function parsePercentInput(value) {
   const normalized = String(value || '').trim().replace(',', '.');
   const numericValue = Number(normalized);
   return Number.isFinite(numericValue) ? numericValue : 0;
+}
+
+function normalizePhoneDigits(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+
+  if (digits.startsWith('55') && [12, 13].includes(digits.length)) {
+    return digits.slice(2);
+  }
+
+  return digits;
 }
 
 function formatPercent(value) {
@@ -146,37 +195,82 @@ function getStatusTone(status) {
 }
 
 function validateSubaccountDraft(draft) {
-  const errors = [];
+  const errors = {};
+  const cpfCnpjDigits = String(draft.cpfCnpj || '').replace(/\D/g, '');
+  const mobilePhoneDigits = normalizePhoneDigits(draft.mobilePhone);
+  const phoneDigits = normalizePhoneDigits(draft.phone);
+  const postalCodeDigits = String(draft.postalCode || '').replace(/\D/g, '');
+  const incomeValue = parsePercentInput(draft.incomeValue);
 
   if (!String(draft.name || '').trim()) {
-    errors.push('Nome da conta e obrigatorio.');
+    errors.name = 'Informe o nome da conta.';
   }
 
-  if (!String(draft.cpfCnpj || '').trim()) {
-    errors.push('CPF/CNPJ e obrigatorio.');
+  if (!cpfCnpjDigits) {
+    errors.cpfCnpj = 'Informe o CNPJ da subconta Asaas.';
+  } else if (cpfCnpjDigits.length === 11) {
+    errors.cpfCnpj = 'Use CNPJ para criar subconta Asaas neste fluxo.';
+  } else if (cpfCnpjDigits.length !== 14) {
+    errors.cpfCnpj = 'Informe um CNPJ valido com 14 digitos.';
+  }
+
+  if (!draft.companyType) {
+    errors.companyType = 'Selecione o tipo de empresa.';
+  }
+
+  if (!incomeValue || incomeValue <= 0) {
+    errors.incomeValue = 'Informe o faturamento mensal.';
   }
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(draft.email || '').trim())) {
-    errors.push('Informe um e-mail valido.');
+    errors.email = 'Informe um e-mail valido.';
   }
 
-  if (String(draft.mobilePhone || '').replace(/\D/g, '').length < 10) {
-    errors.push('Informe um celular valido.');
+  if (mobilePhoneDigits.length < 10 || mobilePhoneDigits.length > 11) {
+    errors.mobilePhone = 'Informe um celular valido.';
   }
 
-  if (!String(draft.postalCode || '').trim()) {
-    errors.push('CEP obrigatorio.');
+  if (phoneDigits && (phoneDigits.length < 10 || phoneDigits.length > 11)) {
+    errors.phone = 'Informe um telefone valido.';
+  }
+
+  if (!String(draft.address || '').trim()) {
+    errors.address = 'Informe o logradouro.';
   }
 
   if (!String(draft.addressNumber || '').trim()) {
-    errors.push('Numero obrigatorio.');
+    errors.addressNumber = 'Informe o numero.';
   }
 
   if (!String(draft.province || '').trim()) {
-    errors.push('Bairro / provincia obrigatorio.');
+    errors.province = 'Informe o bairro.';
+  }
+
+  if (postalCodeDigits.length !== 8) {
+    errors.postalCode = 'Informe um CEP valido.';
   }
 
   return errors;
+}
+
+function getSubaccountFeedback({ status, error, tenantHasSubaccount }) {
+  if (tenantHasSubaccount) {
+    return 'Subconta ja vinculada a este tenant. Revise as configuracoes financeiras antes de criar outra.';
+  }
+
+  if (status === 'loading') {
+    return 'Criando subconta Asaas...';
+  }
+
+  if (status === 'success') {
+    return 'Subconta Asaas criada e vinculada com sucesso.';
+  }
+
+  if (status === 'error') {
+    return error || 'Revise os dados destacados antes de tentar novamente.';
+  }
+
+  return 'Pronto para provisionar a subconta.';
 }
 
 function hasSensitiveTenantChanges(draft, settings) {
@@ -466,6 +560,9 @@ export function AdminFinancialSettingsPanel({
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionResult, setConnectionResult] = useState(null);
   const [creatingSubaccount, setCreatingSubaccount] = useState(false);
+  const [subaccountStatus, setSubaccountStatus] = useState('idle');
+  const [subaccountError, setSubaccountError] = useState('');
+  const [subaccountFieldErrors, setSubaccountFieldErrors] = useState({});
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showPlatformWallet, setShowPlatformWallet] = useState(false);
   const [showTenantWallet, setShowTenantWallet] = useState(false);
@@ -537,6 +634,9 @@ export function AdminFinancialSettingsPanel({
         setTenantSettings(null);
         setTenantDraft(buildTenantDraft());
         setSubaccountDraft(buildSubaccountDraft());
+        setSubaccountStatus('idle');
+        setSubaccountError('');
+        setSubaccountFieldErrors({});
         setShowAdvanced(false);
         return;
       }
@@ -554,6 +654,9 @@ export function AdminFinancialSettingsPanel({
         setTenantSettings(nextSettings);
         setTenantDraft(buildTenantDraft(nextSettings));
         setSubaccountDraft(buildSubaccountDraft(nextSettings));
+        setSubaccountStatus('idle');
+        setSubaccountError('');
+        setSubaccountFieldErrors({});
         setShowTenantWallet(false);
         setShowSubaccountApiKey(false);
       } catch (loadError) {
@@ -583,6 +686,23 @@ export function AdminFinancialSettingsPanel({
 
     navigator.clipboard.writeText(value).catch(() => {});
     setMessage('Valor copiado para a area de transferencia.');
+  }
+
+  function updateSubaccountDraftField(field, value) {
+    setSubaccountDraft((current) => ({
+      ...current,
+      [field]: value,
+    }));
+    setSubaccountFieldErrors((current) => {
+      if (!current[field]) {
+        return current;
+      }
+
+      const nextErrors = { ...current };
+      delete nextErrors[field];
+      return nextErrors;
+    });
+    setSubaccountError('');
   }
 
   async function handleSaveGlobal(event) {
@@ -686,12 +806,19 @@ export function AdminFinancialSettingsPanel({
     }
 
     const validationErrors = validateSubaccountDraft(subaccountDraft);
-    if (validationErrors.length) {
-      setError(validationErrors.join(' | '));
+    if (Object.keys(validationErrors).length) {
+      const validationMessage = 'Revise os campos obrigatorios para criar a subconta Asaas.';
+      setSubaccountFieldErrors(validationErrors);
+      setSubaccountError(validationMessage);
+      setSubaccountStatus('error');
+      setError(Object.values(validationErrors).join(' | '));
       return;
     }
 
     setCreatingSubaccount(true);
+    setSubaccountStatus('loading');
+    setSubaccountError('');
+    setSubaccountFieldErrors({});
     setMessage('');
     setError('');
 
@@ -700,17 +827,31 @@ export function AdminFinancialSettingsPanel({
       setTenantSettings(nextSettings);
       setTenantDraft(buildTenantDraft(nextSettings));
       setSubaccountDraft(buildSubaccountDraft(nextSettings));
+      setSubaccountStatus('success');
       setMessage(
         `Subconta Asaas criada e conectada ao tenant. Wallet ${nextSettings.asaas?.walletId || ''} com status ${humanizeTenantFinancialStatus(nextSettings.tenantFinancialStatus || nextSettings.asaas?.status)}.`,
       );
     } catch (createError) {
-      setError(getErrorMessage(createError));
+      const nextFieldErrors = extractFieldErrors(createError);
+      const nextErrorMessage = getErrorMessage(createError);
+      setSubaccountFieldErrors(nextFieldErrors);
+      setSubaccountError(nextErrorMessage);
+      setSubaccountStatus('error');
+      setError(nextErrorMessage);
     } finally {
       setCreatingSubaccount(false);
     }
   }
 
   const platformReady = Boolean(globalSettings?.summary?.platformReady);
+  const tenantHasSubaccount = Boolean(
+    tenantSettings?.asaas?.connected || tenantSettings?.asaas?.walletId || tenantSettings?.asaas?.subaccountId,
+  );
+  const subaccountFeedback = getSubaccountFeedback({
+    status: subaccountStatus,
+    error: subaccountError,
+    tenantHasSubaccount,
+  });
 
   return (
     <div className="admin-card-stack admin-card-stack--airy">
@@ -1208,95 +1349,148 @@ export function AdminFinancialSettingsPanel({
                     title="Criar Subconta Asaas"
                     description="Provisiona uma subconta usando a conta raiz do TapLink e vincula o walletId retornado ao tenant sem precisar atualizar a pagina."
                   >
-                    <div className="admin-form-grid">
-                      <AdminField label="Nome da conta">
-                        <input
-                          value={subaccountDraft.name}
-                          onChange={(event) =>
-                            setSubaccountDraft((current) => ({
-                              ...current,
-                              name: event.target.value,
-                            }))
-                          }
-                        />
-                      </AdminField>
-                      <AdminField label="E-mail da conta">
-                        <input
-                          value={subaccountDraft.email}
-                          onChange={(event) =>
-                            setSubaccountDraft((current) => ({
-                              ...current,
-                              email: event.target.value,
-                            }))
-                          }
-                        />
-                      </AdminField>
-                      <AdminField label="CPF ou CNPJ">
-                        <input
-                          value={subaccountDraft.cpfCnpj}
-                          onChange={(event) =>
-                            setSubaccountDraft((current) => ({
-                              ...current,
-                              cpfCnpj: event.target.value,
-                            }))
-                          }
-                        />
-                      </AdminField>
-                      <AdminField label="Celular">
-                        <input
-                          value={subaccountDraft.mobilePhone}
-                          onChange={(event) =>
-                            setSubaccountDraft((current) => ({
-                              ...current,
-                              mobilePhone: event.target.value,
-                            }))
-                          }
-                        />
-                      </AdminField>
-                      <AdminField label="CEP">
-                        <input
-                          value={subaccountDraft.postalCode}
-                          onChange={(event) =>
-                            setSubaccountDraft((current) => ({
-                              ...current,
-                              postalCode: event.target.value,
-                            }))
-                          }
-                        />
-                      </AdminField>
-                      <AdminField label="Numero">
-                        <input
-                          value={subaccountDraft.addressNumber}
-                          onChange={(event) =>
-                            setSubaccountDraft((current) => ({
-                              ...current,
-                              addressNumber: event.target.value,
-                            }))
-                          }
-                        />
-                      </AdminField>
-                      <AdminField label="Bairro / provincia">
-                        <input
-                          value={subaccountDraft.province}
-                          onChange={(event) =>
-                            setSubaccountDraft((current) => ({
-                              ...current,
-                              province: event.target.value,
-                            }))
-                          }
-                        />
-                      </AdminField>
+                    <div className="admin-card-stack admin-finance-config-card">
+                      <div className="admin-finance-config-card__header">
+                        <div>
+                          <strong>Dados da conta</strong>
+                          <span>Use os dados cadastrais do CNPJ que sera vinculado ao Asaas.</span>
+                        </div>
+                      </div>
+
+                      <div className="admin-form-grid">
+                        <AdminField label="Nome da conta" error={subaccountFieldErrors.name}>
+                          <input
+                            value={subaccountDraft.name}
+                            aria-invalid={Boolean(subaccountFieldErrors.name)}
+                            onChange={(event) => updateSubaccountDraftField('name', event.target.value)}
+                          />
+                        </AdminField>
+                        <AdminField label="CNPJ" error={subaccountFieldErrors.cpfCnpj}>
+                          <input
+                            value={subaccountDraft.cpfCnpj}
+                            inputMode="numeric"
+                            aria-invalid={Boolean(subaccountFieldErrors.cpfCnpj)}
+                            onChange={(event) => updateSubaccountDraftField('cpfCnpj', event.target.value)}
+                          />
+                        </AdminField>
+                        <AdminField
+                          label="Tipo de empresa"
+                          description="Valor enviado como companyType para o Asaas."
+                          error={subaccountFieldErrors.companyType}
+                        >
+                          <select
+                            value={subaccountDraft.companyType}
+                            aria-invalid={Boolean(subaccountFieldErrors.companyType)}
+                            onChange={(event) => updateSubaccountDraftField('companyType', event.target.value)}
+                          >
+                            <option value="">Selecione...</option>
+                            {ASAAS_COMPANY_TYPE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </AdminField>
+                        <AdminField label="Faturamento mensal" error={subaccountFieldErrors.incomeValue}>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={subaccountDraft.incomeValue}
+                            aria-invalid={Boolean(subaccountFieldErrors.incomeValue)}
+                            onChange={(event) => updateSubaccountDraftField('incomeValue', event.target.value)}
+                          />
+                        </AdminField>
+                        <AdminField label="E-mail da conta" error={subaccountFieldErrors.email}>
+                          <input
+                            value={subaccountDraft.email}
+                            aria-invalid={Boolean(subaccountFieldErrors.email)}
+                            onChange={(event) => updateSubaccountDraftField('email', event.target.value)}
+                          />
+                        </AdminField>
+                        <AdminField label="Celular" error={subaccountFieldErrors.mobilePhone}>
+                          <input
+                            value={subaccountDraft.mobilePhone}
+                            inputMode="tel"
+                            aria-invalid={Boolean(subaccountFieldErrors.mobilePhone)}
+                            onChange={(event) => updateSubaccountDraftField('mobilePhone', event.target.value)}
+                          />
+                        </AdminField>
+                        <AdminField label="Telefone fixo" error={subaccountFieldErrors.phone}>
+                          <input
+                            value={subaccountDraft.phone}
+                            inputMode="tel"
+                            aria-invalid={Boolean(subaccountFieldErrors.phone)}
+                            onChange={(event) => updateSubaccountDraftField('phone', event.target.value)}
+                          />
+                        </AdminField>
+                        <AdminField label="Site" error={subaccountFieldErrors.site}>
+                          <input
+                            value={subaccountDraft.site}
+                            placeholder="https://..."
+                            aria-invalid={Boolean(subaccountFieldErrors.site)}
+                            onChange={(event) => updateSubaccountDraftField('site', event.target.value)}
+                          />
+                        </AdminField>
+                      </div>
+                    </div>
+
+                    <div className="admin-card-stack admin-finance-config-card">
+                      <div className="admin-finance-config-card__header">
+                        <div>
+                          <strong>Endereco</strong>
+                          <span>O CEP precisa ser valido para o Asaas resolver a cidade da subconta.</span>
+                        </div>
+                      </div>
+
+                      <div className="admin-form-grid">
+                        <AdminField label="CEP" error={subaccountFieldErrors.postalCode}>
+                          <input
+                            value={subaccountDraft.postalCode}
+                            inputMode="numeric"
+                            aria-invalid={Boolean(subaccountFieldErrors.postalCode)}
+                            onChange={(event) => updateSubaccountDraftField('postalCode', event.target.value)}
+                          />
+                        </AdminField>
+                        <AdminField label="Logradouro" error={subaccountFieldErrors.address}>
+                          <input
+                            value={subaccountDraft.address}
+                            aria-invalid={Boolean(subaccountFieldErrors.address)}
+                            onChange={(event) => updateSubaccountDraftField('address', event.target.value)}
+                          />
+                        </AdminField>
+                        <AdminField label="Numero" error={subaccountFieldErrors.addressNumber}>
+                          <input
+                            value={subaccountDraft.addressNumber}
+                            aria-invalid={Boolean(subaccountFieldErrors.addressNumber)}
+                            onChange={(event) => updateSubaccountDraftField('addressNumber', event.target.value)}
+                          />
+                        </AdminField>
+                        <AdminField label="Complemento">
+                          <input
+                            value={subaccountDraft.complement}
+                            onChange={(event) => updateSubaccountDraftField('complement', event.target.value)}
+                          />
+                        </AdminField>
+                        <AdminField label="Bairro / provincia" error={subaccountFieldErrors.province}>
+                          <input
+                            value={subaccountDraft.province}
+                            aria-invalid={Boolean(subaccountFieldErrors.province)}
+                            onChange={(event) => updateSubaccountDraftField('province', event.target.value)}
+                          />
+                        </AdminField>
+                      </div>
                     </div>
 
                     <div className="admin-inline-note admin-inline-note--preview">
                       <strong>Feedback operacional</strong>
-                      <span>{creatingSubaccount ? 'Criando subconta no Asaas...' : 'Pronto para provisionar a subconta.'}</span>
+                      <span>{subaccountFeedback}</span>
                       <span>O retorno atualiza walletId, status financeiro, summary e warnings sem exigir F5.</span>
                     </div>
 
                     <div className="admin-inline-actions">
-                      <Button type="submit" disabled={creatingSubaccount}>
-                        {creatingSubaccount ? 'Criando subconta...' : 'Criar subconta'}
+                      <Button type="submit" disabled={creatingSubaccount || tenantHasSubaccount}>
+                        {creatingSubaccount ? 'Criando subconta...' : tenantHasSubaccount ? 'Subconta ja vinculada' : 'Criar subconta'}
                       </Button>
                     </div>
                   </FinanceSection>

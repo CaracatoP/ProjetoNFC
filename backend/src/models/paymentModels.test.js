@@ -5,6 +5,7 @@ import { Order } from './Order.js';
 import { Payment } from './Payment.js';
 import { PaymentCustomer } from './PaymentCustomer.js';
 import { SystemSetting } from './SystemSetting.js';
+import { WebhookEvent } from './WebhookEvent.js';
 
 describe('payment models and schemas', () => {
   it('normalizes asaas payment settings without exposing encrypted secrets', () => {
@@ -228,6 +229,11 @@ describe('payment models and schemas', () => {
       businessId: '665cb4a9e1f0a1b2c3d4e5f6',
       provider: 'asaas',
       providerCustomerId: 'cus_123',
+      identityKind: 'phone',
+      identityValue: '5511999999999',
+      identityKey: 'phone:5511999999999',
+      externalReference: 'tenant:665cb4a9e1f0a1b2c3d4e5f6:customer:665cb4a9e1f0a1b2c3d4e5f8',
+      status: 'ready',
       name: 'Cliente TapLink',
       email: 'cliente@example.com',
       phone: '5511999999999',
@@ -241,6 +247,11 @@ describe('payment models and schemas', () => {
       expect.objectContaining({
         provider: 'asaas',
         providerCustomerId: 'cus_123',
+        identityKind: 'phone',
+        identityValue: '5511999999999',
+        identityKey: 'phone:5511999999999',
+        externalReference: 'tenant:665cb4a9e1f0a1b2c3d4e5f6:customer:665cb4a9e1f0a1b2c3d4e5f8',
+        status: 'ready',
         name: 'Cliente TapLink',
         email: 'cliente@example.com',
         phone: '5511999999999',
@@ -248,6 +259,49 @@ describe('payment models and schemas', () => {
       }),
     );
     expect(json.businessId.toString()).toBe('665cb4a9e1f0a1b2c3d4e5f6');
+  });
+
+  it('declares unique indexes for payment, payment customer, and webhook idempotency', () => {
+    const paymentIndexes = Payment.schema.indexes();
+    const paymentCustomerIndexes = PaymentCustomer.schema.indexes();
+    const webhookEventIndexes = WebhookEvent.schema.indexes();
+
+    expect(paymentIndexes).toEqual(
+      expect.arrayContaining([
+        [
+          { provider: 1, providerPaymentId: 1 },
+          expect.objectContaining({ unique: true }),
+        ],
+        [
+          { provider: 1, externalReference: 1 },
+          expect.objectContaining({ unique: true }),
+        ],
+      ]),
+    );
+    expect(paymentCustomerIndexes).toEqual(
+      expect.arrayContaining([
+        [
+          { businessId: 1, provider: 1, identityKey: 1 },
+          expect.objectContaining({ unique: true }),
+        ],
+        [
+          { provider: 1, externalReference: 1 },
+          expect.objectContaining({ unique: true }),
+        ],
+        [
+          { provider: 1, providerCustomerId: 1 },
+          expect.objectContaining({ unique: true }),
+        ],
+      ]),
+    );
+    expect(webhookEventIndexes).toEqual(
+      expect.arrayContaining([
+        [
+          { provider: 1, eventId: 1 },
+          expect.objectContaining({ unique: true }),
+        ],
+      ]),
+    );
   });
 
   it('creates the system setting model with key and mixed value support', () => {

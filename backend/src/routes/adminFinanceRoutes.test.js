@@ -56,6 +56,7 @@ describe('Admin finance routes', () => {
     process.env.ADMIN_PASSWORD = 'admin123456';
     process.env.ADMIN_TOKEN_SECRET = 'test-admin-secret';
     process.env.AUTH_LOGIN_RATE_LIMIT_MAX = '100';
+    process.env.PAYMENT_CREDENTIALS_ENCRYPTION_KEY = '12345678901234567890123456789012';
     process.env.ASAAS_API_KEY = '$aact_hmlg_root_key';
     process.env.ASAAS_ENV = 'sandbox';
     process.env.ASAAS_WEBHOOK_AUTH_TOKEN = 'asaas-webhook-token';
@@ -80,6 +81,7 @@ describe('Admin finance routes', () => {
     asaasServiceMock.testAsaasConnection.mockReset();
     envConfig.asaasApiKey = '$aact_hmlg_root_key';
     envConfig.asaasWebhookAuthToken = 'asaas-webhook-token';
+    envConfig.paymentCredentialsEncryptionKey = '12345678901234567890123456789012';
 
     const loginResponse = await request(app).post('/api/admin/auth/login').send({
       username: 'admin@nfc.local',
@@ -549,6 +551,7 @@ describe('Admin finance routes', () => {
       id: 'subacc_created',
       walletId: 'wallet_sub_created',
       apiKey: '$aact_hmlg_created_only_once',
+      status: 'active',
     });
 
     const response = await request(app)
@@ -558,14 +561,36 @@ describe('Admin finance routes', () => {
         name: 'Acougue do Preto',
         email: 'financeiro@cliente.com',
         cpfCnpj: '19131243000197',
+        companyType: 'MEI',
+        incomeValue: 25000,
         mobilePhone: '5511991112233',
+        phone: '1132330606',
+        site: 'https://acougue.example.com',
         postalCode: '01310930',
+        address: 'Avenida Paulista',
         addressNumber: '100',
+        complement: 'Sala 2',
         province: 'Centro',
+        ignoredSensitivePayload: '$aact_should_not_be_forwarded',
       });
 
     expect(response.status).toBe(201);
     expect(asaasServiceMock.createAsaasSubaccount).toHaveBeenCalledOnce();
+    expect(asaasServiceMock.createAsaasSubaccount).toHaveBeenCalledWith({
+      name: 'Acougue do Preto',
+      email: 'financeiro@cliente.com',
+      cpfCnpj: '19131243000197',
+      companyType: 'MEI',
+      mobilePhone: '11991112233',
+      phone: '1132330606',
+      site: 'https://acougue.example.com',
+      incomeValue: 25000,
+      address: 'Avenida Paulista',
+      addressNumber: '100',
+      complement: 'Sala 2',
+      province: 'Centro',
+      postalCode: '01310930',
+    });
     expect(response.body.data).toEqual(
       expect.objectContaining({
         provider: 'asaas',
@@ -583,6 +608,15 @@ describe('Admin finance routes', () => {
           walletId: 'wallet_sub_created',
           accountEmail: 'financeiro@cliente.com',
           accountName: 'Acougue do Preto',
+          companyType: 'MEI',
+          incomeValue: 25000,
+          document: '19131243000197',
+          mobilePhone: '11991112233',
+          address: 'Avenida Paulista',
+          addressNumber: '100',
+          complement: 'Sala 2',
+          province: 'Centro',
+          postalCode: '01310930',
           status: 'active',
           subaccountId: 'subacc_created',
         }),
@@ -591,6 +625,7 @@ describe('Admin finance routes', () => {
 
     const storedBusiness = await Business.findById(business._id).lean();
     expect(decryptSecret(storedBusiness.paymentSettings.asaas.apiKeyEncrypted)).toBe('$aact_hmlg_created_only_once');
+    expect(storedBusiness.paymentSettings.asaas.apiKey).toBeUndefined();
     expect(storedBusiness.paymentSettings.split.platformWalletId).toBe('wallet_platform_777');
   });
 
@@ -604,13 +639,18 @@ describe('Admin finance routes', () => {
         name: 'Acougue do Preto',
         email: 'financeiro@cliente.com',
         cpfCnpj: '19131243000197',
+        companyType: 'MEI',
+        incomeValue: 25000,
         mobilePhone: '',
         postalCode: '01310930',
+        address: 'Avenida Paulista',
         addressNumber: '100',
         province: 'Centro',
       });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('SUBACCOUNT_VALIDATION_ERROR');
+    expect(response.body.error.field).toBe('mobilePhone');
     expect(asaasServiceMock.createAsaasSubaccount).not.toHaveBeenCalled();
     expect(response.body.error.details).toEqual(
       expect.arrayContaining([
@@ -619,5 +659,162 @@ describe('Admin finance routes', () => {
         }),
       ]),
     );
+  });
+
+  it('requires a valid Asaas companyType before provisioning a subaccount', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+
+    const missingCompanyTypeResponse = await request(app)
+      .post(`/api/admin/finance/businesses/${business._id.toString()}/asaas/subaccount`)
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .send({
+        name: 'Acougue do Preto',
+        email: 'financeiro@cliente.com',
+        cpfCnpj: '19131243000197',
+        incomeValue: 25000,
+        mobilePhone: '5511991112233',
+        postalCode: '01310930',
+        address: 'Avenida Paulista',
+        addressNumber: '100',
+        province: 'Centro',
+      });
+
+    expect(missingCompanyTypeResponse.status).toBe(422);
+    expect(missingCompanyTypeResponse.body.error).toEqual(
+      expect.objectContaining({
+        code: 'SUBACCOUNT_VALIDATION_ERROR',
+        field: 'companyType',
+        message: 'Selecione o tipo de empresa.',
+      }),
+    );
+
+    const invalidCompanyTypeResponse = await request(app)
+      .post(`/api/admin/finance/businesses/${business._id.toString()}/asaas/subaccount`)
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .send({
+        name: 'Acougue do Preto',
+        email: 'financeiro@cliente.com',
+        cpfCnpj: '19131243000197',
+        companyType: 'LTDA',
+        incomeValue: 25000,
+        mobilePhone: '5511991112233',
+        postalCode: '01310930',
+        address: 'Avenida Paulista',
+        addressNumber: '100',
+        province: 'Centro',
+      });
+
+    expect(invalidCompanyTypeResponse.status).toBe(422);
+    expect(invalidCompanyTypeResponse.body.error.field).toBe('companyType');
+    expect(asaasServiceMock.createAsaasSubaccount).not.toHaveBeenCalled();
+  });
+
+  it('blocks CPF documents in the current Asaas subaccount provisioning flow', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+
+    const response = await request(app)
+      .post(`/api/admin/finance/businesses/${business._id.toString()}/asaas/subaccount`)
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .send({
+        name: 'Profissional Pessoa Fisica',
+        email: 'pf@cliente.com',
+        cpfCnpj: '12345678909',
+        companyType: 'MEI',
+        incomeValue: 8000,
+        mobilePhone: '5511991112233',
+        postalCode: '01310930',
+        address: 'Avenida Paulista',
+        addressNumber: '100',
+        province: 'Centro',
+      });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error).toEqual(
+      expect.objectContaining({
+        code: 'SUBACCOUNT_VALIDATION_ERROR',
+        field: 'cpfCnpj',
+      }),
+    );
+    expect(asaasServiceMock.createAsaasSubaccount).not.toHaveBeenCalled();
+  });
+
+  it('keeps the Asaas 400 invalid_object error visible and sanitized for companyType regressions', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const providerError = new Error('E necessario informar o tipo de empresa.');
+    providerError.statusCode = 400;
+    providerError.code = 'asaas_validation_error';
+    providerError.details = [
+      {
+        provider: 'asaas',
+        status: 400,
+        code: 'invalid_object',
+        message: 'E necessario informar o tipo de empresa.',
+        field: 'companyType',
+      },
+    ];
+    asaasServiceMock.createAsaasSubaccount.mockRejectedValue(providerError);
+
+    const response = await request(app)
+      .post(`/api/admin/finance/businesses/${business._id.toString()}/asaas/subaccount`)
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .send({
+        name: 'Acougue do Preto',
+        email: 'financeiro@cliente.com',
+        cpfCnpj: '19131243000197',
+        companyType: 'MEI',
+        incomeValue: 25000,
+        mobilePhone: '5511991112233',
+        postalCode: '01310930',
+        address: 'Avenida Paulista',
+        addressNumber: '100',
+        province: 'Centro',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toEqual(
+      expect.objectContaining({
+        code: 'SUBACCOUNT_PROVIDER_ERROR',
+        field: 'companyType',
+        message: 'Selecione o tipo de empresa para criar a subconta Asaas.',
+      }),
+    );
+    expect(JSON.stringify(response.body)).not.toContain('$aact');
+    expect(JSON.stringify(response.body)).not.toContain('19131243000197');
+  });
+
+  it('does not create a duplicated Asaas subaccount when the tenant is already provisioned', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    business.paymentSettings = {
+      provider: 'asaas',
+      enabled: true,
+      asaas: {
+        enabled: true,
+        subaccountId: 'subacc_existing',
+        walletId: 'wallet_existing',
+        apiKeyEncrypted: encryptSecret('$aact_existing_subaccount'),
+        status: 'active',
+      },
+    };
+    await business.save();
+
+    const response = await request(app)
+      .post(`/api/admin/finance/businesses/${business._id.toString()}/asaas/subaccount`)
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .send({
+        name: 'Acougue do Preto',
+        email: 'financeiro@cliente.com',
+        cpfCnpj: '19131243000197',
+        companyType: 'MEI',
+        incomeValue: 25000,
+        mobilePhone: '5511991112233',
+        postalCode: '01310930',
+        address: 'Avenida Paulista',
+        addressNumber: '100',
+        province: 'Centro',
+      });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('SUBACCOUNT_ALREADY_PROVISIONED');
+    expect(asaasServiceMock.createAsaasSubaccount).not.toHaveBeenCalled();
   });
 });

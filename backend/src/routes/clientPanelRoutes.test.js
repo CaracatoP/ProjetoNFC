@@ -15,6 +15,7 @@ let Subscription;
 let Product;
 let Order;
 let decryptSecret;
+let envConfig;
 let mongoServer;
 let primaryBusiness;
 let secondaryBusiness;
@@ -44,6 +45,7 @@ describe('Client panel routes', () => {
     process.env.ADMIN_PASSWORD = 'admin123456';
     process.env.ADMIN_TOKEN_SECRET = 'test-admin-secret';
     process.env.AUTH_LOGIN_RATE_LIMIT_MAX = '100';
+    process.env.PAYMENT_CREDENTIALS_ENCRYPTION_KEY = '12345678901234567890123456789012';
 
     ({ connectDatabase, disconnectDatabase } = await import('../config/database.js'));
     ({ seedDemoData } = await import('../utils/seedDemoData.js'));
@@ -55,12 +57,14 @@ describe('Client panel routes', () => {
     ({ Product } = await import('../models/Product.js'));
     ({ Order } = await import('../models/Order.js'));
     ({ decryptSecret } = await import('../utils/secretCrypto.js'));
+    ({ env: envConfig } = await import('../config/env.js'));
     ({ default: app } = await import('../app.js'));
 
     await connectDatabase();
   });
 
   beforeEach(async () => {
+    envConfig.paymentCredentialsEncryptionKey = '12345678901234567890123456789012';
     await seedDemoData({ reset: true });
     await ensureDefaultPlans();
     await User.deleteMany({});

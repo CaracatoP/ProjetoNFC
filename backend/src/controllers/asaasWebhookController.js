@@ -91,10 +91,7 @@ export async function asaasWebhookController(req, res, next) {
     });
     webhookEventRecord = webhookEventResult.record;
 
-    if (
-      !webhookEventResult.created &&
-      ['processed', 'processing', 'ignored'].includes(webhookEventRecord?.status)
-    ) {
+    if (!webhookEventResult.shouldProcess) {
       return res.status(204).end();
     }
 

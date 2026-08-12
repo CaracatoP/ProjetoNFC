@@ -12,8 +12,8 @@ export function errorResponse(res, error) {
     error: {
       code: error.code || 'internal_error',
       message: error.message || 'Erro interno do servidor',
+      ...(error.field ? { field: error.field } : {}),
       ...(error.details ? { details: error.details } : {}),
     },
   });
 }
-

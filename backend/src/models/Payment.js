@@ -63,15 +63,16 @@ paymentSchema.index(
   {
     unique: true,
     partialFilterExpression: {
-      providerPaymentId: { $exists: true, $type: 'string', $ne: '' },
+      providerPaymentId: { $exists: true, $type: 'string', $gt: '' },
     },
   },
 );
 paymentSchema.index(
   { provider: 1, externalReference: 1 },
   {
+    unique: true,
     partialFilterExpression: {
-      externalReference: { $exists: true, $type: 'string', $ne: '' },
+      externalReference: { $exists: true, $type: 'string', $gt: '' },
     },
   },
 );

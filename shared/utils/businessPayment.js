@@ -59,6 +59,16 @@ function normalizeNumberValue(value, fallback = 0, { min = null, max = null } = 
   return normalized;
 }
 
+function normalizePositiveNumberValue(value, fallback = 0) {
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue) || numericValue < 0) {
+    return fallback;
+  }
+
+  return Number(numericValue.toFixed(2));
+}
+
 function normalizeMercadoPagoSettings(input = {}, options = {}) {
   const mercadoPago = isPlainObject(input) ? input : {};
   const mode = options.mode || 'safe';
@@ -107,6 +117,17 @@ function normalizeAsaasSettings(input = {}, options = {}) {
   const walletId = normalizeStringValue(asaas.walletId);
   const accountEmail = normalizeStringValue(asaas.accountEmail).toLowerCase();
   const accountName = normalizeStringValue(asaas.accountName);
+  const companyType = normalizeStringValue(asaas.companyType).toUpperCase();
+  const incomeValue = normalizePositiveNumberValue(asaas.incomeValue);
+  const document = normalizeStringValue(asaas.document || asaas.cpfCnpj);
+  const phone = normalizeStringValue(asaas.phone);
+  const mobilePhone = normalizeStringValue(asaas.mobilePhone);
+  const site = normalizeStringValue(asaas.site);
+  const address = normalizeStringValue(asaas.address);
+  const addressNumber = normalizeStringValue(asaas.addressNumber);
+  const complement = normalizeStringValue(asaas.complement);
+  const province = normalizeStringValue(asaas.province);
+  const postalCode = normalizeStringValue(asaas.postalCode);
   const status = normalizeStringValue(asaas.status, 'not_connected') || 'not_connected';
   const connectedAt = normalizeDateValue(asaas.connectedAt);
   const apiKeyEncrypted = normalizeStringValue(asaas.apiKeyEncrypted);
@@ -125,6 +146,17 @@ function normalizeAsaasSettings(input = {}, options = {}) {
     walletId,
     accountEmail,
     accountName,
+    companyType,
+    incomeValue,
+    document,
+    phone,
+    mobilePhone,
+    site,
+    address,
+    addressNumber,
+    complement,
+    province,
+    postalCode,
     status,
     connectedAt,
     hasApiKey,

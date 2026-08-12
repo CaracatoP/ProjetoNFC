@@ -9,6 +9,7 @@ import { encryptSecret } from '../utils/secretCrypto.js';
 import { AppError } from '../utils/appError.js';
 
 export const MAX_PLATFORM_FEE_PERCENT = 30;
+export const ASAAS_SUBACCOUNT_COMPANY_TYPES = Object.freeze(['MEI', 'LIMITED', 'INDIVIDUAL', 'ASSOCIATION']);
 
 const VALID_WALLET_ID_PATTERN = /^[A-Za-z0-9_-]{6,120}$/;
 const TENANT_FINANCIAL_STATUS_LABELS = Object.freeze({
@@ -50,6 +51,66 @@ function normalizeOptionalString(value) {
   }
 
   return String(value).trim();
+}
+
+function normalizeDigits(value) {
+  return normalizeOptionalString(value).replace(/\D/g, '');
+}
+
+function normalizeBrazilianPhoneDigits(value) {
+  const digits = normalizeDigits(value);
+
+  if (digits.startsWith('55') && [12, 13].includes(digits.length)) {
+    return digits.slice(2);
+  }
+
+  return digits;
+}
+
+function normalizeEmail(value) {
+  return normalizeOptionalString(value).toLowerCase();
+}
+
+function normalizeCompanyType(value) {
+  return normalizeOptionalString(value).toUpperCase();
+}
+
+function normalizeIncomeValue(value) {
+  if (value === '' || value === undefined || value === null) {
+    return 0;
+  }
+
+  const parsed = Number(String(value).replace(',', '.'));
+  return Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : 0;
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value));
+}
+
+function isValidUrl(value) {
+  if (!value) {
+    return true;
+  }
+
+  try {
+    const parsedUrl = new URL(value);
+    return ['http:', 'https:'].includes(parsedUrl.protocol);
+  } catch (_error) {
+    return false;
+  }
+}
+
+function createSubaccountValidationError(message, field) {
+  const error = new AppError(message, 422, 'SUBACCOUNT_VALIDATION_ERROR', [
+    {
+      path: field,
+      field,
+      message,
+    },
+  ]);
+  error.field = field;
+  return error;
 }
 
 function normalizeBoolean(value, fallback = false) {
@@ -106,6 +167,161 @@ function resolveTenantFinancialStatus(paymentSettings = {}) {
   }
 
   return hasApiKey ? 'active' : 'pending';
+}
+
+function hasValidAsaasSubaccountLink(asaasSettings = {}) {
+  return Boolean(
+    normalizePlatformWalletId(asaasSettings.walletId) ||
+      normalizeOptionalString(asaasSettings.subaccountId) ||
+      normalizeOptionalString(asaasSettings.apiKeyEncrypted) ||
+      normalizeBoolean(asaasSettings.connected, false),
+  );
+}
+
+export function buildAsaasSubaccountPayload(payload = {}) {
+  const cpfCnpj = normalizeDigits(payload.cpfCnpj);
+  const companyType = normalizeCompanyType(payload.companyType);
+  const incomeValue = normalizeIncomeValue(payload.incomeValue);
+  const phone = normalizeBrazilianPhoneDigits(payload.phone);
+  const mobilePhone = normalizeBrazilianPhoneDigits(payload.mobilePhone);
+  const postalCode = normalizeDigits(payload.postalCode);
+  const site = normalizeOptionalString(payload.site);
+  const subaccountPayload = {
+    name: normalizeOptionalString(payload.name),
+    email: normalizeEmail(payload.email),
+    cpfCnpj,
+    companyType,
+    mobilePhone,
+    incomeValue,
+    address: normalizeOptionalString(payload.address),
+    addressNumber: normalizeOptionalString(payload.addressNumber),
+    province: normalizeOptionalString(payload.province),
+    postalCode,
+  };
+
+  if (phone) {
+    subaccountPayload.phone = phone;
+  }
+
+  if (site) {
+    subaccountPayload.site = site;
+  }
+
+  const complement = normalizeOptionalString(payload.complement);
+  if (complement) {
+    subaccountPayload.complement = complement;
+  }
+
+  return subaccountPayload;
+}
+
+export function validateAsaasSubaccountPayload(payload = {}) {
+  const documentDigits = normalizeDigits(payload.cpfCnpj);
+
+  if (!normalizeOptionalString(payload.name) || normalizeOptionalString(payload.name).length < 2) {
+    throw createSubaccountValidationError('Informe o nome da conta.', 'name');
+  }
+
+  if (!isValidEmail(payload.email)) {
+    throw createSubaccountValidationError('Informe um e-mail valido.', 'email');
+  }
+
+  if (!documentDigits) {
+    throw createSubaccountValidationError('Informe o CNPJ da subconta Asaas.', 'cpfCnpj');
+  }
+
+  if (documentDigits.length === 11) {
+    throw createSubaccountValidationError('Use um CNPJ para criar subconta Asaas neste fluxo.', 'cpfCnpj');
+  }
+
+  if (documentDigits.length !== 14) {
+    throw createSubaccountValidationError('Informe um CNPJ valido com 14 digitos.', 'cpfCnpj');
+  }
+
+  if (!payload.companyType) {
+    throw createSubaccountValidationError('Selecione o tipo de empresa.', 'companyType');
+  }
+
+  if (!ASAAS_SUBACCOUNT_COMPANY_TYPES.includes(normalizeCompanyType(payload.companyType))) {
+    throw createSubaccountValidationError('Selecione um tipo de empresa valido.', 'companyType');
+  }
+
+  if (normalizeIncomeValue(payload.incomeValue) <= 0) {
+    throw createSubaccountValidationError('Informe o faturamento mensal da subconta.', 'incomeValue');
+  }
+
+  const mobilePhoneDigits = normalizeBrazilianPhoneDigits(payload.mobilePhone);
+  if (mobilePhoneDigits.length < 10 || mobilePhoneDigits.length > 11) {
+    throw createSubaccountValidationError('Informe um celular valido.', 'mobilePhone');
+  }
+
+  const phoneDigits = normalizeBrazilianPhoneDigits(payload.phone);
+  if (phoneDigits && (phoneDigits.length < 10 || phoneDigits.length > 11)) {
+    throw createSubaccountValidationError('Informe um telefone fixo valido.', 'phone');
+  }
+
+  if (!normalizeOptionalString(payload.address)) {
+    throw createSubaccountValidationError('Informe o logradouro.', 'address');
+  }
+
+  if (!normalizeOptionalString(payload.addressNumber)) {
+    throw createSubaccountValidationError('Informe o numero do endereco.', 'addressNumber');
+  }
+
+  if (!normalizeOptionalString(payload.province)) {
+    throw createSubaccountValidationError('Informe o bairro.', 'province');
+  }
+
+  if (normalizeDigits(payload.postalCode).length !== 8) {
+    throw createSubaccountValidationError('Informe um CEP valido com 8 digitos.', 'postalCode');
+  }
+
+  if (!isValidUrl(normalizeOptionalString(payload.site))) {
+    throw createSubaccountValidationError('Informe uma URL valida para o site.', 'site');
+  }
+
+  return true;
+}
+
+function sanitizeAsaasSubaccountProviderError(error) {
+  const statusCode = error?.statusCode && error.statusCode < 500 ? error.statusCode : 502;
+  const providerDetails = Array.isArray(error?.details)
+    ? error.details.map((detail) => ({
+        provider: 'asaas',
+        status: detail?.status || error.statusCode || 502,
+        code: detail?.code || error.code || 'asaas_error',
+        message: detail?.message || detail?.description || error.message || 'Falha na Asaas.',
+        field: detail?.field,
+      }))
+    : [];
+  const firstDetail = providerDetails[0];
+  const field = firstDetail?.field;
+  const fallbackMessage = error?.message || 'Nao foi possivel criar a subconta Asaas.';
+  const message =
+    field === 'companyType'
+      ? 'Selecione o tipo de empresa para criar a subconta Asaas.'
+      : fallbackMessage;
+  const safeError = new AppError(
+    message,
+    statusCode,
+    'SUBACCOUNT_PROVIDER_ERROR',
+    providerDetails.length
+      ? providerDetails
+      : [
+          {
+            provider: 'asaas',
+            status: error?.statusCode || 502,
+            code: error?.code || 'asaas_error',
+            message,
+          },
+        ],
+  );
+
+  if (field) {
+    safeError.field = field;
+  }
+
+  return safeError;
 }
 
 function resolveWarnings({
@@ -278,6 +494,17 @@ function buildTenantFinanceDto(business, financeSettings = {}) {
       walletId: paymentSettings.asaas?.walletId || '',
       accountEmail: paymentSettings.asaas?.accountEmail || '',
       accountName: paymentSettings.asaas?.accountName || '',
+      companyType: paymentSettings.asaas?.companyType || '',
+      incomeValue: paymentSettings.asaas?.incomeValue || 0,
+      document: paymentSettings.asaas?.document || '',
+      phone: paymentSettings.asaas?.phone || '',
+      mobilePhone: paymentSettings.asaas?.mobilePhone || '',
+      site: paymentSettings.asaas?.site || '',
+      address: paymentSettings.asaas?.address || '',
+      addressNumber: paymentSettings.asaas?.addressNumber || '',
+      complement: paymentSettings.asaas?.complement || '',
+      province: paymentSettings.asaas?.province || '',
+      postalCode: paymentSettings.asaas?.postalCode || '',
       status: paymentSettings.asaas?.status || 'not_connected',
       subaccountId: paymentSettings.asaas?.subaccountId || '',
       connectedAt: paymentSettings.asaas?.connectedAt || null,
@@ -490,9 +717,52 @@ export async function createAdminBusinessAsaasSubaccount(businessId, payload = {
     throw new AppError('Negocio nao encontrado', 404, 'business_not_found');
   }
 
-  const createdSubaccount = await createAsaasSubaccount(payload);
   const currentSettings = resolveBusinessPaymentSettings(existingBusiness, { mode: 'storage' });
+
+  if (hasValidAsaasSubaccountLink(currentSettings.asaas)) {
+    throw new AppError(
+      'Este tenant ja possui uma subconta Asaas vinculada.',
+      409,
+      'SUBACCOUNT_ALREADY_PROVISIONED',
+      [
+        {
+          path: 'asaas.walletId',
+          field: 'walletId',
+          message: 'Remova ou revise o vinculo existente antes de criar outra subconta.',
+        },
+      ],
+    );
+  }
+
   const financeSettings = getStoredFinanceSettings(financeRecord?.value);
+  const integrationStatus = resolveIntegrationStatus();
+
+  if (!isIntegrationConfigured(integrationStatus)) {
+    throw new AppError(
+      'Integracao global do Asaas invalida para criar subconta.',
+      400,
+      'finance_integration_invalid',
+    );
+  }
+
+  validateAsaasSubaccountPayload(payload);
+  const asaasPayload = buildAsaasSubaccountPayload(payload);
+  let createdSubaccount;
+
+  try {
+    createdSubaccount = await createAsaasSubaccount(asaasPayload);
+  } catch (error) {
+    throw sanitizeAsaasSubaccountProviderError(error);
+  }
+
+  if (!createdSubaccount?.walletId || !createdSubaccount?.apiKey) {
+    throw new AppError(
+      'Asaas nao retornou walletId/apiKey da subconta.',
+      502,
+      'SUBACCOUNT_PROVIDER_INCOMPLETE_RESPONSE',
+    );
+  }
+
   const nextSettings = {
     ...currentSettings,
     enabled: true,
@@ -507,9 +777,20 @@ export async function createAdminBusinessAsaasSubaccount(businessId, payload = {
       subaccountId: createdSubaccount.id,
       walletId: createdSubaccount.walletId,
       apiKeyEncrypted: encryptSecret(createdSubaccount.apiKey),
-      accountEmail: normalizeOptionalString(payload.email),
-      accountName: normalizeOptionalString(payload.name),
-      status: 'active',
+      accountEmail: asaasPayload.email,
+      accountName: asaasPayload.name,
+      companyType: asaasPayload.companyType,
+      incomeValue: asaasPayload.incomeValue,
+      document: asaasPayload.cpfCnpj,
+      phone: asaasPayload.phone || '',
+      mobilePhone: asaasPayload.mobilePhone,
+      site: asaasPayload.site || '',
+      address: asaasPayload.address,
+      addressNumber: asaasPayload.addressNumber,
+      complement: asaasPayload.complement || '',
+      province: asaasPayload.province,
+      postalCode: asaasPayload.postalCode,
+      status: createdSubaccount.status || 'active',
       connectedAt: new Date(),
     },
     split: {

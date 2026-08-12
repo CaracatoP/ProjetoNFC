@@ -7,6 +7,7 @@ let parseAsaasExternalReference;
 let buildAsaasSplitRules;
 let createAsaasSubaccount;
 let createAsaasCustomer;
+let listAsaasCustomers;
 let createAsaasPaymentCharge;
 let getAsaasPixQrCode;
 let testAsaasConnection;
@@ -15,6 +16,9 @@ function mockAsaasJsonResponse(payload, options = {}) {
   return {
     ok: options.ok ?? true,
     status: options.status ?? 200,
+    headers: {
+      get: (key) => options.headers?.[key] || options.headers?.[String(key).toLowerCase()] || '',
+    },
     text: async () => JSON.stringify(payload),
   };
 }
@@ -31,6 +35,7 @@ describe('asaasService', () => {
       buildAsaasSplitRules,
       createAsaasSubaccount,
       createAsaasCustomer,
+      listAsaasCustomers,
       createAsaasPaymentCharge,
       getAsaasPixQrCode,
       testAsaasConnection,
@@ -77,6 +82,8 @@ describe('asaasService', () => {
         id: 'subacc_123',
         walletId: 'wallet_sub',
         apiKey: '$aact_hmlg_sub_key',
+        status: 'ACTIVE',
+        object: 'account',
       }),
     );
 
@@ -84,6 +91,7 @@ describe('asaasService', () => {
       name: 'Casa do Preto LTDA',
       email: 'financeiro@casadopreto.com',
       cpfCnpj: '12345678000199',
+      companyType: 'MEI',
       mobilePhone: '11999999999',
       incomeValue: 50000,
       address: 'Rua Central',
@@ -96,6 +104,10 @@ describe('asaasService', () => {
       id: 'subacc_123',
       walletId: 'wallet_sub',
       apiKey: '$aact_hmlg_sub_key',
+      status: 'active',
+      raw: {
+        object: 'account',
+      },
     });
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api-sandbox.asaas.com/v3/accounts',
@@ -106,6 +118,12 @@ describe('asaasService', () => {
           'content-type': 'application/json',
           'user-agent': expect.stringContaining('TapLink'),
         }),
+      }),
+    );
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(
+      expect.objectContaining({
+        companyType: 'MEI',
+        incomeValue: 50000,
       }),
     );
   });
@@ -200,6 +218,75 @@ describe('asaasService', () => {
         }),
       }),
     );
+  });
+
+  it('lists customers by externalReference for safe reconciliation', async () => {
+    fetchMock.mockResolvedValue(
+      mockAsaasJsonResponse({
+        data: [{ id: 'cus_123', externalReference: 'tenant:tenant123:customer:ref123' }],
+      }),
+    );
+
+    const result = await listAsaasCustomers({
+      apiKey: '$aact_hmlg_sub_key',
+      filters: {
+        externalReference: 'tenant:tenant123:customer:ref123',
+        limit: 1,
+      },
+    });
+
+    expect(result.data[0].id).toBe('cus_123');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api-sandbox.asaas.com/v3/customers?externalReference=tenant%3Atenant123%3Acustomer%3Aref123&limit=1',
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          access_token: '$aact_hmlg_sub_key',
+          'user-agent': expect.stringContaining('TapLink'),
+        }),
+      }),
+    );
+    expect(fetchMock.mock.calls[0][1].body).toBeUndefined();
+  });
+
+  it('normalizes Asaas 429 errors with safe rate limit metadata and no retry loop', async () => {
+    fetchMock.mockResolvedValue(
+      mockAsaasJsonResponse(
+        {
+          errors: [{ code: 'rateLimitExceeded', description: 'Too many requests' }],
+        },
+        {
+          ok: false,
+          status: 429,
+          headers: {
+            'RateLimit-Limit': '100',
+            'RateLimit-Remaining': '0',
+            'RateLimit-Reset': '30',
+          },
+        },
+      ),
+    );
+
+    await expect(
+      listAsaasCustomers({
+        apiKey: '$aact_hmlg_sub_key',
+        filters: {
+          externalReference: 'tenant:tenant123:customer:ref123',
+          limit: 1,
+        },
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 429,
+      code: 'asaas_rate_limit',
+      details: {
+        rateLimit: {
+          limit: '100',
+          remaining: '0',
+          resetSeconds: '30',
+        },
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('fetches the Pix QR Code payload for a created charge', async () => {

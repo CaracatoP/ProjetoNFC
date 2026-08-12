@@ -25,6 +25,7 @@ let Payment;
 let WebhookEvent;
 let subscribeToTenantUpdates;
 let encryptSecret;
+let envConfig;
 let mongoServer;
 
 describe('Asaas webhook routes', () => {
@@ -39,6 +40,7 @@ describe('Asaas webhook routes', () => {
     process.env.ADMIN_PASSWORD = 'admin123456';
     process.env.ADMIN_TOKEN_SECRET = 'test-admin-secret';
     process.env.PAYMENT_CREDENTIALS_ENCRYPTION_KEY = '12345678901234567890123456789012';
+    process.env.ASAAS_WEBHOOK_TOKEN = 'asaas-webhook-token';
     process.env.ASAAS_WEBHOOK_AUTH_TOKEN = 'asaas-webhook-token';
 
     ({ connectDatabase, disconnectDatabase } = await import('../config/database.js'));
@@ -49,12 +51,17 @@ describe('Asaas webhook routes', () => {
     ({ WebhookEvent } = await import('../models/WebhookEvent.js'));
     ({ subscribeToTenantUpdates } = await import('../services/tenantRealtimeService.js'));
     ({ encryptSecret } = await import('../utils/secretCrypto.js'));
+    ({ env: envConfig } = await import('../config/env.js'));
     ({ default: app } = await import('../app.js'));
 
     await connectDatabase();
-  });
+  }, 30000);
 
   beforeEach(async () => {
+    process.env.ASAAS_WEBHOOK_TOKEN = 'asaas-webhook-token';
+    process.env.ASAAS_WEBHOOK_AUTH_TOKEN = 'asaas-webhook-token';
+    envConfig.asaasWebhookAuthToken = 'asaas-webhook-token';
+    envConfig.paymentCredentialsEncryptionKey = '12345678901234567890123456789012';
     await seedDemoData({ reset: true });
     await Promise.all([Payment.deleteMany({}), WebhookEvent.deleteMany({})]);
     asaasServiceMock.getAsaasPayment.mockReset();
@@ -301,6 +308,174 @@ describe('Asaas webhook routes', () => {
     expect(paidEvents).toHaveLength(1);
     expect(asaasServiceMock.getAsaasPayment).toHaveBeenCalledTimes(1);
     expect(await WebhookEvent.countDocuments({ provider: 'asaas', eventId: 'evt_payment_received_duplicate' })).toBe(1);
+  });
+
+  it('keeps webhook effects idempotent when duplicate events arrive concurrently', async () => {
+    const { business, order } = await createAsaasOrderFixture();
+    const externalReference = `tenant:${business._id.toString()}:order:${order._id.toString()}`;
+
+    asaasServiceMock.getAsaasPayment.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => {
+            resolve({
+              id: 'pay_123',
+              status: 'RECEIVED',
+              value: 79.9,
+              externalReference,
+              confirmedDate: '2026-06-01T18:10:00.000Z',
+            });
+          }, 150);
+        }),
+    );
+
+    const [firstResponse, secondResponse] = await Promise.all([
+      request(app)
+        .post('/api/webhooks/asaas')
+        .set('asaas-access-token', 'asaas-webhook-token')
+        .send({
+          id: 'evt_payment_received_concurrent',
+          event: 'PAYMENT_RECEIVED',
+          payment: {
+            id: 'pay_123',
+            externalReference,
+          },
+        }),
+      request(app)
+        .post('/api/webhooks/asaas')
+        .set('asaas-access-token', 'asaas-webhook-token')
+        .send({
+          id: 'evt_payment_received_concurrent',
+          event: 'PAYMENT_RECEIVED',
+          payment: {
+            id: 'pay_123',
+            externalReference,
+          },
+        }),
+    ]);
+
+    const updatedOrder = await Order.findById(order._id).lean();
+    const paidEvents = updatedOrder.paymentEvents.filter((item) => item.type === 'payment_paid');
+
+    expect(firstResponse.status).toBe(204);
+    expect(secondResponse.status).toBe(204);
+    expect(updatedOrder.payment.status).toBe('paid');
+    expect(paidEvents).toHaveLength(1);
+    expect(asaasServiceMock.getAsaasPayment).toHaveBeenCalledTimes(1);
+    expect(await WebhookEvent.countDocuments({ provider: 'asaas', eventId: 'evt_payment_received_concurrent' })).toBe(1);
+    expect(await Payment.countDocuments({ provider: 'asaas', providerPaymentId: 'pay_123' })).toBe(1);
+  });
+
+  it('allows retrying a failed webhook event without duplicating the financial effect', async () => {
+    const { business, order } = await createAsaasOrderFixture();
+    const externalReference = `tenant:${business._id.toString()}:order:${order._id.toString()}`;
+
+    asaasServiceMock.getAsaasPayment
+      .mockRejectedValueOnce(new Error('Asaas temporariamente indisponivel'))
+      .mockResolvedValueOnce({
+        id: 'pay_123',
+        status: 'RECEIVED',
+        value: 79.9,
+        externalReference,
+        confirmedDate: '2026-06-01T18:10:00.000Z',
+      });
+
+    const firstResponse = await request(app)
+      .post('/api/webhooks/asaas')
+      .set('asaas-access-token', 'asaas-webhook-token')
+      .send({
+        id: 'evt_payment_retry_after_failure',
+        event: 'PAYMENT_RECEIVED',
+        payment: {
+          id: 'pay_123',
+          externalReference,
+        },
+      });
+
+    expect(firstResponse.status).toBe(500);
+    expect(await WebhookEvent.findOne({ eventId: 'evt_payment_retry_after_failure' }).lean()).toEqual(
+      expect.objectContaining({
+        status: 'failed',
+      }),
+    );
+
+    const secondResponse = await request(app)
+      .post('/api/webhooks/asaas')
+      .set('asaas-access-token', 'asaas-webhook-token')
+      .send({
+        id: 'evt_payment_retry_after_failure',
+        event: 'PAYMENT_RECEIVED',
+        payment: {
+          id: 'pay_123',
+          externalReference,
+        },
+      });
+
+    const updatedOrder = await Order.findById(order._id).lean();
+    const paidEvents = updatedOrder.paymentEvents.filter((item) => item.type === 'payment_paid');
+
+    expect(secondResponse.status).toBe(204);
+    expect(updatedOrder.payment.status).toBe('paid');
+    expect(paidEvents).toHaveLength(1);
+    expect(asaasServiceMock.getAsaasPayment).toHaveBeenCalledTimes(2);
+    expect(await WebhookEvent.findOne({ eventId: 'evt_payment_retry_after_failure' }).lean()).toEqual(
+      expect.objectContaining({
+        status: 'processed',
+      }),
+    );
+    expect(await Payment.countDocuments({ provider: 'asaas', providerPaymentId: 'pay_123' })).toBe(1);
+  });
+
+  it('does not let an older pending event downgrade an already paid payment', async () => {
+    const { business, order } = await createAsaasOrderFixture();
+    const externalReference = `tenant:${business._id.toString()}:order:${order._id.toString()}`;
+
+    asaasServiceMock.getAsaasPayment
+      .mockResolvedValueOnce({
+        id: 'pay_123',
+        status: 'RECEIVED',
+        value: 79.9,
+        externalReference,
+        confirmedDate: '2026-06-01T18:10:00.000Z',
+      })
+      .mockResolvedValueOnce({
+        id: 'pay_123',
+        status: 'PENDING',
+        value: 79.9,
+        externalReference,
+      });
+
+    const paidResponse = await request(app)
+      .post('/api/webhooks/asaas')
+      .set('asaas-access-token', 'asaas-webhook-token')
+      .send({
+        id: 'evt_payment_received_before_pending',
+        event: 'PAYMENT_RECEIVED',
+        payment: {
+          id: 'pay_123',
+          externalReference,
+        },
+      });
+    const pendingResponse = await request(app)
+      .post('/api/webhooks/asaas')
+      .set('asaas-access-token', 'asaas-webhook-token')
+      .send({
+        id: 'evt_payment_pending_late',
+        event: 'PAYMENT_CREATED',
+        payment: {
+          id: 'pay_123',
+          externalReference,
+        },
+      });
+
+    const updatedOrder = await Order.findById(order._id).lean();
+    const storedPayment = await Payment.findOne({ provider: 'asaas', providerPaymentId: 'pay_123' }).lean();
+
+    expect(paidResponse.status).toBe(204);
+    expect(pendingResponse.status).toBe(204);
+    expect(updatedOrder.payment.status).toBe('paid');
+    expect(storedPayment.status).toBe('paid');
+    expect(storedPayment.providerStatus).toBe('PENDING');
   });
 
   it('rejects cross-tenant updates when Asaas reports another tenant in externalReference', async () => {

@@ -1,34 +1,104 @@
 import { WebhookEvent } from '../models/WebhookEvent.js';
 
-export async function tryCreateWebhookEventRecord(payload) {
-  const existingRecord = await WebhookEvent.findOne({
-    provider: payload.provider,
-    eventId: payload.eventId,
-  });
+const WEBHOOK_PROCESSING_STALE_MS = 2 * 60 * 1000;
 
-  if (existingRecord) {
+function isProcessingStale(record, now = new Date()) {
+  if (!record || record.status !== 'processing') {
+    return false;
+  }
+
+  const updatedAt = record.updatedAt || record.createdAt;
+  const updatedAtMs = updatedAt ? new Date(updatedAt).getTime() : 0;
+
+  return !updatedAtMs || now.getTime() - updatedAtMs > WEBHOOK_PROCESSING_STALE_MS;
+}
+
+async function resolveExistingWebhookEventRecord(record) {
+  if (!record) {
     return {
       created: false,
-      record: existingRecord,
+      shouldProcess: false,
+      record: null,
     };
   }
 
+  if (['processed', 'ignored'].includes(record.status)) {
+    return {
+      created: false,
+      shouldProcess: false,
+      record,
+    };
+  }
+
+  if (record.status === 'failed' || isProcessingStale(record)) {
+    const acquired = await WebhookEvent.findOneAndUpdate(
+      {
+        _id: record._id,
+        status: record.status,
+        ...(record.status === 'processing'
+          ? { updatedAt: { $lte: new Date(Date.now() - WEBHOOK_PROCESSING_STALE_MS) } }
+          : {}),
+      },
+      {
+        status: 'processing',
+        errorCode: '',
+        errorMessage: '',
+        processedAt: null,
+      },
+      { new: true },
+    );
+
+    return {
+      created: false,
+      shouldProcess: Boolean(acquired),
+      record: acquired || record,
+    };
+  }
+
+  return {
+    created: false,
+    shouldProcess: false,
+    record,
+  };
+}
+
+export async function tryCreateWebhookEventRecord(payload) {
   try {
-    const record = await WebhookEvent.create(payload);
+    const result = await WebhookEvent.findOneAndUpdate(
+      {
+        provider: payload.provider,
+        eventId: payload.eventId,
+      },
+      {
+        $setOnInsert: payload,
+      },
+      {
+        new: true,
+        runValidators: true,
+        upsert: true,
+        setDefaultsOnInsert: true,
+        includeResultMetadata: true,
+      },
+    );
+    const record = result?.value || result;
+
+    if (result?.lastErrorObject?.updatedExisting) {
+      return resolveExistingWebhookEventRecord(record);
+    }
 
     return {
       created: true,
+      shouldProcess: true,
       record,
     };
   } catch (error) {
     if (error?.code === 11000) {
-      return {
-        created: false,
-        record: await WebhookEvent.findOne({
-          provider: payload.provider,
-          eventId: payload.eventId,
-        }),
-      };
+      const record = await WebhookEvent.findOne({
+        provider: payload.provider,
+        eventId: payload.eventId,
+      });
+
+      return resolveExistingWebhookEventRecord(record);
     }
 
     throw error;

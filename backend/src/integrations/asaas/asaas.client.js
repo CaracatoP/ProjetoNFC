@@ -57,6 +57,28 @@ function buildSafeLogContext({ method, path, operation, environment, status, dur
   };
 }
 
+function readHeader(headers, key) {
+  if (!headers || typeof headers.get !== 'function') {
+    return '';
+  }
+
+  return String(headers.get(key) || headers.get(key.toLowerCase()) || '').trim();
+}
+
+function readRateLimitDetails(headers) {
+  const limit = readHeader(headers, 'RateLimit-Limit');
+  const remaining = readHeader(headers, 'RateLimit-Remaining');
+  const reset = readHeader(headers, 'RateLimit-Reset');
+  const retryAfter = readHeader(headers, 'Retry-After');
+
+  return {
+    ...(limit ? { limit } : {}),
+    ...(remaining ? { remaining } : {}),
+    ...(reset ? { resetSeconds: reset } : {}),
+    ...(retryAfter ? { retryAfterSeconds: retryAfter } : {}),
+  };
+}
+
 export function createAsaasClient(options = {}) {
   const apiKey = resolveAsaasApiKey(options.apiKey);
   const config = getAsaasRuntimeConfig({ apiKey, requireApiKey: options.requireApiKey !== false });
@@ -100,7 +122,9 @@ export function createAsaasClient(options = {}) {
       );
 
       if (!response.ok) {
-        throw buildAsaasErrorFromResponse(response.status, payload);
+        throw buildAsaasErrorFromResponse(response.status, payload, {
+          rateLimit: readRateLimitDetails(response.headers),
+        });
       }
 
       return payload;

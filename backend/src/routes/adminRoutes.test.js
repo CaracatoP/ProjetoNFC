@@ -19,6 +19,7 @@ let AppointmentRequest;
 let Order;
 let subscribeToTenantUpdates;
 let decryptSecret;
+let envConfig;
 let mongoServer;
 let adminToken;
 
@@ -47,6 +48,7 @@ describe('Admin routes', () => {
     process.env.ADMIN_PASSWORD = 'admin123456';
     process.env.ADMIN_TOKEN_SECRET = 'test-admin-secret';
     process.env.AUTH_LOGIN_RATE_LIMIT_MAX = '100';
+    process.env.PAYMENT_CREDENTIALS_ENCRYPTION_KEY = '12345678901234567890123456789012';
 
     ({ connectDatabase, disconnectDatabase } = await import('../config/database.js'));
     ({ seedDemoData } = await import('../utils/seedDemoData.js'));
@@ -62,12 +64,14 @@ describe('Admin routes', () => {
     ({ Order } = await import('../models/Order.js'));
     ({ subscribeToTenantUpdates } = await import('../services/tenantRealtimeService.js'));
     ({ decryptSecret } = await import('../utils/secretCrypto.js'));
+    ({ env: envConfig } = await import('../config/env.js'));
     ({ default: app } = await import('../app.js'));
 
     await connectDatabase();
   });
 
   beforeEach(async () => {
+    envConfig.paymentCredentialsEncryptionKey = '12345678901234567890123456789012';
     await seedDemoData({ reset: true });
     await User.deleteMany({});
     const loginResponse = await request(app).post('/api/admin/auth/login').send({

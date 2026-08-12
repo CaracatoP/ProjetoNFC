@@ -67,10 +67,6 @@ import { buildPixPayload } from '../../../shared/utils/pix.js';
 import { publishTenantUpdated } from './tenantRealtimeService.js';
 import { createMercadoPagoCheckoutPreference } from './mercadoPagoService.js';
 import { getFinanceSettingsRecord } from '../repositories/systemSettingRepository.js';
-import {
-  findReusablePaymentCustomer,
-  upsertPaymentCustomerReference,
-} from '../repositories/paymentCustomerRepository.js';
 import { upsertPaymentByProviderPaymentId } from '../repositories/paymentRepository.js';
 import {
   getDeclaredHostedCheckoutProvider,
@@ -81,12 +77,12 @@ import { validatePaymentMethodForDeliveryType } from '../utils/paymentDeliveryVa
 import {
   buildAsaasExternalReference,
   buildAsaasSplitRules,
-  createAsaasCustomer,
   createAsaasPaymentCharge,
   getAsaasPixQrCode,
   mapAsaasPaymentStatus,
 } from './asaasService.js';
 import { resolveEffectiveAsaasSplitSettings } from './adminFinanceService.js';
+import { resolveOrCreateAsaasPaymentCustomer } from './paymentCustomerService.js';
 
 function toPlainRecord(value) {
   if (!value) {
@@ -651,6 +647,24 @@ function appendUniquePaymentEvents(existingEvents = [], nextEvents = []) {
   return mergedEvents;
 }
 
+function resolveNonRegressivePaymentStatus(currentStatus, incomingStatus) {
+  const current = normalizePaymentStatus(currentStatus, PAYMENT_STATUS.PENDING);
+  const incoming = normalizePaymentStatus(incomingStatus, current);
+
+  if (current === PAYMENT_STATUS.PAID && incoming !== PAYMENT_STATUS.PAID) {
+    return current;
+  }
+
+  if (
+    [PAYMENT_STATUS.FAILED, PAYMENT_STATUS.CANCELLED].includes(current) &&
+    incoming === PAYMENT_STATUS.PENDING
+  ) {
+    return current;
+  }
+
+  return incoming;
+}
+
 function buildAsaasWebhookPaymentPatch(
   existingOrder,
   asaasPayment,
@@ -659,7 +673,8 @@ function buildAsaasWebhookPaymentPatch(
 ) {
   const currentPayment = normalizeOrderPayment(existingOrder?.payment || {}, existingOrder?.total || 0);
   const currentPaymentEvents = normalizeOrderPaymentEvents(existingOrder?.paymentEvents || []);
-  const nextStatus = mapAsaasPaymentStatus(asaasPayment?.status);
+  const providerMappedStatus = mapAsaasPaymentStatus(asaasPayment?.status);
+  const nextStatus = resolveNonRegressivePaymentStatus(currentPayment.status, providerMappedStatus);
   const nextPayment = normalizeOrderPayment(
     {
       ...currentPayment,
@@ -683,7 +698,9 @@ function buildAsaasWebhookPaymentPatch(
   );
 
   const statusEventType =
-    nextStatus === PAYMENT_STATUS.PAID
+    nextStatus !== providerMappedStatus
+      ? ''
+      : nextStatus === PAYMENT_STATUS.PAID
       ? 'payment_paid'
       : nextStatus === PAYMENT_STATUS.FAILED
         ? 'payment_failed'
@@ -700,6 +717,8 @@ function buildAsaasWebhookPaymentPatch(
       occurredAt,
       meta: {
         externalReference: String(asaasPayment?.externalReference || '').trim(),
+        providerStatus: String(asaasPayment?.status || '').trim(),
+        mappedStatus: providerMappedStatus,
       },
     },
     ...(statusEventType
@@ -1019,34 +1038,22 @@ export async function createPublicOrder(slug, payload) {
       const customerName = String(payload.customerName || '').trim();
       const customerPhone = String(payload.customerPhone || '').trim();
       const customerEmail = String(payload.customerEmail || payload.email || '').trim();
-      const existingCustomerReference = await findReusablePaymentCustomer({
+      const customerDocument = String(
+        payload.customerDocument || payload.document || payload.cpfCnpj || '',
+      ).trim();
+      const customer = await resolveOrCreateAsaasPaymentCustomer({
         businessId: business._id,
-        provider: PAYMENT_PROVIDERS.ASAAS,
-        phone: customerPhone,
-        email: customerEmail,
-      });
-      const customer = existingCustomerReference?.providerCustomerId
-        ? { id: existingCustomerReference.providerCustomerId }
-        : await createAsaasCustomer({
-            apiKey: storedPaymentSettings.asaas.apiKeyEncrypted,
-            customer: {
-              name: customerName,
-              mobilePhone: customerPhone,
-              ...(customerEmail ? { email: customerEmail } : {}),
-            },
-          });
-
-      await upsertPaymentCustomerReference({
-        businessId: business._id,
-        provider: PAYMENT_PROVIDERS.ASAAS,
-        providerCustomerId: String(customer.id || '').trim(),
+        apiKey: storedPaymentSettings.asaas.apiKeyEncrypted,
         name: customerName,
         phone: customerPhone,
         email: customerEmail,
-        metadata: {
-          source: existingCustomerReference ? 'local_reference' : 'asaas_create_customer',
-        },
+        document: customerDocument,
       });
+      const providerCustomerId = String(customer.id || '').trim();
+
+      if (!providerCustomerId) {
+        throw new AppError('Asaas nao retornou um customer valido.', 502, 'asaas_customer_missing_id');
+      }
       const effectiveSplitSettings = resolveEffectiveAsaasSplitSettings(
         storedPaymentSettings,
         financeSettingsRecord?.value,
@@ -1063,7 +1070,7 @@ export async function createPublicOrder(slug, payload) {
       const charge = await createAsaasPaymentCharge({
         apiKey: storedPaymentSettings.asaas.apiKeyEncrypted,
         charge: {
-          customer: String(customer.id || '').trim(),
+          customer: providerCustomerId,
           billingType,
           value: total,
           dueDate: receivedAt.toISOString().slice(0, 10),
@@ -1077,7 +1084,7 @@ export async function createPublicOrder(slug, payload) {
         {
           ...payment,
           providerPaymentId: String(charge.id || '').trim(),
-          providerCustomerId: String(customer.id || '').trim(),
+          providerCustomerId,
           invoiceUrl: String(charge.invoiceUrl || '').trim(),
           bankSlipUrl: String(charge.bankSlipUrl || '').trim(),
           platformFeeAmount,
@@ -1252,6 +1259,21 @@ export async function syncAsaasOrderPaymentWebhook(
   );
 
   if (!nextPaymentPatch.hasChanged) {
+    await upsertPaymentByProviderPaymentId(
+      PAYMENT_PROVIDERS.ASAAS,
+      nextPaymentPatch.payment.providerPaymentId,
+      buildAsaasPaymentReferencePayload({
+        businessId,
+        orderId: id,
+        payment: nextPaymentPatch.payment,
+        providerPayment: asaasPayment,
+        providerStatus: asaasPayment?.status,
+        billingType: String(asaasPayment?.billingType || '').trim(),
+        externalReference: String(asaasPayment?.externalReference || '').trim(),
+        occurredAt,
+      }),
+    );
+
     return serializeOrderRecord(existing);
   }
 

@@ -115,6 +115,10 @@ export async function createAsaasSubaccount(payload, { rootApiKey } = {}) {
     id: String(response.id || '').trim(),
     walletId: String(response.walletId || '').trim(),
     apiKey: String(response.apiKey || '').trim(),
+    status: String(response.status || response.accountStatus || '').trim().toLowerCase(),
+    raw: {
+      object: String(response.object || '').trim(),
+    },
   };
 }
 
@@ -135,6 +139,27 @@ export async function createAsaasCustomer({ apiKey, customer }) {
     path: '/customers',
     body: customer,
     operation: 'create_customer',
+  });
+}
+
+export async function listAsaasCustomers({ apiKey, filters = {} }) {
+  const params = new URLSearchParams();
+
+  Object.entries(filters || {}).forEach(([key, value]) => {
+    const normalizedValue = String(value ?? '').trim();
+
+    if (normalizedValue) {
+      params.set(key, normalizedValue);
+    }
+  });
+
+  const query = params.toString();
+
+  return asaasRequest({
+    apiKey,
+    method: 'GET',
+    path: `/customers${query ? `?${query}` : ''}`,
+    operation: 'list_customers',
   });
 }
 

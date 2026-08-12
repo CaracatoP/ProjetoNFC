@@ -1441,26 +1441,206 @@ describe('DashboardHomePage', () => {
       );
     });
 
-    await user.type(screen.getByLabelText(/CPF ou CNPJ/i), '19131243000197');
+    expect(screen.getByRole('button', { name: /Subconta ja vinculada/i })).toBeDisabled();
+    expect(adminService.createAdminBusinessAsaasSubaccount).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it('creates an Asaas subaccount with company type and keeps provider errors visible', async () => {
+    const user = userEvent.setup();
+
+    adminService.fetchAdminBusinessFinanceSettings.mockResolvedValueOnce({
+      businessId: 'business-1',
+      businessName: 'Barbearia Estilo Vivo',
+      businessSlug: 'barbearia-estilo-vivo',
+      enabled: false,
+      provider: 'manual',
+      integrationStatus: 'configured',
+      tenantFinancialStatus: 'not_connected',
+      methods: {
+        pix: false,
+        creditCard: false,
+        debitCard: false,
+        cashOnPickup: true,
+        cashOnDelivery: true,
+      },
+      manualPixConfigured: false,
+      asaas: {
+        enabled: false,
+        connected: false,
+        hasApiKey: false,
+        walletId: '',
+        accountEmail: 'financeiro@cliente.local',
+        accountName: 'Barbearia Estilo Vivo',
+        status: 'not_connected',
+        subaccountId: '',
+      },
+      usesGlobalFee: true,
+      effectivePlatformFeePercent: 5,
+      canEnableSplit: false,
+      canEnableCheckout: true,
+      warnings: [],
+      splitPreview: {
+        globalPercent: 5,
+        tenantOverridePercent: null,
+        effectivePlatformFeePercent: 5,
+        platformPercent: 0,
+        tenantNetPercent: 100,
+        inheritsGlobal: true,
+        splitActive: false,
+        mode: 'global',
+      },
+      summary: {
+        providerLabel: 'Manual',
+        integrationLabel: 'Configurado',
+        tenantFinancialLabel: 'Nao conectada',
+        splitLabel: 'Desativado',
+        checkoutLabel: 'Desativado',
+      },
+      split: {
+        enabled: false,
+        inheritsGlobal: true,
+        platformFeePercent: 0,
+        effectivePlatformFeePercent: 5,
+        platformWalletConfigured: true,
+        defaultPlatformFeePercent: 5,
+        mode: 'percentage',
+      },
+    });
+    adminService.createAdminBusinessAsaasSubaccount
+      .mockRejectedValueOnce(
+        new ApiClientError(
+          'Selecione o tipo de empresa para criar a subconta Asaas.',
+          400,
+          [
+            {
+              field: 'companyType',
+              message: 'E necessario informar o tipo de empresa.',
+            },
+          ],
+          'SUBACCOUNT_PROVIDER_ERROR',
+        ),
+      )
+      .mockResolvedValueOnce({
+        businessId: 'business-1',
+        businessName: 'Barbearia Estilo Vivo',
+        businessSlug: 'barbearia-estilo-vivo',
+        enabled: true,
+        provider: 'asaas',
+        integrationStatus: 'configured',
+        tenantFinancialStatus: 'active',
+        methods: {
+          pix: true,
+          creditCard: false,
+          debitCard: false,
+          cashOnPickup: true,
+          cashOnDelivery: true,
+        },
+        manualPixConfigured: false,
+        asaas: {
+          enabled: true,
+          connected: true,
+          hasApiKey: true,
+          walletId: 'wallet_sub_created',
+          accountEmail: 'financeiro@cliente.local',
+          accountName: 'Barbearia Estilo Vivo',
+          companyType: 'MEI',
+          incomeValue: 25000,
+          document: '19131243000197',
+          mobilePhone: '5511991112233',
+          address: 'Avenida Paulista',
+          addressNumber: '100',
+          province: 'Centro',
+          postalCode: '01310930',
+          status: 'active',
+          subaccountId: 'subacc_created',
+          connectedAt: '2026-06-02T10:05:00.000Z',
+        },
+        usesGlobalFee: true,
+        effectivePlatformFeePercent: 5,
+        canEnableSplit: true,
+        canEnableCheckout: true,
+        warnings: [],
+        splitPreview: {
+          globalPercent: 5,
+          tenantOverridePercent: null,
+          effectivePlatformFeePercent: 5,
+          platformPercent: 5,
+          tenantNetPercent: 95,
+          inheritsGlobal: true,
+          splitActive: true,
+          mode: 'global',
+        },
+        summary: {
+          providerLabel: 'Asaas',
+          integrationLabel: 'Configurado',
+          tenantFinancialLabel: 'Ativo',
+          splitLabel: 'Ativo',
+          checkoutLabel: 'Ativo',
+        },
+        split: {
+          enabled: true,
+          inheritsGlobal: true,
+          platformFeePercent: 0,
+          effectivePlatformFeePercent: 5,
+          platformWalletConfigured: true,
+          defaultPlatformFeePercent: 5,
+          mode: 'percentage',
+        },
+      });
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Financeiro/i }));
+    expect(await screen.findByText('Criar Subconta Asaas')).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText(/CNPJ/i));
+    await user.type(screen.getByLabelText(/CNPJ/i), '19131243000197');
+    await user.clear(screen.getByLabelText(/Faturamento mensal/i));
+    await user.type(screen.getByLabelText(/Faturamento mensal/i), '25000');
+    await user.clear(screen.getByLabelText(/Celular/i));
     await user.type(screen.getByLabelText(/Celular/i), '5511991112233');
+    await user.clear(screen.getByLabelText(/CEP/i));
     await user.type(screen.getByLabelText(/CEP/i), '01310930');
+    await user.type(screen.getByLabelText(/Logradouro/i), 'Avenida Paulista');
     await user.type(screen.getByLabelText(/^Numero$/i), '100');
     await user.type(screen.getByLabelText(/Bairro \/ provincia/i), 'Centro');
+
+    await user.click(screen.getByRole('button', { name: /Criar subconta/i }));
+
+    expect(screen.getAllByText('Selecione o tipo de empresa.').length).toBeGreaterThan(0);
+    expect(adminService.createAdminBusinessAsaasSubaccount).not.toHaveBeenCalled();
+
+    await user.selectOptions(screen.getByLabelText(/Tipo de empresa/i), 'MEI');
+    await user.click(screen.getByRole('button', { name: /Criar subconta/i }));
+
+    expect((await screen.findAllByText(/Selecione o tipo de empresa para criar a subconta Asaas/i)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/E necessario informar o tipo de empresa/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Pronto para provisionar a subconta.')).not.toBeInTheDocument();
+
     await user.click(screen.getByRole('button', { name: /Criar subconta/i }));
 
     await waitFor(() => {
-      expect(adminService.createAdminBusinessAsaasSubaccount).toHaveBeenCalledWith(
+      expect(adminService.createAdminBusinessAsaasSubaccount).toHaveBeenLastCalledWith(
         'admin-token',
         'business-1',
         expect.objectContaining({
           cpfCnpj: '19131243000197',
+          companyType: 'MEI',
+          incomeValue: '25000',
+          address: 'Avenida Paulista',
         }),
       );
     });
-
     expect(await screen.findByText(/Subconta Asaas criada e conectada ao tenant/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Mostrar configuracoes avancadas/i }));
     expect(await screen.findByDisplayValue('wallet_sub_created')).toBeInTheDocument();
-    confirmSpy.mockRestore();
+    expect(screen.getByRole('button', { name: /Subconta ja vinculada/i })).toBeDisabled();
   });
 
   it('lets level 0 reset the analytics baseline from the admin analytics view', async () => {
