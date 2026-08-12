@@ -261,7 +261,7 @@ function buildCheckoutValidationErrors(checkout, cartItems, checkoutPaymentMetho
   }
 
   if (customerPhone.length < 8) {
-    errors.customerPhone = 'Informe seu telefone.';
+    errors.customerPhone = customerPhone ? 'Informe um telefone valido.' : 'Informe seu telefone.';
   }
 
   if (!checkout.deliveryType) {
@@ -917,8 +917,13 @@ export function BusinessCatalogSection({
                       {feedback ? <p className="site-inline-feedback catalog-checkout__feedback">{feedback}</p> : null}
                       {Object.keys(checkoutErrors).length ? (
                         <div className="catalog-checkout__validation-summary" role="alert" tabIndex="-1">
-                          <strong>Preencha os campos obrigatorios para continuar.</strong>
-                          <span>Revise os campos destacados antes de finalizar o pedido.</span>
+                          <strong>Revise os campos destacados antes de continuar.</strong>
+                          <span>Corrija os pontos abaixo para finalizar o pedido com seguranca.</span>
+                          <ul>
+                            {Object.values(checkoutErrors).map((message) => (
+                              <li key={message}>{message}</li>
+                            ))}
+                          </ul>
                         </div>
                       ) : null}
 

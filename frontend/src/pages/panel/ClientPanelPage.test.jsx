@@ -375,6 +375,35 @@ describe('ClientPanelPage', () => {
     expect(clientPanelService.fetchClientPanelProducts).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the client sidebar compact without the duplicated open site action', async () => {
+    const logout = vi.fn();
+    const user = userEvent.setup();
+    useAuth.mockReturnValue(buildOwnerAuth({ logout }));
+
+    render(
+      <MemoryRouter>
+        <ClientPanelPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Visao geral' })).toBeInTheDocument();
+
+    const navigation = screen.getByRole('navigation', { name: /Navegacao do painel do cliente/i });
+    const sidebar = navigation.closest('aside');
+
+    expect(sidebar).toBeInTheDocument();
+    expect(within(sidebar).queryByRole('link', { name: /Abrir site/i })).not.toBeInTheDocument();
+    const planSummary = within(sidebar).getByText('Plano').closest('.client-panel-sidebar__plan');
+    expect(planSummary).toBeInTheDocument();
+    expect(planSummary).toHaveTextContent('Premium');
+    expect(planSummary).toHaveTextContent('Pago');
+
+    await user.click(within(sidebar).getByRole('button', { name: /Sair/i }));
+    expect(logout).toHaveBeenCalledTimes(1);
+
+    expect(screen.getByRole('link', { name: /Ver site/i })).toBeInTheDocument();
+  });
+
   it('saves basic business settings from the dedicated settings view', async () => {
     const user = userEvent.setup();
     useAuth.mockReturnValue(buildOwnerAuth());

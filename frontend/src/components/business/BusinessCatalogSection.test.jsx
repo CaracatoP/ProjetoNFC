@@ -193,10 +193,10 @@ describe('BusinessCatalogSection', () => {
     await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
     await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
-    expect(screen.getByText('Preencha os campos obrigatorios para continuar.')).toBeInTheDocument();
-    expect(screen.getByText('Informe seu nome.')).toBeInTheDocument();
-    expect(screen.getByText('Informe seu telefone.')).toBeInTheDocument();
-    expect(screen.getByText('Escolha entrega ou retirada.')).toBeInTheDocument();
+    expect(screen.getByText('Revise os campos destacados antes de continuar.')).toBeInTheDocument();
+    expect(screen.getAllByText('Informe seu nome.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Informe seu telefone.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Escolha entrega ou retirada.').length).toBeGreaterThan(0);
     expect(screen.getByLabelText('Nome')).toHaveAttribute('aria-invalid', 'true');
     await waitFor(() => {
       expect(screen.getByLabelText('Nome')).toHaveFocus();
@@ -234,9 +234,9 @@ describe('BusinessCatalogSection', () => {
     await user.click(screen.getByRole('button', { name: 'Entrega' }));
     await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
-    expect(screen.getByText('Preencha os campos obrigatorios para continuar.')).toBeInTheDocument();
-    expect(screen.getByText('Informe o endereco para entrega.')).toBeInTheDocument();
-    expect(screen.getByText('Escolha uma forma de pagamento.')).toBeInTheDocument();
+    expect(screen.getByText('Revise os campos destacados antes de continuar.')).toBeInTheDocument();
+    expect(screen.getAllByText('Informe o endereco para entrega.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Escolha uma forma de pagamento.').length).toBeGreaterThan(0);
     expect(screen.getByLabelText('Endereco')).toHaveAttribute('aria-invalid', 'true');
     expect(onSubmitOrder).not.toHaveBeenCalled();
 
@@ -245,7 +245,47 @@ describe('BusinessCatalogSection', () => {
 
     await user.click(screen.getByRole('button', { name: /Pix/i }));
     await waitFor(() => {
-      expect(screen.queryByText('Preencha os campos obrigatorios para continuar.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Revise os campos destacados antes de continuar.')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows a specific visual error for an invalid phone and keeps the request blocked', async () => {
+    const onSubmitOrder = vi.fn().mockResolvedValue({ status: 'received' });
+    const user = userEvent.setup();
+
+    render(
+      <BusinessCatalogSection
+        business={businessFixture}
+        tenantSlug="barbearia-estilo-vivo"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={onSubmitOrder}
+      />,
+    );
+
+    const catalogCard = screen.getByText('Pomada modeladora').closest('.catalog-card');
+    await user.click(within(catalogCard).getByRole('button', { name: 'Adicionar' }));
+    await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
+    await user.type(screen.getByLabelText('Nome'), 'Carlos');
+    await user.type(screen.getByLabelText('Telefone'), '12');
+    await user.click(screen.getByRole('button', { name: 'Retirada' }));
+    await user.click(screen.getByRole('button', { name: /Pix/i }));
+    await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
+
+    expect(screen.getByText('Revise os campos destacados antes de continuar.')).toBeInTheDocument();
+    expect(screen.getAllByText('Informe um telefone valido.').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Telefone')).toHaveAttribute('aria-invalid', 'true');
+    await waitFor(() => {
+      expect(screen.getByLabelText('Telefone')).toHaveFocus();
+    });
+    expect(onSubmitOrder).not.toHaveBeenCalled();
+
+    await user.clear(screen.getByLabelText('Telefone'));
+    await user.type(screen.getByLabelText('Telefone'), '11987654321');
+
+    await waitFor(() => {
+      expect(screen.queryByText('Informe um telefone valido.')).not.toBeInTheDocument();
     });
   });
 

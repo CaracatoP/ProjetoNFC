@@ -412,6 +412,62 @@ describe('TenantModuleManagementSection', () => {
     });
   });
 
+  it('keeps stock filters separated from the product list when rendering many products', async () => {
+    const user = userEvent.setup();
+    const products = Array.from({ length: 18 }, (_, index) => ({
+      id: `stock-product-${index + 1}`,
+      name: `Produto estoque ${index + 1}`,
+      category: 'Carnes',
+      price: 20 + index,
+      image: '',
+      measurementUnit: 'unit',
+      description: '',
+      isAvailable: index % 5 !== 0,
+      inventory: {
+        enabled: index % 3 !== 0,
+        quantity: index % 4 === 0 ? 0 : index + 1,
+        minimumQuantity: 3,
+        unit: 'unit',
+        notes: '',
+      },
+      active: true,
+    }));
+
+    render(
+      <TenantModuleManagementSection
+        draft={buildDraft({
+          modulesData: {
+            professionals: [],
+            appointmentServices: [],
+            appointmentRequests: [],
+            orders: [],
+            products,
+          },
+        })}
+        onDraftChange={vi.fn()}
+        moduleActions={{ updateProduct: vi.fn() }}
+        mode="client"
+        permissions={{
+          canViewCatalog: true,
+          canEditCatalog: true,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Estoque' }));
+    await user.click(screen.getByRole('button', { name: 'Todos' }));
+
+    const filterBar = screen.getByRole('tablist', { name: 'Filtros rapidos de estoque' });
+    const stockList = screen.getByText('Produto estoque 18').closest('.admin-repeater-list');
+
+    expect(within(filterBar).getByRole('button', { name: 'Todos' })).toBeInTheDocument();
+    expect(within(filterBar).getByRole('button', { name: 'Com estoque' })).toBeInTheDocument();
+    expect(within(filterBar).getByRole('button', { name: 'Baixo estoque' })).toBeInTheDocument();
+    expect(within(filterBar).getByRole('button', { name: 'Sem estoque' })).toBeInTheDocument();
+    expect(stockList).toBeInTheDocument();
+    expect(Boolean(filterBar.compareDocumentPosition(stockList) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  });
+
   it('lets client mode collapse existing catalog products and order status groups', async () => {
     const user = userEvent.setup();
 

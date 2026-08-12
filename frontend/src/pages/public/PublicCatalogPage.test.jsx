@@ -1,10 +1,11 @@
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TenantProvider } from '@/context/TenantContext.jsx';
 import { PublicCatalogPage } from './PublicCatalogPage.jsx';
 import * as publicSiteService from '@/services/publicSiteService.js';
 import * as analyticsService from '@/services/analyticsService.js';
+import * as tenantRealtimeService from '@/services/tenantRealtimeService.js';
 
 vi.mock('@/services/publicSiteService.js', () => ({
   getPublicSiteBySlug: vi.fn(),
@@ -15,6 +16,9 @@ vi.mock('@/services/publicSiteService.js', () => ({
 }));
 vi.mock('@/services/analyticsService.js', () => ({
   trackEvent: vi.fn(),
+}));
+vi.mock('@/services/tenantRealtimeService.js', () => ({
+  subscribeToTenantUpdates: vi.fn(),
 }));
 
 const baseFixture = {
@@ -86,11 +90,19 @@ const baseFixture = {
 };
 
 describe('PublicCatalogPage', () => {
+  let realtimeCallbacks;
+
   beforeEach(() => {
     publicSiteService.getPublicSiteBySlug.mockReset();
     publicSiteService.createPublicOrder?.mockReset();
     publicSiteService.createPublicOrder?.mockResolvedValue({ status: 'received' });
+    publicSiteService.invalidatePublicSiteCache?.mockReset();
     analyticsService.trackEvent.mockReset();
+    tenantRealtimeService.subscribeToTenantUpdates.mockReset();
+    tenantRealtimeService.subscribeToTenantUpdates.mockImplementation((_target, callbacks = {}) => {
+      realtimeCallbacks = callbacks;
+      return vi.fn();
+    });
   });
 
   it('shows a friendly unavailable state when the catalog modules are disabled', async () => {
@@ -191,5 +203,95 @@ describe('PublicCatalogPage', () => {
     expect(await screen.findByRole('heading', { name: 'Acougue Central' })).toBeInTheDocument();
     await screen.findByRole('button', { name: /Voltar para a pagina inicial/i });
     expect(analyticsService.trackEvent).not.toHaveBeenCalled();
+  });
+
+  it('reloads the dedicated catalog immediately when a product availability update arrives for the same tenant', async () => {
+    publicSiteService.getPublicSiteBySlug
+      .mockResolvedValueOnce(baseFixture)
+      .mockResolvedValueOnce({
+        ...baseFixture,
+        modulesData: {
+          products: [
+            {
+              ...baseFixture.modulesData.products[0],
+              isAvailable: false,
+            },
+          ],
+        },
+      });
+
+    render(
+      <TenantProvider>
+        <MemoryRouter initialEntries={['/site/acougue-central/catalog']}>
+          <Routes>
+            <Route path="/site/:slug/catalog" element={<PublicCatalogPage />} />
+          </Routes>
+        </MemoryRouter>
+      </TenantProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Acougue Central' })).toBeInTheDocument();
+    expect(tenantRealtimeService.subscribeToTenantUpdates).toHaveBeenCalledWith(
+      { businessId: 'business-1' },
+      expect.any(Object),
+    );
+
+    const productCard = screen.getByText('Picanha').closest('.catalog-card');
+    expect(within(productCard).getByRole('button', { name: 'Adicionar' })).toBeEnabled();
+
+    await act(async () => {
+      realtimeCallbacks?.onTenantUpdated?.({
+        businessId: 'business-1',
+        slug: 'acougue-central',
+        kind: 'product_updated',
+        operation: 'updated',
+      });
+    });
+
+    expect(await screen.findByRole('button', { name: 'Indisponivel' })).toBeDisabled();
+    expect(screen.getAllByText('Indisponivel').length).toBeGreaterThan(0);
+    expect(publicSiteService.invalidatePublicSiteCache).toHaveBeenCalledWith(
+      expect.objectContaining({
+        slug: 'acougue-central',
+      }),
+    );
+    await waitFor(() => {
+      expect(publicSiteService.getPublicSiteBySlug.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+    expect(publicSiteService.getPublicSiteBySlug).toHaveBeenLastCalledWith(
+      'acougue-central',
+      expect.objectContaining({
+        bypassCache: true,
+        cacheBust: expect.any(String),
+      }),
+    );
+  });
+
+  it('ignores realtime events that do not affect the dedicated catalog payload', async () => {
+    publicSiteService.getPublicSiteBySlug.mockResolvedValue(baseFixture);
+
+    render(
+      <TenantProvider>
+        <MemoryRouter initialEntries={['/site/acougue-central/catalog']}>
+          <Routes>
+            <Route path="/site/:slug/catalog" element={<PublicCatalogPage />} />
+          </Routes>
+        </MemoryRouter>
+      </TenantProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Acougue Central' })).toBeInTheDocument();
+
+    await act(async () => {
+      realtimeCallbacks?.onTenantUpdated?.({
+        businessId: 'business-1',
+        slug: 'acougue-central',
+        kind: 'order_created',
+        operation: 'created',
+      });
+    });
+
+    expect(publicSiteService.invalidatePublicSiteCache).not.toHaveBeenCalled();
+    expect(publicSiteService.getPublicSiteBySlug).toHaveBeenCalledTimes(1);
   });
 });

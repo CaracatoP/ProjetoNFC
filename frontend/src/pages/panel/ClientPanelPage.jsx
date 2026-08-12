@@ -1933,7 +1933,7 @@ export function ClientPanelPage() {
               </div>
             </div>
 
-            <nav aria-label="Navegacao do painel do cliente">
+            <nav className="client-panel-sidebar__navigation" aria-label="Navegacao do painel do cliente">
               {navigationGroups.map((group) => (
                 <div key={group.id} className="client-panel-sidebar__group">
                   <span className="client-panel-sidebar__group-title">{group.label}</span>
@@ -1957,17 +1957,21 @@ export function ClientPanelPage() {
             </nav>
 
             <div className="client-panel-sidebar__footer">
-              <div>
-                <strong>{subscription?.plan?.name || subscription?.plan?.code || 'Plano ativo'}</strong>
-                <span>{BILLING_ACCESS_LABELS[access?.billingStatus] || access?.billingStatus || 'Pago'}</span>
+              <div className="client-panel-sidebar__plan">
+                <span>Plano</span>
+                <strong>
+                  {subscription?.plan?.name || subscription?.plan?.code || 'Plano ativo'}
+                  <small aria-hidden="true"> - </small>
+                  {BILLING_ACCESS_LABELS[access?.billingStatus] || access?.billingStatus || 'Pago'}
+                </strong>
               </div>
               <div className="client-panel-sidebar__footer-actions">
-                {publicUrl ? (
-                  <Button variant="secondary" href={publicUrl} target="_blank" rel="noreferrer">
-                    Abrir site
-                  </Button>
-                ) : null}
-                <Button variant="secondary" onClick={logout}>
+                <Button variant="ghost" className="client-panel-sidebar__logout" onClick={logout}>
+                  <svg aria-hidden="true" viewBox="0 0 20 20" focusable="false">
+                    <path d="M7.5 4.5H5.75A1.75 1.75 0 0 0 4 6.25v7.5c0 .97.78 1.75 1.75 1.75H7.5" />
+                    <path d="M11.5 6.5 15 10l-3.5 3.5" />
+                    <path d="M8 10h7" />
+                  </svg>
                   Sair
                 </Button>
               </div>

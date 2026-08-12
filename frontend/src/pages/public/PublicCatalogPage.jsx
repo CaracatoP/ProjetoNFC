@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { TENANT_REALTIME_KINDS } from '@shared/constants/index.js';
 import { buildBusinessSegmentState } from '@shared/utils/segments.js';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { BusinessCatalogSection } from '@/components/business/BusinessCatalogSection.jsx';
@@ -8,9 +9,23 @@ import { Card } from '@/components/common/Card.jsx';
 import { PublicSiteLayout } from '@/components/layout/PublicSiteLayout.jsx';
 import { useAnalytics } from '@/hooks/useAnalytics.js';
 import { useBusinessSite } from '@/hooks/useBusinessSite.js';
-import { createPublicOrder } from '@/services/publicSiteService.js';
+import {
+  createPublicOrder,
+  invalidatePublicSiteCache,
+} from '@/services/publicSiteService.js';
+import { subscribeToTenantUpdates } from '@/services/tenantRealtimeService.js';
 import { useTenantTheme } from '@/hooks/useTenantTheme.js';
 import { useTenant } from '@/context/TenantContext.jsx';
+
+const PUBLIC_CATALOG_REFRESH_KINDS = new Set([
+  TENANT_REALTIME_KINDS.TENANT_CREATED,
+  TENANT_REALTIME_KINDS.TENANT_UPDATED,
+  TENANT_REALTIME_KINDS.TENANT_STATUS_UPDATED,
+  TENANT_REALTIME_KINDS.TENANT_DELETED,
+  TENANT_REALTIME_KINDS.PRODUCT_CREATED,
+  TENANT_REALTIME_KINDS.PRODUCT_UPDATED,
+  TENANT_REALTIME_KINDS.PRODUCT_DELETED,
+]);
 
 function TenantLoadingScreen() {
   return (
@@ -75,7 +90,7 @@ export function PublicCatalogPage() {
       previewToken: params.get('previewToken') || '',
     };
   }, [location.search]);
-  const { status, data: site, error } = useBusinessSite(slug, previewQuery);
+  const { status, data: site, error, reload } = useBusinessSite(slug, previewQuery);
   const { trackAction, trackPageView } = useAnalytics(site);
   const trackedSlugRef = useRef('');
   const segmentState = useMemo(() => buildBusinessSegmentState(site?.business || {}), [site?.business]);
@@ -97,6 +112,56 @@ export function PublicCatalogPage() {
 
     document.title = `${site.business.name} | Catalogo`;
   }, [setSite, site, trackPageView]);
+
+  useEffect(() => {
+    const subscriptionTarget = site?.business?.id
+      ? { businessId: site.business.id }
+      : slug
+        ? { slug }
+        : null;
+
+    if (!subscriptionTarget) {
+      return undefined;
+    }
+
+    return subscribeToTenantUpdates(subscriptionTarget, {
+      onTenantUpdated(payload) {
+        if (payload?.kind && !PUBLIC_CATALOG_REFRESH_KINDS.has(payload.kind)) {
+          return;
+        }
+
+        invalidatePublicSiteCache({
+          slug,
+          host: window.location.host,
+          domains: payload?.domains,
+          previousDomains: payload?.previousDomains,
+          previousSlug: payload?.previousSlug,
+        });
+        invalidatePublicSiteCache({
+          slug: payload?.slug,
+          previousSlug: payload?.previousSlug,
+          domains: payload?.domains,
+          previousDomains: payload?.previousDomains,
+        });
+
+        if (previewQuery.preview) {
+          return;
+        }
+
+        if (payload?.slug && payload.slug !== slug) {
+          navigate(`/site/${payload.slug}/catalog${location.search || ''}`, { replace: true });
+          return;
+        }
+
+        reload({
+          preview: previewQuery.preview,
+          bypassCache: true,
+          cacheBust: String(Date.now()),
+          previewToken: previewQuery.previewToken,
+        });
+      },
+    });
+  }, [location.search, navigate, previewQuery.preview, previewQuery.previewToken, reload, site?.business?.id, slug]);
 
   async function handleOrder(payload) {
     if (!site?.business?.slug) {
