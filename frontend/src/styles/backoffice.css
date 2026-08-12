@@ -1,69 +1,73 @@
 .app-shell,
 .dashboard-shell {
-  --backoffice-bg: #eaedf2;
-  --backoffice-surface: #f5f7f9;
-  --backoffice-surface-muted: #eef2f5;
-  --backoffice-surface-soft: #e7ecf1;
-  --backoffice-surface-hover: #e1e7ee;
-  --backoffice-sidebar: #27384d;
-  --backoffice-sidebar-border: rgba(255, 255, 255, 0.08);
-  --backoffice-border: #d8dee6;
-  --backoffice-border-strong: #cad2dc;
-  --backoffice-text: #243044;
-  --backoffice-text-muted: #6b778c;
-  --backoffice-primary: #4773d6;
-  --backoffice-primary-strong: #4068c5;
-  --backoffice-primary-soft: rgba(71, 115, 214, 0.12);
-  --backoffice-success: #4a7a63;
-  --backoffice-success-soft: rgba(74, 122, 99, 0.12);
-  --backoffice-warning: #a8792f;
-  --backoffice-warning-soft: rgba(168, 121, 47, 0.13);
-  --backoffice-danger: #a45c64;
-  --backoffice-danger-soft: rgba(164, 92, 100, 0.12);
-  --backoffice-info: #456fd1;
-  --backoffice-info-soft: rgba(69, 111, 209, 0.12);
-  --backoffice-shadow: 0 1px 1px rgba(36, 48, 68, 0.03);
+  --backoffice-bg: #0d1117;
+  --backoffice-surface: #161b22;
+  --backoffice-surface-muted: #1c222b;
+  --backoffice-surface-soft: #202731;
+  --backoffice-surface-hover: #252d38;
+  --backoffice-sidebar: #111827;
+  --backoffice-sidebar-border: rgba(148, 163, 184, 0.14);
+  --backoffice-border: #2a3340;
+  --backoffice-border-strong: #344050;
+  --backoffice-text: #eef4fb;
+  --backoffice-text-muted: #97a6ba;
+  --backoffice-primary: #4f7df3;
+  --backoffice-primary-hover: #628cf5;
+  --backoffice-primary-strong: #5b82f1;
+  --backoffice-primary-soft: rgba(79, 125, 243, 0.16);
+  --backoffice-success: #58a67b;
+  --backoffice-success-soft: rgba(88, 166, 123, 0.14);
+  --backoffice-warning: #cb9949;
+  --backoffice-warning-soft: rgba(203, 153, 73, 0.15);
+  --backoffice-danger: #cf7783;
+  --backoffice-danger-soft: rgba(207, 119, 131, 0.14);
+  --backoffice-info: #6a90f5;
+  --backoffice-info-soft: rgba(106, 144, 245, 0.15);
+  --backoffice-input: #111820;
+  --backoffice-overlay: rgba(3, 7, 13, 0.74);
+  --backoffice-shadow: none;
   color: var(--backoffice-text);
 }
 
 .app-shell.dashboard-shell.client-panel-shell {
-  --backoffice-bg: #e8ecf1;
-  --backoffice-surface: #f4f6f8;
-  --backoffice-surface-muted: #edf1f4;
-  --backoffice-surface-soft: #e6ebf0;
-  --backoffice-surface-hover: #dfe5ec;
-  --backoffice-sidebar: #2a3b50;
-  --backoffice-sidebar-border: rgba(226, 232, 240, 0.14);
-  --backoffice-border: #d4dae2;
-  --backoffice-border-strong: #c7d0da;
-  --backoffice-text: #243044;
-  --backoffice-text-muted: #68758a;
-  --backoffice-primary: #456fd1;
-  --backoffice-primary-strong: #3d63bd;
-  --backoffice-primary-soft: rgba(69, 111, 209, 0.11);
-  --backoffice-success: #487660;
-  --backoffice-success-soft: rgba(72, 118, 96, 0.12);
-  --backoffice-warning: #a47530;
-  --backoffice-warning-soft: rgba(164, 117, 48, 0.13);
-  --backoffice-danger: #9f5b63;
-  --backoffice-danger-soft: rgba(159, 91, 99, 0.12);
-  --backoffice-info: #456fd1;
-  --backoffice-info-soft: rgba(69, 104, 214, 0.12);
-  --backoffice-shadow: 0 1px 1px rgba(36, 50, 71, 0.03);
+  --backoffice-bg: #0b0f14;
+  --backoffice-surface: #151a21;
+  --backoffice-surface-muted: #1b212a;
+  --backoffice-surface-soft: #202731;
+  --backoffice-surface-hover: #26303b;
+  --backoffice-sidebar: #151b25;
+  --backoffice-sidebar-border: rgba(148, 163, 184, 0.18);
+  --backoffice-border: #293341;
+  --backoffice-border-strong: #344253;
+  --backoffice-text: #f1f5f9;
+  --backoffice-text-muted: #95a4b7;
+  --backoffice-primary: #4f7df3;
+  --backoffice-primary-hover: #648ef6;
+  --backoffice-primary-strong: #5b82f1;
+  --backoffice-primary-soft: rgba(79, 125, 243, 0.18);
+  --backoffice-success: #5aac81;
+  --backoffice-success-soft: rgba(90, 172, 129, 0.14);
+  --backoffice-warning: #d0a258;
+  --backoffice-warning-soft: rgba(208, 162, 88, 0.16);
+  --backoffice-danger: #d27a86;
+  --backoffice-danger-soft: rgba(210, 122, 134, 0.15);
+  --backoffice-info: #7296f6;
+  --backoffice-info-soft: rgba(114, 150, 246, 0.16);
+  --backoffice-input: #10171f;
+  --backoffice-overlay: rgba(2, 6, 12, 0.78);
+  --backoffice-shadow: none;
   --client-panel-sidebar-text: #eff4fb;
   --client-panel-sidebar-muted: rgba(226, 232, 240, 0.72);
   --client-panel-sidebar-hover: rgba(148, 163, 184, 0.12);
-  --client-panel-sidebar-active: rgba(125, 158, 224, 0.18);
-  --client-panel-sidebar-accent: rgba(158, 185, 236, 0.92);
-  --client-panel-surface-accent: rgba(69, 111, 209, 0.05);
-  --client-panel-surface-accent-strong: rgba(69, 111, 209, 0.09);
-  background: linear-gradient(180deg, #eaedf2 0%, #e6eaf0 100%);
+  --client-panel-sidebar-active: rgba(79, 125, 243, 0.16);
+  --client-panel-sidebar-accent: rgba(111, 149, 246, 0.96);
+  --client-panel-surface-accent: rgba(79, 125, 243, 0.08);
+  --client-panel-surface-accent-strong: rgba(79, 125, 243, 0.14);
+  background: var(--backoffice-bg);
 }
 
 .app-shell {
-  background:
-    radial-gradient(circle at top left, rgba(71, 115, 214, 0.05), transparent 22%),
-    linear-gradient(180deg, #edf1f5, #e7ebf0);
+  background: var(--backoffice-bg);
 }
 
 .dashboard-shell {
@@ -99,6 +103,7 @@
   height: 40px;
   border-radius: 10px;
   border-color: var(--backoffice-border);
+  background: var(--backoffice-surface-soft);
 }
 
 .app-shell__topbar .app-shell__brand-copy strong {
@@ -148,13 +153,13 @@
 .dashboard-shell .button--primary {
   border-color: var(--backoffice-primary);
   background: var(--backoffice-primary);
-  color: #ffffff;
+  color: #f8fbff;
 }
 
 .dashboard-shell .button--primary:hover,
 .dashboard-shell .button--primary:focus-visible {
-  border-color: var(--backoffice-primary-strong);
-  background: var(--backoffice-primary-strong);
+  border-color: var(--backoffice-primary-hover);
+  background: var(--backoffice-primary-hover);
 }
 
 .dashboard-shell .button--secondary {
@@ -183,8 +188,8 @@
 }
 
 .dashboard-shell .button--danger-tone {
-  border-color: rgba(185, 28, 28, 0.18);
-  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(207, 119, 131, 0.22);
+  background: var(--backoffice-danger-soft);
   color: var(--backoffice-danger);
 }
 
@@ -194,7 +199,7 @@
   min-height: 40px;
   border-radius: 8px;
   border: 1px solid var(--backoffice-border);
-  background: var(--backoffice-surface-muted);
+  background: var(--backoffice-input);
   color: var(--backoffice-text);
 }
 
@@ -204,7 +209,7 @@
 
 .dashboard-shell input::placeholder,
 .dashboard-shell textarea::placeholder {
-  color: #7a8799;
+  color: #748396;
 }
 
 .dashboard-shell input:focus-visible,
@@ -213,8 +218,8 @@
 .dashboard-shell .client-panel-sidebar__nav-button:focus-visible,
 .dashboard-shell .client-panel-mobile-nav__button:focus-visible {
   outline: none;
-  border-color: rgba(71, 115, 214, 0.42);
-  box-shadow: 0 0 0 2px rgba(71, 115, 214, 0.1);
+  border-color: rgba(79, 125, 243, 0.5);
+  box-shadow: 0 0 0 2px rgba(79, 125, 243, 0.16);
 }
 
 .dashboard-shell .admin-field {
@@ -262,21 +267,21 @@
 }
 
 .dashboard-shell .admin-status-banner--success {
-  border-color: rgba(22, 163, 74, 0.18);
-  background: rgba(22, 163, 74, 0.08);
-  color: #166534;
+  border-color: rgba(88, 166, 123, 0.24);
+  background: var(--backoffice-success-soft);
+  color: var(--backoffice-success);
 }
 
 .dashboard-shell .admin-status-banner--error {
-  border-color: rgba(239, 68, 68, 0.18);
-  background: rgba(239, 68, 68, 0.08);
-  color: #991b1b;
+  border-color: rgba(207, 119, 131, 0.24);
+  background: var(--backoffice-danger-soft);
+  color: var(--backoffice-danger);
 }
 
 .dashboard-shell .admin-status-banner--warning {
-  border-color: rgba(245, 158, 11, 0.22);
-  background: rgba(245, 158, 11, 0.1);
-  color: #92400e;
+  border-color: rgba(203, 153, 73, 0.24);
+  background: var(--backoffice-warning-soft);
+  color: var(--backoffice-warning);
 }
 
 .dashboard-shell .admin-panel-card,
@@ -433,8 +438,8 @@
   padding: 1rem;
   border: 1px solid var(--backoffice-sidebar-border);
   border-radius: 16px;
-  background: linear-gradient(180deg, #2d3f55 0%, #27384d 100%);
-  box-shadow: 0 1px 1px rgba(23, 32, 51, 0.08);
+  background: var(--backoffice-sidebar);
+  box-shadow: none;
   color: var(--client-panel-sidebar-text);
 }
 
@@ -448,7 +453,7 @@
   gap: 0.8rem;
   align-items: center;
   padding-bottom: 0.9rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.14);
+  border-bottom: 1px solid var(--backoffice-sidebar-border);
 }
 
 .dashboard-shell .client-panel-sidebar__brand-badge {
@@ -457,10 +462,10 @@
   width: 42px;
   height: 42px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(148, 163, 184, 0.12);
   color: var(--client-panel-sidebar-text);
   font-weight: 800;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.12);
 }
 
 .dashboard-shell .client-panel-sidebar__brand strong,
@@ -522,7 +527,7 @@
 }
 
 .dashboard-shell .client-panel-sidebar__nav-button.is-active {
-  border-color: rgba(158, 185, 236, 0.2);
+  border-color: rgba(111, 149, 246, 0.2);
   background: var(--client-panel-sidebar-active);
   color: var(--client-panel-sidebar-text);
 }
@@ -548,7 +553,7 @@
   display: grid;
   gap: 0.7rem;
   padding-top: 0.9rem;
-  border-top: 1px solid rgba(226, 232, 240, 0.14);
+  border-top: 1px solid var(--backoffice-sidebar-border);
 }
 
 .dashboard-shell .client-panel-sidebar__footer-actions {
@@ -557,15 +562,15 @@
 }
 
 .dashboard-shell .client-panel-sidebar__footer .button--secondary {
-  border-color: rgba(226, 232, 240, 0.14);
-  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--backoffice-sidebar-border);
+  background: rgba(148, 163, 184, 0.08);
   color: var(--client-panel-sidebar-text);
 }
 
 .dashboard-shell .client-panel-sidebar__footer .button--secondary:hover,
 .dashboard-shell .client-panel-sidebar__footer .button--secondary:focus-visible {
-  border-color: rgba(191, 219, 254, 0.18);
-  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(111, 149, 246, 0.22);
+  background: rgba(148, 163, 184, 0.14);
 }
 
 .dashboard-shell .client-panel-mobile-nav {
@@ -633,19 +638,19 @@
 }
 
 .dashboard-shell .client-panel-kpi--info {
-  --client-kpi-accent: #5d82d8;
+  --client-kpi-accent: #7ea0f6;
 }
 
 .dashboard-shell .client-panel-kpi--warning {
-  --client-kpi-accent: #b08a50;
+  --client-kpi-accent: #d4a65a;
 }
 
 .dashboard-shell .client-panel-kpi--danger {
-  --client-kpi-accent: #b0777d;
+  --client-kpi-accent: #d58a95;
 }
 
 .dashboard-shell .client-panel-kpi--accent {
-  --client-kpi-accent: #6a83d6;
+  --client-kpi-accent: #8aa7f7;
 }
 
 .dashboard-shell .client-panel-kpi span {
@@ -768,8 +773,8 @@
 .dashboard-shell .admin-order-status-badge--received,
 .dashboard-shell .admin-order-payment-badge--pending {
   border-color: rgba(148, 163, 184, 0.18);
-  background: rgba(216, 222, 230, 0.42);
-  color: #526275;
+  background: rgba(148, 163, 184, 0.1);
+  color: #cad5e5;
 }
 
 .dashboard-shell .client-panel-status--preparing,
@@ -916,8 +921,8 @@
 }
 
 .dashboard-shell .client-settings-tabs__button.is-active {
-  border-color: rgba(69, 111, 209, 0.18);
-  background: var(--backoffice-surface-soft);
+  border-color: rgba(79, 125, 243, 0.28);
+  background: var(--backoffice-primary-soft);
   color: var(--backoffice-primary);
 }
 
@@ -1015,7 +1020,7 @@
 }
 
 .dashboard-shell .admin-filter-pill.is-active {
-  border-color: rgba(71, 115, 214, 0.18);
+  border-color: rgba(79, 125, 243, 0.28);
   background: var(--backoffice-primary-soft);
   color: var(--backoffice-primary);
 }
@@ -1123,6 +1128,27 @@
 
 .dashboard-shell .admin-order-card--client {
   border-radius: 12px;
+}
+
+.dashboard-shell .admin-order-card--received {
+  border-color: rgba(106, 144, 245, 0.16);
+  background: rgba(79, 125, 243, 0.04);
+}
+
+.dashboard-shell .admin-order-card--preparing {
+  border-color: rgba(203, 153, 73, 0.18);
+  background: rgba(203, 153, 73, 0.06);
+}
+
+.dashboard-shell .admin-order-card--ready,
+.dashboard-shell .admin-order-card--delivered {
+  border-color: rgba(88, 166, 123, 0.18);
+  background: rgba(88, 166, 123, 0.06);
+}
+
+.dashboard-shell .admin-order-card--cancelled {
+  border-color: rgba(207, 119, 131, 0.18);
+  background: rgba(207, 119, 131, 0.06);
 }
 
 .dashboard-shell .admin-order-card__identity {
@@ -1241,23 +1267,23 @@
 }
 
 .dashboard-shell .analytics-metric-card--accent {
-  border-color: rgba(59, 111, 216, 0.14);
-  background: rgba(69, 111, 209, 0.06);
+  border-color: rgba(79, 125, 243, 0.2);
+  background: rgba(79, 125, 243, 0.1);
 }
 
 .dashboard-shell .analytics-metric-card--warning {
-  border-color: rgba(183, 121, 31, 0.14);
-  background: rgba(168, 121, 47, 0.07);
+  border-color: rgba(203, 153, 73, 0.2);
+  background: rgba(203, 153, 73, 0.1);
 }
 
 .dashboard-shell .analytics-metric-card--info {
-  border-color: rgba(69, 104, 214, 0.14);
-  background: rgba(69, 111, 209, 0.07);
+  border-color: rgba(106, 144, 245, 0.2);
+  background: rgba(106, 144, 245, 0.1);
 }
 
 .dashboard-shell .analytics-metric-card--success {
-  border-color: rgba(47, 133, 90, 0.14);
-  background: rgba(74, 122, 99, 0.07);
+  border-color: rgba(88, 166, 123, 0.2);
+  background: rgba(88, 166, 123, 0.1);
 }
 
 .dashboard-shell .analytics-layout-grid--client {
@@ -1293,7 +1319,7 @@
   height: 8px;
   overflow: hidden;
   border-radius: 999px;
-  background: #d5dde6;
+  background: #283241;
 }
 
 .dashboard-shell .analytics-bar-list__track span {
@@ -1334,11 +1360,11 @@
 }
 
 .dashboard-shell .analytics-trend-chart__bar--views {
-  background: #6f86c2;
+  background: #7f97db;
 }
 
 .dashboard-shell .analytics-trend-chart__bar--actions {
-  background: #b18a4a;
+  background: #d2a258;
 }
 
 .dashboard-shell .analytics-trend-chart__label {
@@ -1407,6 +1433,35 @@
   border: 1px solid var(--backoffice-border);
   border-radius: 12px;
   background: var(--backoffice-surface);
+}
+
+.dashboard-shell .modal-backdrop {
+  background: var(--backoffice-overlay);
+}
+
+.dashboard-shell .modal-card {
+  border: 1px solid var(--backoffice-border);
+  border-radius: 16px;
+  background: var(--backoffice-surface);
+  box-shadow: 0 22px 48px rgba(3, 7, 13, 0.34);
+  color: var(--backoffice-text);
+}
+
+.dashboard-shell .modal-header {
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--backoffice-border);
+}
+
+.dashboard-shell .modal-header h3,
+.dashboard-shell .modal-content {
+  color: var(--backoffice-text);
+}
+
+.dashboard-shell .modal-card .icon-button {
+  border: 1px solid var(--backoffice-border);
+  background: var(--backoffice-surface-soft);
+  color: var(--backoffice-text);
 }
 
 .dashboard-shell .admin-dashboard-switcher--tabs .button {
@@ -1486,12 +1541,12 @@
     padding: 0.55rem 0.85rem;
     border: 1px solid var(--backoffice-border);
     border-radius: 999px;
-    background: rgba(251, 252, 253, 0.94);
+    background: var(--backoffice-surface-muted);
     color: var(--backoffice-text);
   }
 
   .dashboard-shell .client-panel-mobile-nav__button.is-active {
-    border-color: rgba(59, 111, 216, 0.18);
+    border-color: rgba(79, 125, 243, 0.28);
     background: var(--client-panel-surface-accent-strong);
     color: var(--backoffice-primary);
   }
