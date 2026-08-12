@@ -3,6 +3,11 @@ import { resolveBusinessPaymentSettings } from '../../../shared/utils/businessPa
 import { env } from '../config/env.js';
 import { findBusinessById } from '../repositories/businessRepository.js';
 import { findOrderById } from '../repositories/orderRepository.js';
+import {
+  markWebhookEventFailed,
+  markWebhookEventProcessed,
+  tryCreateWebhookEventRecord,
+} from '../repositories/webhookEventRepository.js';
 import { getAsaasPayment, parseAsaasExternalReference } from '../services/asaasService.js';
 import { syncAsaasOrderPaymentWebhook } from '../services/moduleService.js';
 import { AppError } from '../utils/appError.js';
@@ -62,15 +67,35 @@ function validateProviderExternalReferenceScope(externalReference, businessId, o
 }
 
 export async function asaasWebhookController(req, res, next) {
+  let webhookEventRecord = null;
+
   try {
     validateAsaasWebhookAuthToken(getWebhookHeaderValue(req.headers['asaas-access-token']));
 
+    const providerEventId = String(req.body?.id || '').trim();
     const providerEvent = String(req.body?.event || '').trim();
     const providerPaymentId = String(req.body?.payment?.id || '').trim();
     const incomingExternalReference = String(req.body?.payment?.externalReference || '').trim();
 
-    if (!providerEvent || !providerPaymentId || !incomingExternalReference) {
+    if (!providerEventId || !providerEvent || !providerPaymentId || !incomingExternalReference) {
       throw new AppError('Webhook Asaas incompleto.', 400, 'asaas_webhook_invalid');
+    }
+
+    const webhookEventResult = await tryCreateWebhookEventRecord({
+      provider: PAYMENT_PROVIDERS.ASAAS,
+      eventId: providerEventId,
+      eventType: providerEvent,
+      providerResourceId: providerPaymentId,
+      resourceType: 'payment',
+      status: 'processing',
+    });
+    webhookEventRecord = webhookEventResult.record;
+
+    if (
+      !webhookEventResult.created &&
+      ['processed', 'processing', 'ignored'].includes(webhookEventRecord?.status)
+    ) {
+      return res.status(204).end();
     }
 
     const parsedIncomingReference = parseAsaasExternalReference(incomingExternalReference);
@@ -103,8 +128,19 @@ export async function asaasWebhookController(req, res, next) {
       new Date(),
     );
 
+    await markWebhookEventProcessed(webhookEventRecord?._id, {
+      businessId,
+      resourceType: 'order_payment',
+      resourceId: orderId,
+      providerResourceId: providerPaymentId,
+    });
+
     return res.status(204).end();
   } catch (error) {
+    if (webhookEventRecord?._id) {
+      await markWebhookEventFailed(webhookEventRecord._id, error).catch(() => {});
+    }
+
     return next(error);
   }
 }

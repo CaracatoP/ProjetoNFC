@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { businessPaymentSettingsSchema } from '../../../shared/schemas/business.js';
 import { Business } from './Business.js';
 import { Order } from './Order.js';
+import { Payment } from './Payment.js';
+import { PaymentCustomer } from './PaymentCustomer.js';
 import { SystemSetting } from './SystemSetting.js';
 
 describe('payment models and schemas', () => {
@@ -173,6 +175,79 @@ describe('payment models and schemas', () => {
         meta: { source: 'test' },
       }),
     ]);
+  });
+
+  it('stores provider payment records separately from the order snapshot', () => {
+    const payment = new Payment({
+      businessId: '665cb4a9e1f0a1b2c3d4e5f6',
+      orderId: '665cb4a9e1f0a1b2c3d4e5f7',
+      provider: 'asaas',
+      method: 'pix',
+      billingType: 'PIX',
+      status: 'paid',
+      providerStatus: 'RECEIVED',
+      providerPaymentId: 'pay_123',
+      providerCustomerId: 'cus_123',
+      externalReference: 'tenant:665cb4a9e1f0a1b2c3d4e5f6:order:665cb4a9e1f0a1b2c3d4e5f7',
+      amount: 119.9,
+      platformFeeAmount: 5.99,
+      tenantNetAmount: 113.91,
+      invoiceUrl: 'https://sandbox.asaas.com/i/pay_123',
+      pixCopyPaste: '000201010212',
+      pixQrCode: 'data:image/png;base64,abc123',
+      providerUpdatedAt: new Date('2026-06-02T12:00:00.000Z'),
+      metadata: { source: 'checkout' },
+    });
+
+    const json = payment.toJSON();
+
+    expect(json).toEqual(
+      expect.objectContaining({
+        provider: 'asaas',
+        method: 'pix',
+        billingType: 'PIX',
+        status: 'paid',
+        providerStatus: 'RECEIVED',
+        providerPaymentId: 'pay_123',
+        providerCustomerId: 'cus_123',
+        amount: 119.9,
+        platformFeeAmount: 5.99,
+        tenantNetAmount: 113.91,
+        invoiceUrl: 'https://sandbox.asaas.com/i/pay_123',
+        pixCopyPaste: '000201010212',
+        pixQrCode: 'data:image/png;base64,abc123',
+        metadata: { source: 'checkout' },
+      }),
+    );
+    expect(json.businessId.toString()).toBe('665cb4a9e1f0a1b2c3d4e5f6');
+    expect(json.orderId.toString()).toBe('665cb4a9e1f0a1b2c3d4e5f7');
+  });
+
+  it('stores reusable provider customer references per tenant', () => {
+    const customer = new PaymentCustomer({
+      businessId: '665cb4a9e1f0a1b2c3d4e5f6',
+      provider: 'asaas',
+      providerCustomerId: 'cus_123',
+      name: 'Cliente TapLink',
+      email: 'cliente@example.com',
+      phone: '5511999999999',
+      lastSyncedAt: new Date('2026-06-02T12:00:00.000Z'),
+      metadata: { source: 'asaas_create_customer' },
+    });
+
+    const json = customer.toJSON();
+
+    expect(json).toEqual(
+      expect.objectContaining({
+        provider: 'asaas',
+        providerCustomerId: 'cus_123',
+        name: 'Cliente TapLink',
+        email: 'cliente@example.com',
+        phone: '5511999999999',
+        metadata: { source: 'asaas_create_customer' },
+      }),
+    );
+    expect(json.businessId.toString()).toBe('665cb4a9e1f0a1b2c3d4e5f6');
   });
 
   it('creates the system setting model with key and mixed value support', () => {

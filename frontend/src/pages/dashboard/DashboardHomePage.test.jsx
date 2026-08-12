@@ -16,6 +16,7 @@ vi.mock('@/services/adminService.js', () => ({
   resetAdminAnalytics: vi.fn(),
   fetchAdminFinanceSettings: vi.fn(),
   updateAdminFinanceSettings: vi.fn(),
+  testAdminAsaasConnection: vi.fn(),
   fetchAdminBusinessFinanceSettings: vi.fn(),
   updateAdminBusinessFinanceSettings: vi.fn(),
   createAdminBusinessAsaasSubaccount: vi.fn(),
@@ -418,6 +419,12 @@ describe('DashboardHomePage', () => {
       summary: {
         platformReady: true,
       },
+    });
+    adminService.testAdminAsaasConnection.mockResolvedValue({
+      ok: true,
+      environment: 'sandbox',
+      status: 'connected',
+      message: 'Asaas conectado com sucesso - sandbox.',
     });
     adminService.fetchAdminBusinessFinanceSettings.mockResolvedValue({
       businessId: 'business-1',
@@ -1384,6 +1391,12 @@ describe('DashboardHomePage', () => {
     expect(screen.getByText('Tenant recebe: 95%')).toBeInTheDocument();
     expect(screen.queryByDisplayValue('wallet_sub_123')).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Nova apiKey da subconta/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Testar conexao Asaas/i }));
+    await waitFor(() => {
+      expect(adminService.testAdminAsaasConnection).toHaveBeenCalledWith('admin-token');
+    });
+    expect((await screen.findAllByText(/Asaas conectado com sucesso - sandbox/i)).length).toBeGreaterThan(0);
 
     await user.clear(screen.getByLabelText(/Taxa padrao da plataforma/i));
     await user.type(screen.getByLabelText(/Taxa padrao da plataforma/i), '6.5');

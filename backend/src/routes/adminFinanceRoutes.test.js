@@ -5,6 +5,7 @@ import { hashPassword } from '../utils/password.js';
 
 const asaasServiceMock = vi.hoisted(() => ({
   createAsaasSubaccount: vi.fn(),
+  testAsaasConnection: vi.fn(),
 }));
 
 vi.mock('../services/asaasService.js', async () => {
@@ -13,6 +14,7 @@ vi.mock('../services/asaasService.js', async () => {
   return {
     ...actual,
     createAsaasSubaccount: asaasServiceMock.createAsaasSubaccount,
+    testAsaasConnection: asaasServiceMock.testAsaasConnection,
   };
 });
 
@@ -75,6 +77,7 @@ describe('Admin finance routes', () => {
     await User.deleteMany({});
     await SystemSetting.deleteMany({});
     asaasServiceMock.createAsaasSubaccount.mockReset();
+    asaasServiceMock.testAsaasConnection.mockReset();
     envConfig.asaasApiKey = '$aact_hmlg_root_key';
     envConfig.asaasWebhookAuthToken = 'asaas-webhook-token';
 
@@ -200,6 +203,41 @@ describe('Admin finance routes', () => {
       defaultPlatformFeePercent: 10,
     });
     expect(persistedSettings.value.asaasApiKey).toBeUndefined();
+  });
+
+  it('allows level 0 to test the root Asaas connection without leaking the api key', async () => {
+    asaasServiceMock.testAsaasConnection.mockResolvedValue({
+      ok: true,
+      environment: 'sandbox',
+      status: 'connected',
+      message: 'Asaas conectado com sucesso - sandbox.',
+    });
+
+    const response = await request(app)
+      .post('/api/admin/finance/asaas/test-connection')
+      .set('Authorization', `Bearer ${superAdminToken}`);
+
+    expect(response.status).toBe(200);
+    expect(asaasServiceMock.testAsaasConnection).toHaveBeenCalledOnce();
+    expect(response.body.data).toEqual({
+      ok: true,
+      environment: 'sandbox',
+      status: 'connected',
+      message: 'Asaas conectado com sucesso - sandbox.',
+    });
+    expect(JSON.stringify(response.body.data)).not.toContain('$aact_hmlg_root_key');
+  });
+
+  it('blocks level 1 from testing the root Asaas connection', async () => {
+    const levelOneToken = await createInternalAdminWithoutLegacyRoles();
+
+    const response = await request(app)
+      .post('/api/admin/finance/asaas/test-connection')
+      .set('Authorization', `Bearer ${levelOneToken}`);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('finance_forbidden');
+    expect(asaasServiceMock.testAsaasConnection).not.toHaveBeenCalled();
   });
 
   it('returns tenant finance settings safely without leaking the subaccount api key', async () => {

@@ -21,6 +21,8 @@ let disconnectDatabase;
 let seedDemoData;
 let Business;
 let Order;
+let Payment;
+let WebhookEvent;
 let subscribeToTenantUpdates;
 let encryptSecret;
 let mongoServer;
@@ -43,6 +45,8 @@ describe('Asaas webhook routes', () => {
     ({ seedDemoData } = await import('../utils/seedDemoData.js'));
     ({ Business } = await import('../models/Business.js'));
     ({ Order } = await import('../models/Order.js'));
+    ({ Payment } = await import('../models/Payment.js'));
+    ({ WebhookEvent } = await import('../models/WebhookEvent.js'));
     ({ subscribeToTenantUpdates } = await import('../services/tenantRealtimeService.js'));
     ({ encryptSecret } = await import('../utils/secretCrypto.js'));
     ({ default: app } = await import('../app.js'));
@@ -52,6 +56,7 @@ describe('Asaas webhook routes', () => {
 
   beforeEach(async () => {
     await seedDemoData({ reset: true });
+    await Promise.all([Payment.deleteMany({}), WebhookEvent.deleteMany({})]);
     asaasServiceMock.getAsaasPayment.mockReset();
   });
 
@@ -149,6 +154,7 @@ describe('Asaas webhook routes', () => {
       .post('/api/webhooks/asaas')
       .set('asaas-access-token', 'asaas-webhook-token')
       .send({
+        id: 'evt_payment_received_1',
         event: 'PAYMENT_RECEIVED',
         payment: {
           id: 'pay_123',
@@ -189,6 +195,24 @@ describe('Asaas webhook routes', () => {
         kind: 'payment_updated',
       }),
     );
+    expect(await WebhookEvent.findOne({ provider: 'asaas', eventId: 'evt_payment_received_1' }).lean()).toEqual(
+      expect.objectContaining({
+        status: 'processed',
+        eventType: 'PAYMENT_RECEIVED',
+        providerResourceId: 'pay_123',
+        resourceId: order._id.toString(),
+      }),
+    );
+    expect(await Payment.findOne({ provider: 'asaas', providerPaymentId: 'pay_123' }).lean()).toEqual(
+      expect.objectContaining({
+        businessId: business._id,
+        orderId: order._id,
+        status: 'paid',
+        providerStatus: 'RECEIVED',
+        externalReference,
+        amount: 79.9,
+      }),
+    );
     unsubscribe();
   });
 
@@ -199,6 +223,7 @@ describe('Asaas webhook routes', () => {
       .post('/api/webhooks/asaas')
       .set('asaas-access-token', 'invalid-token')
       .send({
+        id: 'evt_invalid_token',
         event: 'PAYMENT_RECEIVED',
         payment: {
           id: 'pay_123',
@@ -209,6 +234,26 @@ describe('Asaas webhook routes', () => {
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe('asaas_webhook_unauthorized');
     expect(asaasServiceMock.getAsaasPayment).not.toHaveBeenCalled();
+  });
+
+  it('rejects incomplete webhook payloads before calling Asaas', async () => {
+    const { business, order } = await createAsaasOrderFixture();
+
+    const response = await request(app)
+      .post('/api/webhooks/asaas')
+      .set('asaas-access-token', 'asaas-webhook-token')
+      .send({
+        event: 'PAYMENT_RECEIVED',
+        payment: {
+          id: 'pay_123',
+          externalReference: `tenant:${business._id.toString()}:order:${order._id.toString()}`,
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('asaas_webhook_invalid');
+    expect(asaasServiceMock.getAsaasPayment).not.toHaveBeenCalled();
+    expect(await WebhookEvent.countDocuments({ provider: 'asaas' })).toBe(0);
   });
 
   it('keeps the webhook idempotent when the same paid notification is delivered twice', async () => {
@@ -227,6 +272,7 @@ describe('Asaas webhook routes', () => {
       .post('/api/webhooks/asaas')
       .set('asaas-access-token', 'asaas-webhook-token')
       .send({
+        id: 'evt_payment_received_duplicate',
         event: 'PAYMENT_RECEIVED',
         payment: {
           id: 'pay_123',
@@ -238,6 +284,7 @@ describe('Asaas webhook routes', () => {
       .post('/api/webhooks/asaas')
       .set('asaas-access-token', 'asaas-webhook-token')
       .send({
+        id: 'evt_payment_received_duplicate',
         event: 'PAYMENT_RECEIVED',
         payment: {
           id: 'pay_123',
@@ -252,6 +299,8 @@ describe('Asaas webhook routes', () => {
     expect(secondResponse.status).toBe(204);
     expect(updatedOrder.payment.status).toBe('paid');
     expect(paidEvents).toHaveLength(1);
+    expect(asaasServiceMock.getAsaasPayment).toHaveBeenCalledTimes(1);
+    expect(await WebhookEvent.countDocuments({ provider: 'asaas', eventId: 'evt_payment_received_duplicate' })).toBe(1);
   });
 
   it('rejects cross-tenant updates when Asaas reports another tenant in externalReference', async () => {
@@ -278,6 +327,7 @@ describe('Asaas webhook routes', () => {
       .post('/api/webhooks/asaas')
       .set('asaas-access-token', 'asaas-webhook-token')
       .send({
+        id: 'evt_cross_tenant',
         event: 'PAYMENT_RECEIVED',
         payment: {
           id: 'pay_123',

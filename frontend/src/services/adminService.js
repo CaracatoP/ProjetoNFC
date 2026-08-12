@@ -39,6 +39,15 @@ export async function updateAdminFinanceSettings(token, payload) {
   return response.data;
 }
 
+export async function testAdminAsaasConnection(token) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/finance/asaas/test-connection`, {
+    method: 'POST',
+    headers: buildAdminAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
 export async function fetchAdminBusinessFinanceSettings(token, businessId) {
   const response = await apiRequest(`${appConfig.apiBaseUrl}/admin/finance/businesses/${businessId}`, {
     headers: buildAdminAuthHeaders(token),

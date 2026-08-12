@@ -8,6 +8,7 @@ import {
   createAdminBusinessAsaasSubaccount,
   fetchAdminBusinessFinanceSettings,
   fetchAdminFinanceSettings,
+  testAdminAsaasConnection,
   updateAdminBusinessFinanceSettings,
   updateAdminFinanceSettings,
 } from '@/services/adminService.js';
@@ -462,6 +463,8 @@ export function AdminFinancialSettingsPanel({
   const [loadingTenant, setLoadingTenant] = useState(false);
   const [savingGlobal, setSavingGlobal] = useState(false);
   const [savingTenant, setSavingTenant] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionResult, setConnectionResult] = useState(null);
   const [creatingSubaccount, setCreatingSubaccount] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showPlatformWallet, setShowPlatformWallet] = useState(false);
@@ -601,6 +604,23 @@ export function AdminFinancialSettingsPanel({
       setError(getErrorMessage(saveError));
     } finally {
       setSavingGlobal(false);
+    }
+  }
+
+  async function handleTestConnection() {
+    setTestingConnection(true);
+    setMessage('');
+    setError('');
+
+    try {
+      const result = await testAdminAsaasConnection(token);
+      setConnectionResult(result);
+      setMessage(result?.message || 'Conexao com Asaas validada com sucesso.');
+    } catch (testError) {
+      setConnectionResult(null);
+      setError(getErrorMessage(testError));
+    } finally {
+      setTestingConnection(false);
     }
   }
 
@@ -779,7 +799,20 @@ export function AdminFinancialSettingsPanel({
                 </div>
               </div>
 
+              {connectionResult ? (
+                <div className="admin-inline-note admin-inline-note--preview">
+                  <strong>Ultimo teste de conexao</strong>
+                  <span>
+                    {connectionResult.ok ? 'Conectado' : 'Nao configurado'} - {connectionResult.environment || globalSettings?.environment || 'sandbox'}
+                  </span>
+                  <span>{connectionResult.message || 'Resultado validado sem expor credenciais.'}</span>
+                </div>
+              ) : null}
+
               <div className="admin-inline-actions">
+                <Button type="button" variant="secondary" disabled={testingConnection} onClick={handleTestConnection}>
+                  {testingConnection ? 'Testando...' : 'Testar conexao Asaas'}
+                </Button>
                 <Button type="submit" disabled={savingGlobal}>
                   {savingGlobal ? 'Salvando...' : 'Salvar configuracoes globais'}
                 </Button>

@@ -68,6 +68,11 @@ import { publishTenantUpdated } from './tenantRealtimeService.js';
 import { createMercadoPagoCheckoutPreference } from './mercadoPagoService.js';
 import { getFinanceSettingsRecord } from '../repositories/systemSettingRepository.js';
 import {
+  findReusablePaymentCustomer,
+  upsertPaymentCustomerReference,
+} from '../repositories/paymentCustomerRepository.js';
+import { upsertPaymentByProviderPaymentId } from '../repositories/paymentRepository.js';
+import {
   getDeclaredHostedCheckoutProvider,
   isAsaasProviderConnected,
   isMercadoPagoProviderConnected,
@@ -477,6 +482,43 @@ function resolveAsaasBillingType(method) {
   }
 
   return 'UNDEFINED';
+}
+
+function buildAsaasPaymentReferencePayload({
+  businessId,
+  orderId,
+  payment,
+  providerPayment = {},
+  providerStatus = '',
+  billingType = '',
+  externalReference = '',
+  occurredAt = new Date(),
+}) {
+  const normalizedPayment = normalizeOrderPayment(payment || {}, payment?.amount || 0);
+
+  return {
+    businessId,
+    orderId,
+    provider: PAYMENT_PROVIDERS.ASAAS,
+    method: normalizedPayment.method,
+    billingType,
+    status: normalizedPayment.status,
+    providerStatus: String(providerStatus || providerPayment?.status || '').trim(),
+    providerPaymentId: String(providerPayment?.id || normalizedPayment.providerPaymentId || '').trim(),
+    providerCustomerId: String(providerPayment?.customer || normalizedPayment.providerCustomerId || '').trim(),
+    externalReference: String(externalReference || providerPayment?.externalReference || '').trim(),
+    amount: normalizedPayment.amount,
+    platformFeeAmount: normalizedPayment.platformFeeAmount,
+    tenantNetAmount: normalizedPayment.tenantNetAmount,
+    invoiceUrl: normalizedPayment.invoiceUrl,
+    bankSlipUrl: normalizedPayment.bankSlipUrl,
+    checkoutUrl: normalizedPayment.checkoutUrl,
+    pixCopyPaste: normalizedPayment.pixCopyPaste,
+    pixQrCode: normalizedPayment.pixQrCode,
+    pixQrCodeUrl: normalizedPayment.pixQrCodeUrl,
+    paidAt: normalizedPayment.paidAt,
+    providerUpdatedAt: occurredAt,
+  };
 }
 
 function buildPublicOrderPaymentSnapshot(business, payload, amount, occurredAt = new Date()) {
@@ -974,11 +1016,35 @@ export async function createPublicOrder(slug, payload) {
   if (payment.provider === PAYMENT_PROVIDERS.ASAAS) {
     try {
       const financeSettingsRecord = await getFinanceSettingsRecord();
-      const customer = await createAsaasCustomer({
-        apiKey: storedPaymentSettings.asaas.apiKeyEncrypted,
-        customer: {
-          name: String(payload.customerName || '').trim(),
-          mobilePhone: String(payload.customerPhone || '').trim(),
+      const customerName = String(payload.customerName || '').trim();
+      const customerPhone = String(payload.customerPhone || '').trim();
+      const customerEmail = String(payload.customerEmail || payload.email || '').trim();
+      const existingCustomerReference = await findReusablePaymentCustomer({
+        businessId: business._id,
+        provider: PAYMENT_PROVIDERS.ASAAS,
+        phone: customerPhone,
+        email: customerEmail,
+      });
+      const customer = existingCustomerReference?.providerCustomerId
+        ? { id: existingCustomerReference.providerCustomerId }
+        : await createAsaasCustomer({
+            apiKey: storedPaymentSettings.asaas.apiKeyEncrypted,
+            customer: {
+              name: customerName,
+              mobilePhone: customerPhone,
+              ...(customerEmail ? { email: customerEmail } : {}),
+            },
+          });
+
+      await upsertPaymentCustomerReference({
+        businessId: business._id,
+        provider: PAYMENT_PROVIDERS.ASAAS,
+        providerCustomerId: String(customer.id || '').trim(),
+        name: customerName,
+        phone: customerPhone,
+        email: customerEmail,
+        metadata: {
+          source: existingCustomerReference ? 'local_reference' : 'asaas_create_customer',
         },
       });
       const effectiveSplitSettings = resolveEffectiveAsaasSplitSettings(
@@ -992,15 +1058,17 @@ export async function createPublicOrder(slug, payload) {
           : 0,
         platformWalletId: effectiveSplitSettings.platformWalletId,
       });
+      const billingType = resolveAsaasBillingType(payment.method);
+      const externalReference = buildAsaasExternalReference(business._id, created._id);
       const charge = await createAsaasPaymentCharge({
         apiKey: storedPaymentSettings.asaas.apiKeyEncrypted,
         charge: {
           customer: String(customer.id || '').trim(),
-          billingType: resolveAsaasBillingType(payment.method),
+          billingType,
           value: total,
           dueDate: receivedAt.toISOString().slice(0, 10),
           description: business.name ? `Pedido em ${business.name}` : 'Pedido TapLink',
-          externalReference: buildAsaasExternalReference(business._id, created._id),
+          externalReference,
           ...(split.length ? { split } : {}),
         },
       });
@@ -1045,12 +1113,27 @@ export async function createPublicOrder(slug, payload) {
             providerPaymentId: String(charge.id || '').trim(),
             occurredAt: receivedAt,
             meta: {
-              externalReference: buildAsaasExternalReference(business._id, created._id),
+              externalReference,
               method: payment.method,
             },
           },
         ]),
       });
+
+      await upsertPaymentByProviderPaymentId(
+        PAYMENT_PROVIDERS.ASAAS,
+        String(charge.id || '').trim(),
+        buildAsaasPaymentReferencePayload({
+          businessId: business._id,
+          orderId: created._id,
+          payment: nextPayment,
+          providerPayment: charge,
+          providerStatus: charge.status,
+          billingType,
+          externalReference,
+          occurredAt: new Date(),
+        }),
+      );
     } catch (error) {
       await updateOrderRecordByBusinessId(business._id, created._id, {
         payment: normalizeOrderPayment(
@@ -1180,6 +1263,21 @@ export async function syncAsaasOrderPaymentWebhook(
   if (!updated) {
     throw new AppError('Pedido nao encontrado', 404, 'module_resource_not_found');
   }
+
+  await upsertPaymentByProviderPaymentId(
+    PAYMENT_PROVIDERS.ASAAS,
+    nextPaymentPatch.payment.providerPaymentId,
+    buildAsaasPaymentReferencePayload({
+      businessId,
+      orderId: id,
+      payment: nextPaymentPatch.payment,
+      providerPayment: asaasPayment,
+      providerStatus: asaasPayment?.status,
+      billingType: String(asaasPayment?.billingType || '').trim(),
+      externalReference: String(asaasPayment?.externalReference || '').trim(),
+      occurredAt,
+    }),
+  );
 
   publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.PAYMENT_UPDATED);
   return serializeOrderRecord(updated);

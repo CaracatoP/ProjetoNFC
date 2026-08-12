@@ -9,6 +9,15 @@ let createAsaasSubaccount;
 let createAsaasCustomer;
 let createAsaasPaymentCharge;
 let getAsaasPixQrCode;
+let testAsaasConnection;
+
+function mockAsaasJsonResponse(payload, options = {}) {
+  return {
+    ok: options.ok ?? true,
+    status: options.status ?? 200,
+    text: async () => JSON.stringify(payload),
+  };
+}
 
 describe('asaasService', () => {
   beforeAll(async () => {
@@ -24,6 +33,7 @@ describe('asaasService', () => {
       createAsaasCustomer,
       createAsaasPaymentCharge,
       getAsaasPixQrCode,
+      testAsaasConnection,
     } = await import('./asaasService.js'));
   });
 
@@ -62,14 +72,13 @@ describe('asaasService', () => {
   });
 
   it('creates a subaccount using the root Asaas API key and returns apiKey and walletId', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    fetchMock.mockResolvedValue(
+      mockAsaasJsonResponse({
         id: 'subacc_123',
         walletId: 'wallet_sub',
         apiKey: '$aact_hmlg_sub_key',
       }),
-    });
+    );
 
     const result = await createAsaasSubaccount({
       name: 'Casa do Preto LTDA',
@@ -95,20 +104,20 @@ describe('asaasService', () => {
         headers: expect.objectContaining({
           access_token: '$aact_hmlg_root_key',
           'content-type': 'application/json',
+          'user-agent': expect.stringContaining('TapLink'),
         }),
       }),
     );
   });
 
   it('creates a Pix charge with externalReference and split using the tenant subaccount key', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    fetchMock.mockResolvedValue(
+      mockAsaasJsonResponse({
         id: 'pay_123',
         invoiceUrl: 'https://sandbox.asaas.com/i/pay_123',
         status: 'PENDING',
       }),
-    });
+    );
 
     const result = await createAsaasPaymentCharge({
       apiKey: '$aact_hmlg_sub_key',
@@ -137,6 +146,7 @@ describe('asaasService', () => {
         headers: expect.objectContaining({
           access_token: '$aact_hmlg_sub_key',
           'content-type': 'application/json',
+          'user-agent': expect.stringContaining('TapLink'),
         }),
         body: JSON.stringify({
           customer: 'cus_123',
@@ -152,13 +162,12 @@ describe('asaasService', () => {
   });
 
   it('creates a customer in the tenant subaccount before issuing the charge', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    fetchMock.mockResolvedValue(
+      mockAsaasJsonResponse({
         id: 'cus_123',
         name: 'Marcos',
       }),
-    });
+    );
 
     const result = await createAsaasCustomer({
       apiKey: '$aact_hmlg_sub_key',
@@ -182,6 +191,7 @@ describe('asaasService', () => {
         headers: expect.objectContaining({
           access_token: '$aact_hmlg_sub_key',
           'content-type': 'application/json',
+          'user-agent': expect.stringContaining('TapLink'),
         }),
         body: JSON.stringify({
           name: 'Marcos',
@@ -193,13 +203,12 @@ describe('asaasService', () => {
   });
 
   it('fetches the Pix QR Code payload for a created charge', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    fetchMock.mockResolvedValue(
+      mockAsaasJsonResponse({
         payload: '000201010212',
         encodedImage: 'data:image/png;base64,abc123',
       }),
-    });
+    );
 
     const result = await getAsaasPixQrCode({
       apiKey: '$aact_hmlg_sub_key',
@@ -216,6 +225,30 @@ describe('asaasService', () => {
         method: 'GET',
         headers: expect.objectContaining({
           access_token: '$aact_hmlg_sub_key',
+          'user-agent': expect.stringContaining('TapLink'),
+        }),
+      }),
+    );
+  });
+
+  it('tests the root Asaas connection without exposing the API key', async () => {
+    fetchMock.mockResolvedValue(mockAsaasJsonResponse({ commercialInfo: 'APPROVED' }));
+
+    const result = await testAsaasConnection();
+
+    expect(result).toEqual({
+      ok: true,
+      environment: 'sandbox',
+      status: 'connected',
+      message: 'Asaas conectado com sucesso - sandbox.',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api-sandbox.asaas.com/v3/myAccount/status/',
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          access_token: '$aact_hmlg_root_key',
+          'user-agent': expect.stringContaining('TapLink'),
         }),
       }),
     );

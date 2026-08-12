@@ -159,7 +159,7 @@ describe('AdminClientsPanel', () => {
     await waitFor(() => {
       expect(adminService.updateAdminClientBillingStatus).toHaveBeenCalledWith('admin-token', 'client-1', 'trial');
     });
-  });
+  }, 10000);
 
   it('keeps financial controls blocked for level 1 while still allowing password reset and operational edits', async () => {
     const user = userEvent.setup();

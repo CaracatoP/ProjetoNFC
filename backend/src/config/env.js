@@ -97,7 +97,8 @@ export const env = {
   asaasEnv: String(process.env.ASAAS_ENV || 'sandbox')
     .trim()
     .toLowerCase() || 'sandbox',
-  asaasWebhookAuthToken: process.env.ASAAS_WEBHOOK_AUTH_TOKEN || '',
+  asaasWebhookAuthToken: process.env.ASAAS_WEBHOOK_TOKEN || process.env.ASAAS_WEBHOOK_AUTH_TOKEN || '',
+  asaasRequestTimeoutMs: Number(process.env.ASAAS_REQUEST_TIMEOUT_MS || 10000),
   adminSessionTtlHours: Number(process.env.ADMIN_SESSION_TTL_HOURS || 12),
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB || 5),
   authLoginRateLimitWindowMs: Number(process.env.AUTH_LOGIN_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),

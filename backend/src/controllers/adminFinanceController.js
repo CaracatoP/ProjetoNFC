@@ -3,6 +3,7 @@ import {
   createAdminBusinessAsaasSubaccount,
   getAdminBusinessFinanceSettings,
   getAdminFinanceSettings,
+  testAdminAsaasConnection,
   updateAdminBusinessFinanceSettings,
   updateAdminFinanceSettings,
 } from '../services/adminFinanceService.js';
@@ -28,6 +29,15 @@ export async function updateAdminFinanceSettingsController(req, res, next) {
   try {
     assertFinanceAccess(req.adminUser);
     return successResponse(res, await updateAdminFinanceSettings(req.body || {}));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function testAdminAsaasConnectionController(req, res, next) {
+  try {
+    assertFinanceAccess(req.adminUser);
+    return successResponse(res, await testAdminAsaasConnection());
   } catch (error) {
     return next(error);
   }

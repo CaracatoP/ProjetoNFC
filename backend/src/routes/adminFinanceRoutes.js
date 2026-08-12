@@ -3,6 +3,7 @@ import {
   createAdminBusinessAsaasSubaccountController,
   getAdminBusinessFinanceSettingsController,
   getAdminFinanceSettingsController,
+  testAdminAsaasConnectionController,
   updateAdminBusinessFinanceSettingsController,
   updateAdminFinanceSettingsController,
 } from '../controllers/adminFinanceController.js';
@@ -20,6 +21,7 @@ const router = Router();
 router.use(requireAdminAuth);
 router.get('/settings', getAdminFinanceSettingsController);
 router.patch('/settings', validateRequest({ body: adminFinanceSettingsBodySchema }), updateAdminFinanceSettingsController);
+router.post('/asaas/test-connection', testAdminAsaasConnectionController);
 router.get(
   '/businesses/:businessId',
   validateRequest({ params: adminFinanceBusinessParamsSchema }),

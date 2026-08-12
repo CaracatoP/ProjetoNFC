@@ -4,7 +4,7 @@ import { env } from '../config/env.js';
 import { updateBusinessRecord } from '../repositories/adminRepository.js';
 import { findBusinessById } from '../repositories/businessRepository.js';
 import { getFinanceSettingsRecord, upsertFinanceSettingsRecord } from '../repositories/systemSettingRepository.js';
-import { createAsaasSubaccount, validatePlatformFeePercent } from './asaasService.js';
+import { createAsaasSubaccount, testAsaasConnection, validatePlatformFeePercent } from './asaasService.js';
 import { encryptSecret } from '../utils/secretCrypto.js';
 import { AppError } from '../utils/appError.js';
 
@@ -186,6 +186,12 @@ export async function updateAdminFinanceSettings(payload = {}) {
 
   const updatedRecord = await upsertFinanceSettingsRecord(nextSettings);
   return buildFinanceSettingsDto(updatedRecord?.value);
+}
+
+export async function testAdminAsaasConnection() {
+  return testAsaasConnection({
+    apiKey: env.asaasApiKey || process.env.ASAAS_API_KEY || '',
+  });
 }
 
 export function resolveEffectiveAsaasSplitSettings(paymentSettings = {}, financeSettings = {}) {

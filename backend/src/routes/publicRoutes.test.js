@@ -35,6 +35,7 @@ let BusinessSection;
 let Professional;
 let AppointmentService;
 let Product;
+let PaymentCustomer;
 let SystemSetting;
 let subscribeToTenantUpdates;
 let env;
@@ -52,6 +53,7 @@ describe('Public routes', () => {
     process.env.ADMIN_PASSWORD = 'admin123456';
     process.env.ADMIN_TOKEN_SECRET = 'test-admin-secret';
     process.env.AUTH_LOGIN_RATE_LIMIT_MAX = '100';
+    process.env.PUBLIC_FORM_RATE_LIMIT_MAX = '100';
 
     ({ connectDatabase, disconnectDatabase } = await import('../config/database.js'));
     ({ seedDemoData } = await import('../utils/seedDemoData.js'));
@@ -61,6 +63,7 @@ describe('Public routes', () => {
     ({ Professional } = await import('../models/Professional.js'));
     ({ AppointmentService } = await import('../models/AppointmentService.js'));
     ({ Product } = await import('../models/Product.js'));
+    ({ PaymentCustomer } = await import('../models/PaymentCustomer.js'));
     ({ SystemSetting } = await import('../models/SystemSetting.js'));
     ({ subscribeToTenantUpdates } = await import('../services/tenantRealtimeService.js'));
     ({ env } = await import('../config/env.js'));
@@ -72,6 +75,7 @@ describe('Public routes', () => {
   beforeEach(async () => {
     await seedDemoData({ reset: true });
     await AnalyticsEvent.deleteMany({});
+    await PaymentCustomer.deleteMany({});
     await SystemSetting.deleteMany({});
     mercadoPagoServiceMock.createMercadoPagoCheckoutPreference.mockReset();
     asaasServiceMock.createAsaasCustomer.mockReset();
@@ -1129,6 +1133,117 @@ describe('Public routes', () => {
       }),
     );
     expect(mercadoPagoServiceMock.createMercadoPagoCheckoutPreference).not.toHaveBeenCalled();
+  });
+
+  it('reuses an existing Asaas customer reference for repeat orders from the same tenant shopper', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Combo asaas recorrente',
+      description: 'Checkout com customer reaproveitado',
+      price: 49.9,
+      image: '',
+      category: 'Combos',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'asaas',
+          asaas: {
+            enabled: true,
+            subaccountId: 'subacc_123',
+            walletId: 'wallet_sub',
+            apiKeyEncrypted: 'encrypted-sub-key',
+            accountEmail: 'seller@example.com',
+            accountName: 'Casa do Preto',
+            status: 'active',
+          },
+          split: {
+            enabled: false,
+            platformFeePercent: 0,
+            mode: 'percentage',
+            inheritsGlobal: true,
+          },
+        },
+      },
+    );
+
+    asaasServiceMock.createAsaasCustomer.mockResolvedValueOnce({
+      id: 'cus_123',
+      name: 'Nina',
+    });
+    asaasServiceMock.createAsaasPaymentCharge
+      .mockResolvedValueOnce({
+        id: 'pay_123',
+        status: 'PENDING',
+        invoiceUrl: 'https://sandbox.asaas.com/i/pay_123',
+      })
+      .mockResolvedValueOnce({
+        id: 'pay_124',
+        status: 'PENDING',
+        invoiceUrl: 'https://sandbox.asaas.com/i/pay_124',
+      });
+    asaasServiceMock.getAsaasPixQrCode.mockResolvedValue({
+      payload: '000201010212',
+      encodedImage: 'data:image/png;base64,abc123',
+    });
+
+    const orderPayload = {
+      customerName: 'Nina',
+      customerPhone: '55 (11) 99111-2233',
+      items: [
+        {
+          productId: product.id,
+          name: product.name,
+          quantity: 1,
+          unitPrice: product.price,
+        },
+      ],
+      deliveryType: 'pickup',
+      payment: {
+        method: 'pix',
+        provider: 'asaas',
+      },
+    };
+
+    const firstResponse = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send(orderPayload);
+    const secondResponse = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send(orderPayload);
+
+    expect(firstResponse.status).toBe(201);
+    expect(secondResponse.status).toBe(201);
+    expect(asaasServiceMock.createAsaasCustomer).toHaveBeenCalledTimes(1);
+    expect(asaasServiceMock.createAsaasPaymentCharge).toHaveBeenCalledTimes(2);
+    expect(asaasServiceMock.createAsaasPaymentCharge).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        charge: expect.objectContaining({
+          customer: 'cus_123',
+        }),
+      }),
+    );
+    expect(secondResponse.body.data.payment).toEqual(
+      expect.objectContaining({
+        providerPaymentId: 'pay_124',
+        providerCustomerId: 'cus_123',
+      }),
+    );
+    expect(await PaymentCustomer.countDocuments({ provider: 'asaas', providerCustomerId: 'cus_123' })).toBe(1);
   });
 
   it('creates a Checkout Pro order for a Mercado Pago tenant and returns the checkout URL', async () => {

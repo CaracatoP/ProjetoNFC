@@ -1,78 +1,29 @@
-import { env } from '../config/env.js';
 import { AppError } from '../utils/appError.js';
 import { PAYMENT_STATUS } from '../../../shared/constants/index.js';
-import { decryptSecret } from '../utils/secretCrypto.js';
+import { env } from '../config/env.js';
+import { createAsaasClient } from '../integrations/asaas/asaas.client.js';
+import { getAsaasRuntimeConfig } from '../integrations/asaas/asaas.config.js';
+import { AsaasNotConfiguredError } from '../integrations/asaas/asaas.errors.js';
 
-function getAsaasEnvironment() {
-  return String(env.asaasEnv || process.env.ASAAS_ENV || 'sandbox')
-    .trim()
-    .toLowerCase();
-}
+async function asaasRequest({ apiKey, method, path, body, operation }) {
+  try {
+    return await createAsaasClient({ apiKey }).request({
+      method,
+      path,
+      body,
+      operation,
+    });
+  } catch (error) {
+    if (error instanceof AsaasNotConfiguredError) {
+      throw new AppError(
+        'Este tenant ainda nao concluiu a configuracao do Asaas.',
+        400,
+        'payment_provider_unavailable',
+      );
+    }
 
-function getAsaasBaseUrl() {
-  return getAsaasEnvironment() === 'production'
-    ? 'https://api.asaas.com/v3'
-    : 'https://api-sandbox.asaas.com/v3';
-}
-
-function sanitizeAsaasErrorMessage(payload) {
-  if (payload?.errors?.length) {
-    return String(payload.errors[0]?.description || '').trim();
+    throw error;
   }
-
-  return '';
-}
-
-async function parseAsaasResponse(response) {
-  const payload = await response.json().catch(() => ({}));
-
-  if (response.ok) {
-    return payload;
-  }
-
-  throw new AppError(
-    sanitizeAsaasErrorMessage(payload) ||
-      'Nao foi possivel concluir a operacao com o Asaas no momento.',
-    response.status >= 400 && response.status < 500 ? 400 : 502,
-    response.status === 401 ? 'payment_provider_unauthorized' : 'payment_provider_error',
-  );
-}
-
-async function asaasRequest({ apiKey, method, path, body }) {
-  const normalizedApiKey = resolveAsaasApiKey(apiKey);
-
-  if (!normalizedApiKey) {
-    throw new AppError(
-      'Este tenant ainda nao concluiu a configuracao do Asaas.',
-      400,
-      'payment_provider_unavailable',
-    );
-  }
-
-  const response = await fetch(`${getAsaasBaseUrl()}${path}`, {
-    method,
-    headers: {
-      access_token: normalizedApiKey,
-      'content-type': 'application/json',
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
-
-  return parseAsaasResponse(response);
-}
-
-function resolveAsaasApiKey(apiKey) {
-  const normalizedApiKey = String(apiKey || '').trim();
-
-  if (!normalizedApiKey) {
-    return '';
-  }
-
-  if (normalizedApiKey.startsWith('v1:')) {
-    return decryptSecret(normalizedApiKey);
-  }
-
-  return normalizedApiKey;
 }
 
 export function buildAsaasExternalReference(businessId, orderId) {
@@ -157,6 +108,7 @@ export async function createAsaasSubaccount(payload, { rootApiKey } = {}) {
     method: 'POST',
     path: '/accounts',
     body: payload,
+    operation: 'create_subaccount',
   });
 
   return {
@@ -172,6 +124,7 @@ export async function createAsaasPaymentCharge({ apiKey, charge }) {
     method: 'POST',
     path: '/payments',
     body: charge,
+    operation: 'create_payment',
   });
 }
 
@@ -181,6 +134,7 @@ export async function createAsaasCustomer({ apiKey, customer }) {
     method: 'POST',
     path: '/customers',
     body: customer,
+    operation: 'create_customer',
   });
 }
 
@@ -189,6 +143,7 @@ export async function getAsaasPayment({ apiKey, paymentId }) {
     apiKey,
     method: 'GET',
     path: `/payments/${encodeURIComponent(String(paymentId || '').trim())}`,
+    operation: 'get_payment',
   });
 }
 
@@ -197,10 +152,40 @@ export async function getAsaasPixQrCode({ apiKey, paymentId }) {
     apiKey,
     method: 'GET',
     path: `/payments/${encodeURIComponent(String(paymentId || '').trim())}/pixQrCode`,
+    operation: 'get_pix_qr_code',
   });
 
   return {
     payload: String(response.payload || '').trim(),
     encodedImage: String(response.encodedImage || '').trim(),
+  };
+}
+
+export async function testAsaasConnection({ apiKey } = {}) {
+  const runtimeConfig = getAsaasRuntimeConfig({
+    apiKey: apiKey || env.asaasApiKey || process.env.ASAAS_API_KEY || '',
+  });
+
+  if (!runtimeConfig.configured) {
+    return {
+      ok: false,
+      environment: runtimeConfig.environment,
+      status: 'not_configured',
+      message: 'Asaas nao configurado.',
+    };
+  }
+
+  await asaasRequest({
+    apiKey: runtimeConfig.apiKey,
+    method: 'GET',
+    path: '/myAccount/status/',
+    operation: 'test_connection',
+  });
+
+  return {
+    ok: true,
+    environment: runtimeConfig.environment,
+    status: 'connected',
+    message: `Asaas conectado com sucesso - ${runtimeConfig.environment}.`,
   };
 }
