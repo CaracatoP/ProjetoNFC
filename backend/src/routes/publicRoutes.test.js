@@ -41,6 +41,7 @@ let Product;
 let Payment;
 let PaymentCustomer;
 let SystemSetting;
+let TenantLedgerEntry;
 let subscribeToTenantUpdates;
 let env;
 let logger;
@@ -71,6 +72,7 @@ describe('Public routes', () => {
     ({ Payment } = await import('../models/Payment.js'));
     ({ PaymentCustomer } = await import('../models/PaymentCustomer.js'));
     ({ SystemSetting } = await import('../models/SystemSetting.js'));
+    ({ TenantLedgerEntry } = await import('../models/TenantLedgerEntry.js'));
     ({ subscribeToTenantUpdates } = await import('../services/tenantRealtimeService.js'));
     ({ env } = await import('../config/env.js'));
     ({ logger } = await import('../utils/logger.js'));
@@ -85,6 +87,7 @@ describe('Public routes', () => {
     await Payment.deleteMany({});
     await PaymentCustomer.deleteMany({});
     await SystemSetting.deleteMany({});
+    await TenantLedgerEntry.deleteMany({});
     env.asaasApiKey = 'SUA_API_KEY_SANDBOX';
     mercadoPagoServiceMock.createMercadoPagoCheckoutPreference.mockReset();
     asaasServiceMock.createAsaasCustomer.mockReset();
@@ -1191,6 +1194,129 @@ describe('Public routes', () => {
     });
     expect(mercadoPagoServiceMock.createMercadoPagoCheckoutPreference).not.toHaveBeenCalled();
     loggerInfoSpy.mockRestore();
+  });
+
+  it('keeps the Asaas Pix order pending and returns the hosted invoice fallback when the QR retrieval fails after charge creation', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Combo asaas pix fallback',
+      description: 'Checkout online via Asaas com fallback hospedado',
+      price: 99.7,
+      image: '',
+      category: 'Combos',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    await SystemSetting.create({
+      key: 'finance:asaas',
+      value: {
+        paymentArchitecture: 'centralized',
+        platformWalletId: 'wallet_platform_global',
+        defaultPlatformFeePercent: 5,
+      },
+    });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'asaas',
+          asaas: {
+            enabled: true,
+            status: 'active',
+          },
+          split: {
+            enabled: false,
+            platformFeePercent: 0,
+            mode: 'percentage',
+            inheritsGlobal: true,
+          },
+        },
+      },
+    );
+
+    asaasServiceMock.createAsaasCustomer.mockResolvedValue({
+      id: 'cus_qr_fallback',
+      name: 'Joao',
+    });
+    asaasServiceMock.createAsaasPaymentCharge.mockResolvedValue({
+      id: 'pay_qr_fallback',
+      status: 'PENDING',
+      invoiceUrl: 'https://sandbox.asaas.com/i/pay_qr_fallback',
+    });
+    asaasServiceMock.getAsaasPixQrCode.mockRejectedValue(
+      new AppError(
+        'Voce nao possui uma chave Pix cadastrada para recebimentos de cobrancas via Pix.',
+        400,
+        'asaas_validation_error',
+      ),
+    );
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Joao',
+        customerPhone: '5511988877665',
+        customerDocument: '529.982.247-25',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: 1,
+            itemTotal: 1,
+          },
+        ],
+        deliveryType: 'pickup',
+        payment: {
+          method: 'pix',
+          provider: 'asaas',
+        },
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.payment).toEqual(
+      expect.objectContaining({
+        method: 'pix',
+        provider: 'asaas',
+        status: 'pending',
+        amount: 99.7,
+        paymentArchitecture: 'centralized',
+        providerPaymentId: 'pay_qr_fallback',
+        providerCustomerId: 'cus_qr_fallback',
+        invoiceUrl: 'https://sandbox.asaas.com/i/pay_qr_fallback',
+        checkoutUrl: 'https://sandbox.asaas.com/i/pay_qr_fallback',
+        pixCopyPaste: '',
+        pixQrCode: '',
+        platformFeeAmount: 4.99,
+        tenantNetAmount: 94.71,
+      }),
+    );
+    expect(asaasServiceMock.createAsaasCustomer).toHaveBeenCalledOnce();
+    expect(asaasServiceMock.createAsaasPaymentCharge).toHaveBeenCalledOnce();
+    expect(asaasServiceMock.getAsaasPixQrCode).toHaveBeenCalledOnce();
+    expect(await Payment.findOne({ provider: 'asaas', providerPaymentId: 'pay_qr_fallback' }).lean()).toEqual(
+      expect.objectContaining({
+        businessId: business._id,
+        status: 'pending',
+        invoiceUrl: 'https://sandbox.asaas.com/i/pay_qr_fallback',
+        checkoutUrl: 'https://sandbox.asaas.com/i/pay_qr_fallback',
+        pixCopyPaste: '',
+        pixQrCode: '',
+      }),
+    );
+    expect(await Payment.countDocuments({ provider: 'manual', method: 'pix', amount: 99.7 })).toBe(0);
+    expect(await TenantLedgerEntry.countDocuments({ businessId: business._id })).toBe(0);
   });
 
   it('rejects an Asaas Pix checkout without CPF or CNPJ before trying to create the provider customer', async () => {

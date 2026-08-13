@@ -1324,14 +1324,17 @@ export async function createPublicOrder(slug, payload) {
         },
         'Asaas payment charge created for public order',
       );
+      const providerPaymentId = String(charge.id || '').trim();
+      const invoiceUrl = String(charge.invoiceUrl || '').trim();
 
       let nextPayment = normalizeOrderPayment(
         {
           ...payment,
           paymentArchitecture: asaasContext.paymentArchitecture,
-          providerPaymentId: String(charge.id || '').trim(),
+          providerPaymentId,
           providerCustomerId,
-          invoiceUrl: String(charge.invoiceUrl || '').trim(),
+          checkoutUrl: invoiceUrl,
+          invoiceUrl,
           bankSlipUrl: String(charge.bankSlipUrl || '').trim(),
           grossAmount: total,
           platformFeeAmount,
@@ -1342,44 +1345,79 @@ export async function createPublicOrder(slug, payload) {
         },
         total,
       );
+      const nextPaymentEvents = [
+        {
+          type: 'charge_created',
+          provider: PAYMENT_PROVIDERS.ASAAS,
+          status: PAYMENT_STATUS.PENDING,
+          providerPaymentId,
+          occurredAt: receivedAt,
+          meta: {
+            externalReference,
+            method: payment.method,
+            paymentArchitecture: asaasContext.paymentArchitecture,
+          },
+        },
+      ];
 
       if (payment.method === PAYMENT_METHODS.PIX) {
-        const pixQrCode = await getAsaasPixQrCode({
-          apiKey: asaasContext.apiKey,
-          paymentId: String(charge.id || '').trim(),
-        });
+        try {
+          const pixQrCode = await getAsaasPixQrCode({
+            apiKey: asaasContext.apiKey,
+            paymentId: providerPaymentId,
+          });
 
-        nextPayment = normalizeOrderPayment(
-          {
-            ...nextPayment,
-            pixCopyPaste: pixQrCode.payload,
-            pixQrCode: pixQrCode.encodedImage,
-          },
-          total,
-        );
+          nextPayment = normalizeOrderPayment(
+            {
+              ...nextPayment,
+              pixCopyPaste: pixQrCode.payload,
+              pixQrCode: pixQrCode.encodedImage,
+            },
+            total,
+          );
+        } catch (error) {
+          if (!invoiceUrl) {
+            throw error;
+          }
+
+          logger.warn(
+            {
+              businessId: String(business._id || ''),
+              orderId: String(created._id || ''),
+              providerPaymentId,
+              paymentMethod: payment.method,
+              paymentArchitecture: asaasContext.paymentArchitecture,
+              code: error?.code,
+              statusCode: error?.statusCode,
+            },
+            'Failed to retrieve Asaas Pix QR code for public order, keeping hosted invoice fallback',
+          );
+          nextPaymentEvents.push({
+            type: 'pix_qr_unavailable',
+            provider: PAYMENT_PROVIDERS.ASAAS,
+            status: PAYMENT_STATUS.PENDING,
+            providerPaymentId,
+            message: String(error?.message || '').trim(),
+            occurredAt: new Date(),
+            meta: {
+              code: String(error?.code || '').trim(),
+              externalReference,
+              method: payment.method,
+              invoiceUrl,
+              paymentArchitecture: asaasContext.paymentArchitecture,
+            },
+          });
+        }
       }
 
       finalOrder = await updateOrderRecordByBusinessId(business._id, created._id, {
         payment: nextPayment,
-        paymentEvents: appendUniquePaymentEvents(created.paymentEvents || [], [
-          {
-            type: 'charge_created',
-            provider: PAYMENT_PROVIDERS.ASAAS,
-            status: PAYMENT_STATUS.PENDING,
-            providerPaymentId: String(charge.id || '').trim(),
-            occurredAt: receivedAt,
-            meta: {
-              externalReference,
-              method: payment.method,
-              paymentArchitecture: asaasContext.paymentArchitecture,
-            },
-          },
-        ]),
+        paymentEvents: appendUniquePaymentEvents(created.paymentEvents || [], nextPaymentEvents),
       });
 
       const storedPayment = await upsertPaymentByProviderPaymentId(
         PAYMENT_PROVIDERS.ASAAS,
-        String(charge.id || '').trim(),
+        providerPaymentId,
         buildAsaasPaymentReferencePayload({
           businessId: business._id,
           orderId: created._id,

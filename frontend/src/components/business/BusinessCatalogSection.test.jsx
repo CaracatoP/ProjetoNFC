@@ -771,6 +771,69 @@ describe('BusinessCatalogSection', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('redirects Asaas Pix checkout to the hosted invoice when the charge exists but the QR payload is unavailable', async () => {
+    const user = userEvent.setup();
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const onSubmitOrder = vi.fn().mockResolvedValue({
+      id: 'order-asaas-pix-fallback-1',
+      total: 39.9,
+      payment: {
+        method: PAYMENT_METHODS.PIX,
+        status: PAYMENT_STATUS.PENDING,
+        provider: 'asaas',
+        amount: 39.9,
+        invoiceUrl: 'https://sandbox.asaas.com/i/pay_pix_fallback',
+        pixCopyPaste: '',
+        pixQrCode: '',
+      },
+    });
+
+    render(
+      <BusinessCatalogSection
+        business={asaasBusinessFixture}
+        tenantSlug="barbearia-estilo-vivo"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={onSubmitOrder}
+      />,
+    );
+
+    const catalogCard = screen.getByText('Pomada modeladora').closest('.catalog-card');
+    await user.click(within(catalogCard).getByRole('button', { name: 'Adicionar' }));
+    await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
+    await user.type(screen.getByLabelText('Nome'), 'Julia');
+    await user.type(screen.getByLabelText('Telefone'), '5511977776666');
+    await user.click(screen.getByRole('button', { name: 'Retirada' }));
+    await user.click(screen.getByRole('button', { name: 'Pix' }));
+    await user.type(screen.getByLabelText('CPF ou CNPJ'), '52998224725');
+    await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
+
+    await waitFor(() => {
+      expect(onSubmitOrder).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customerDocument: '52998224725',
+          payment: {
+            method: PAYMENT_METHODS.PIX,
+          },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(openSpy).toHaveBeenCalledWith('https://sandbox.asaas.com/i/pay_pix_fallback', '_self');
+    });
+
+    expect(await screen.findByText('Abrir cobranca Pix')).toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        /Finalize o Pix no ambiente seguro do Asaas. Depois da confirmacao, o pedido sera atualizado automaticamente./i,
+      ).length,
+    ).toBeGreaterThan(0);
+
+    openSpy.mockRestore();
+  });
+
   it('shows a loading state during submit and recovers with visible feedback when the request fails', async () => {
     const user = userEvent.setup();
     const deferred = createDeferred();

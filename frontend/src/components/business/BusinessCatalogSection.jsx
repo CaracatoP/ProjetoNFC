@@ -297,12 +297,25 @@ function getPaymentSuccessMessage(payment = {}) {
   }
 }
 
+function isPixPayment(order) {
+  return order?.payment?.method === PAYMENT_METHODS.PIX;
+}
+
 function isPixCheckoutResult(order) {
-  return order?.payment?.method === PAYMENT_METHODS.PIX && Boolean(order?.payment?.pixCopyPaste);
+  return isPixPayment(order) && Boolean(order?.payment?.pixCopyPaste);
 }
 
 function isAsaasPixCheckoutResult(order) {
   return isPixCheckoutResult(order) && order?.payment?.provider === PAYMENT_PROVIDERS.ASAAS;
+}
+
+function isAsaasPixHostedFallback(order) {
+  return (
+    isPixPayment(order) &&
+    order?.payment?.provider === PAYMENT_PROVIDERS.ASAAS &&
+    !order?.payment?.pixCopyPaste &&
+    Boolean(order?.payment?.invoiceUrl)
+  );
 }
 
 function requiresCheckoutCustomerDocument(checkout, paymentSettings = {}) {
@@ -981,8 +994,11 @@ export function BusinessCatalogSection({
 
       const shouldRedirectToHostedCheckout =
         nextPayment.provider === PAYMENT_PROVIDERS.ASAAS &&
-        (nextPayment.method === PAYMENT_METHODS.CREDIT_CARD ||
-          nextPayment.method === PAYMENT_METHODS.DEBIT_CARD) &&
+        (
+          nextPayment.method === PAYMENT_METHODS.CREDIT_CARD ||
+          nextPayment.method === PAYMENT_METHODS.DEBIT_CARD ||
+          (nextPayment.method === PAYMENT_METHODS.PIX && !nextPayment.pixCopyPaste)
+        ) &&
         nextPayment.invoiceUrl;
 
       setCart({});
@@ -1137,6 +1153,7 @@ export function BusinessCatalogSection({
 
                       {isShowingCheckoutSuccess ? (
                         <div className="catalog-checkout__success" data-testid="catalog-checkout-success">
+                          {/** Keep Pix waiting states clear even when the QR must open in the hosted Asaas page. */}
                           <div className="catalog-checkout__success-hero">
                             <span className="catalog-checkout__success-pill">Pedido enviado com sucesso</span>
                             <div className="catalog-checkout__success-copy">
@@ -1150,7 +1167,7 @@ export function BusinessCatalogSection({
                               </div>
                               <div className="catalog-checkout__success-meta-card">
                                 <span>Status</span>
-                                <strong>{isPixCheckoutResult(checkoutResult) ? 'Aguardando pagamento' : 'Aguardando confirmacao'}</strong>
+                                <strong>{isPixPayment(checkoutResult) ? 'Aguardando pagamento' : 'Aguardando confirmacao'}</strong>
                               </div>
                             </div>
                           </div>
@@ -1166,11 +1183,11 @@ export function BusinessCatalogSection({
                             </div>
                           </div>
 
-                          {isPixCheckoutResult(checkoutResult) ? (
+                          {isPixPayment(checkoutResult) ? (
                             <div className="catalog-checkout__pix-success-card">
                               <div className="catalog-checkout__pix-qr-wrap">
                                 <div className="catalog-checkout__pix-qr">
-                                  {isAsaasPixSuccess ? (
+                                  {checkoutResult?.payment?.provider === PAYMENT_PROVIDERS.ASAAS ? (
                                     checkoutResult?.payment?.pixQrCode ? (
                                       <img
                                         src={checkoutResult.payment.pixQrCode}
@@ -1178,8 +1195,12 @@ export function BusinessCatalogSection({
                                       />
                                     ) : (
                                       <div className="catalog-checkout__pix-qr-fallback">
-                                        <strong>QR Code indisponivel</strong>
-                                        <span>Use o codigo Pix abaixo para concluir o pagamento.</span>
+                                        <strong>Abra a cobranca Pix</strong>
+                                        <span>
+                                          {isAsaasPixHostedFallback(checkoutResult)
+                                            ? 'O QR Code sera exibido no ambiente seguro do Asaas.'
+                                            : 'Use o codigo Pix abaixo para concluir o pagamento.'}
+                                        </span>
                                       </div>
                                     )
                                   ) : (
@@ -1192,17 +1213,36 @@ export function BusinessCatalogSection({
 
                               <div className="catalog-checkout__pix-copy">
                                 <div className="catalog-checkout__pix-copy-header">
-                                  <strong>Codigo Pix</strong>
-                                  <span>Use o QR Code ou copie o codigo completo para pagar agora.</span>
+                                  <strong>{checkoutResult?.payment?.pixCopyPaste ? 'Codigo Pix' : 'Pagamento Pix'}</strong>
+                                  <span>
+                                    {checkoutResult?.payment?.pixCopyPaste
+                                      ? 'Use o QR Code ou copie o codigo completo para pagar agora.'
+                                      : 'Continue o pagamento pela cobranca segura do Asaas.'}
+                                  </span>
                                 </div>
-                                <label className="admin-field catalog-checkout__pix-code-field">
-                                  <span>Copia e cola Pix</span>
-                                  <textarea readOnly rows="4" value={checkoutResult.payment.pixCopyPaste} />
-                                </label>
-                                {pixCopyFeedback ? <p className="catalog-checkout__pix-feedback">{pixCopyFeedback}</p> : null}
+                                {checkoutResult?.payment?.pixCopyPaste ? (
+                                  <label className="admin-field catalog-checkout__pix-code-field">
+                                    <span>Copia e cola Pix</span>
+                                    <textarea readOnly rows="4" value={checkoutResult.payment.pixCopyPaste} />
+                                  </label>
+                                ) : null}
+                                {!checkoutResult?.payment?.pixCopyPaste && checkoutResult?.payment?.invoiceUrl ? (
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    onClick={() => redirectToCheckoutUrl(checkoutResult.payment.invoiceUrl)}
+                                  >
+                                    Abrir cobranca Pix
+                                  </Button>
+                                ) : null}
+                                {checkoutResult?.payment?.pixCopyPaste && pixCopyFeedback ? (
+                                  <p className="catalog-checkout__pix-feedback">{pixCopyFeedback}</p>
+                                ) : null}
                                 <p className="admin-muted-copy">
                                   {isAsaasPixSuccess
                                     ? 'Assim que o pagamento for confirmado, o status do pedido sera atualizado automaticamente.'
+                                    : isAsaasPixHostedFallback(checkoutResult)
+                                    ? 'Finalize o Pix no ambiente seguro do Asaas. Depois da confirmacao, o pedido sera atualizado automaticamente.'
                                     : 'Apos o pagamento, o estabelecimento confirmara seu pedido.'}
                                 </p>
                               </div>
