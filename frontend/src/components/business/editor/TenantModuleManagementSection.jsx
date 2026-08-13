@@ -736,6 +736,29 @@ export function TenantModuleManagementSection({
     return payment.status !== PAYMENT_STATUS.PAID;
   }
 
+  function getOperationalPaymentStatus(order) {
+    const paymentStatus = order?.payment?.status || PAYMENT_STATUS.MANUAL;
+
+    if (paymentStatus === PAYMENT_STATUS.PAID) {
+      return {
+        label: 'Pago',
+        tone: PAYMENT_STATUS.PAID,
+      };
+    }
+
+    if ([PAYMENT_STATUS.FAILED, PAYMENT_STATUS.CANCELLED].includes(paymentStatus)) {
+      return {
+        label: 'Cancelado',
+        tone: PAYMENT_STATUS.CANCELLED,
+      };
+    }
+
+    return {
+      label: 'Aguardando pagamento',
+      tone: PAYMENT_STATUS.PENDING,
+    };
+  }
+
   return (
     <div className="admin-card-stack admin-card-stack--airy">
       {showModuleIntro ? (
@@ -2117,38 +2140,52 @@ export function TenantModuleManagementSection({
                       {order.payment ? (
                         <div className="admin-order-payment">
                           <div className="admin-order-payment__meta">
-                            <span className="admin-order-payment__method">
-                              {PAYMENT_METHOD_LABELS[order.payment.method] || 'Pagamento manual'}
-                            </span>
-                            <div className={`admin-order-payment-badge admin-order-payment-badge--${order.payment.status || PAYMENT_STATUS.MANUAL}`}>
+                            <div className="admin-order-payment__copy">
+                              <span className="admin-order-payment__label">Pagamento</span>
+                              <span className="admin-order-payment__method">
+                                {(PAYMENT_METHOD_LABELS[order.payment.method] || 'Pagamento manual')}
+                                {' · '}
+                                {formatCurrencyValue(order.payment.amount || order.total)}
+                              </span>
+                            </div>
+                            <div className={`admin-order-payment-badge admin-order-payment-badge--${getOperationalPaymentStatus(order).tone}`}>
                               <i aria-hidden="true" />
-                              <span>{PAYMENT_STATUS_LABELS[order.payment.status] || PAYMENT_STATUS_LABELS[PAYMENT_STATUS.MANUAL]}</span>
+                              <span>{getOperationalPaymentStatus(order).label}</span>
                             </div>
                           </div>
-                          <div className="admin-order-payment__details">
-                            <span>
-                              <strong>Provider:</strong> {PAYMENT_PROVIDER_LABELS[order.payment.provider] || order.payment.provider || 'Manual'}
-                            </span>
-                            <span>
-                              <strong>Valor do pagamento:</strong> {formatCurrencyValue(order.payment.amount || order.total)}
-                            </span>
-                            {order.payment.platformFeeAmount > 0 ? (
+                          {order.payment.paidAt ? (
+                            <div className="admin-order-payment__details">
                               <span>
-                                <strong>Taxa da plataforma:</strong> {formatCurrencyValue(order.payment.platformFeeAmount)}
+                                <strong>Pago em:</strong> {formatDateTime(order.payment.paidAt)}
                               </span>
-                            ) : null}
-                            {order.payment.tenantNetAmount > 0 ? (
+                            </div>
+                          ) : null}
+                          {mode === 'admin' ? (
+                            <div className="admin-order-payment__details">
                               <span>
-                                <strong>Liquido estimado do tenant:</strong> {formatCurrencyValue(order.payment.tenantNetAmount)}
+                                <strong>Provider:</strong> {PAYMENT_PROVIDER_LABELS[order.payment.provider] || order.payment.provider || 'Manual'}
                               </span>
-                            ) : null}
-                            {mode === 'admin' && order.payment.providerPaymentId ? (
                               <span>
-                                <strong>Pagamento Asaas:</strong> {order.payment.providerPaymentId}
+                                <strong>Valor do pagamento:</strong> {formatCurrencyValue(order.payment.amount || order.total)}
                               </span>
-                            ) : null}
-                          </div>
-                          {order.payment.invoiceUrl ? (
+                              {order.payment.platformFeeAmount > 0 ? (
+                                <span>
+                                  <strong>Taxa da plataforma:</strong> {formatCurrencyValue(order.payment.platformFeeAmount)}
+                                </span>
+                              ) : null}
+                              {order.payment.tenantNetAmount > 0 ? (
+                                <span>
+                                  <strong>Liquido estimado do tenant:</strong> {formatCurrencyValue(order.payment.tenantNetAmount)}
+                                </span>
+                              ) : null}
+                              {order.payment.providerPaymentId ? (
+                                <span>
+                                  <strong>Pagamento Asaas:</strong> {order.payment.providerPaymentId}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
+                          {mode === 'admin' && order.payment.invoiceUrl ? (
                             <div className="admin-inline-actions">
                               <Button
                                 href={order.payment.invoiceUrl}
@@ -2160,7 +2197,7 @@ export function TenantModuleManagementSection({
                               </Button>
                             </div>
                           ) : null}
-                          {Array.isArray(order.paymentEvents) && order.paymentEvents.length ? (
+                          {mode === 'admin' && Array.isArray(order.paymentEvents) && order.paymentEvents.length ? (
                             <div className="admin-order-payment-events">
                               <strong>Historico financeiro</strong>
                               <ul className="admin-order-payment-events__list">

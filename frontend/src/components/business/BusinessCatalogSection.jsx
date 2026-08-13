@@ -5,6 +5,7 @@ import {
   PAYMENT_METHODS,
   PAYMENT_METHOD_VALUES,
   PAYMENT_PROVIDERS,
+  PAYMENT_STATUS,
 } from '@shared/constants/index.js';
 import {
   isBusinessPaymentMethodEnabled,
@@ -33,6 +34,8 @@ import { SectionHeader } from '@/components/common/SectionHeader.jsx';
 import { formatCurrency, resolveMediaUrl } from '@/utils/formatters.js';
 
 const CART_STORAGE_PREFIX = 'taplink:cart:';
+const PENDING_PIX_STORAGE_PREFIX = 'taplink:pending-pix:';
+const ALL_CATEGORIES_VALUE = '__all__';
 
 function logCheckoutEvent(eventName, context = {}) {
   if (!import.meta.env.DEV || import.meta.env.MODE === 'test' || typeof console === 'undefined') {
@@ -85,6 +88,11 @@ function defaultCheckoutState() {
 function getCartStorageKey(slug) {
   const normalizedSlug = String(slug || '').trim();
   return normalizedSlug ? `${CART_STORAGE_PREFIX}${normalizedSlug}` : '';
+}
+
+function getPendingPixStorageKey(slug) {
+  const normalizedSlug = String(slug || '').trim();
+  return normalizedSlug ? `${PENDING_PIX_STORAGE_PREFIX}${normalizedSlug}` : '';
 }
 
 function readStoredCart(slug) {
@@ -144,6 +152,66 @@ function persistStoredCart(slug, cart) {
   }
 
   storage.setItem(storageKey, JSON.stringify(Object.fromEntries(normalizedEntries)));
+}
+
+function readStoredPendingPixOrder(slug) {
+  const storageKey = getPendingPixStorageKey(slug);
+
+  if (!storageKey || typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const rawValue = window.localStorage?.getItem(storageKey);
+
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue);
+    const checkoutToken = String(parsed?.checkoutToken || '').trim();
+    const orderId = String(parsed?.orderId || '').trim();
+
+    if (!checkoutToken) {
+      return null;
+    }
+
+    return {
+      checkoutToken,
+      orderId,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistStoredPendingPixOrder(slug, pendingOrder = null) {
+  const storageKey = getPendingPixStorageKey(slug);
+
+  if (!storageKey || typeof window === 'undefined') {
+    return;
+  }
+
+  const storage = window.localStorage;
+
+  if (!storage) {
+    return;
+  }
+
+  const checkoutToken = String(pendingOrder?.checkoutToken || '').trim();
+
+  if (!checkoutToken) {
+    storage.removeItem(storageKey);
+    return;
+  }
+
+  storage.setItem(
+    storageKey,
+    JSON.stringify({
+      checkoutToken,
+      orderId: String(pendingOrder?.orderId || '').trim(),
+    }),
+  );
 }
 
 function normalizeCategoryLabel(value) {
@@ -295,6 +363,29 @@ function getPaymentSuccessMessage(payment = {}) {
     default:
       return 'Pedido enviado com sucesso. O pagamento sera feito na retirada.';
   }
+}
+
+function getRecoverablePixStatusCopy(order = {}) {
+  const status = order?.payment?.status;
+
+  if (status === PAYMENT_STATUS.PAID) {
+    return {
+      title: 'Pagamento confirmado',
+      description: 'Seu pedido ja foi pago e aguardara a proxima atualizacao do estabelecimento.',
+    };
+  }
+
+  if (status === PAYMENT_STATUS.FAILED || status === PAYMENT_STATUS.CANCELLED) {
+    return {
+      title: 'Pagamento indisponivel',
+      description: 'Essa cobranca nao pode mais ser concluida. Revise o pedido antes de tentar novamente.',
+    };
+  }
+
+  return {
+    title: 'Pagamento pendente',
+    description: 'Seu Pix continua disponivel. Retome o pagamento quando quiser.',
+  };
 }
 
 function isPixPayment(order) {
@@ -497,6 +588,12 @@ function parseFractionInputValue(rawValue) {
   return Number(String(rawValue || '').trim().replace(',', '.'));
 }
 
+function getStepPrecision(stepValue) {
+  const normalizedStep = String(stepValue ?? '').trim();
+  const dotIndex = normalizedStep.indexOf('.');
+  return dotIndex >= 0 ? normalizedStep.length - dotIndex - 1 : 0;
+}
+
 function convertInputValueToCartQuantity(product, rawValue) {
   const numericValue = parseFractionInputValue(rawValue);
 
@@ -583,6 +680,7 @@ export function BusinessCatalogSection({
   segmentConfig,
   products = [],
   onSubmitOrder,
+  onRecoverPendingPixOrder,
   onTrackAction,
 }) {
   const [cart, setCart] = useState({});
@@ -592,8 +690,10 @@ export function BusinessCatalogSection({
   const [feedback, setFeedback] = useState('');
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
+  const [activeCategory, setActiveCategory] = useState(ALL_CATEGORIES_VALUE);
   const [checkoutResult, setCheckoutResult] = useState(null);
   const [pendingPixOrder, setPendingPixOrder] = useState(null);
+  const [recoveringPendingPixOrder, setRecoveringPendingPixOrder] = useState(false);
   const [pixCopyFeedback, setPixCopyFeedback] = useState('');
   const [checkoutErrors, setCheckoutErrors] = useState({});
   const hydratedSlugRef = useRef('');
@@ -628,6 +728,8 @@ export function BusinessCatalogSection({
     setCheckout(defaultCheckoutState());
     setCheckoutResult(null);
     setPendingPixOrder(null);
+    setRecoveringPendingPixOrder(false);
+    setActiveCategory(ALL_CATEGORIES_VALUE);
     setPixCopyFeedback('');
     setCheckoutErrors({});
   }, [tenantSlug]);
@@ -639,6 +741,50 @@ export function BusinessCatalogSection({
 
     persistStoredCart(tenantSlug, cart);
   }, [cart, tenantSlug]);
+
+  useEffect(() => {
+    const pendingOrderReference = readStoredPendingPixOrder(tenantSlug);
+
+    if (!pendingOrderReference?.checkoutToken || typeof onRecoverPendingPixOrder !== 'function') {
+      return undefined;
+    }
+
+    let active = true;
+    setRecoveringPendingPixOrder(true);
+
+    Promise.resolve(onRecoverPendingPixOrder(pendingOrderReference.checkoutToken))
+      .then((order) => {
+        if (!active || !isValidCheckoutResponse(order) || !isPixPayment(order)) {
+          return;
+        }
+
+        setPendingPixOrder({
+          ...order,
+          checkoutToken: pendingOrderReference.checkoutToken,
+        });
+
+        if (order?.payment?.status !== PAYMENT_STATUS.PENDING) {
+          persistStoredPendingPixOrder(tenantSlug, null);
+        }
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+
+        persistStoredPendingPixOrder(tenantSlug, null);
+        setPendingPixOrder(null);
+      })
+      .finally(() => {
+        if (active) {
+          setRecoveringPendingPixOrder(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [onRecoverPendingPixOrder, tenantSlug]);
 
   useEffect(() => {
     const productsById = new Map(normalizedProducts.map((product) => [product.id, product]));
@@ -679,9 +825,32 @@ export function BusinessCatalogSection({
   }, [cart, normalizedProducts]);
 
   const filteredProducts = useMemo(
-    () => normalizedProducts.filter((product) => matchesProductSearch(product, normalizedSearch)),
-    [normalizedProducts, normalizedSearch],
+    () =>
+      normalizedProducts.filter((product) => {
+        const matchesCategory =
+          activeCategory === ALL_CATEGORIES_VALUE ||
+          normalizeCategoryLabel(product.category) === activeCategory;
+
+        return matchesCategory && matchesProductSearch(product, normalizedSearch);
+      }),
+    [activeCategory, normalizedProducts, normalizedSearch],
   );
+  const categoryOptions = useMemo(() => {
+    const categories = Array.from(
+      new Set(normalizedProducts.map((product) => normalizeCategoryLabel(product.category))),
+    );
+
+    return [
+      {
+        value: ALL_CATEGORIES_VALUE,
+        label: 'Todos',
+      },
+      ...categories.map((category) => ({
+        value: category,
+        label: category,
+      })),
+    ];
+  }, [normalizedProducts]);
 
   const groupedProducts = useMemo(() => {
     const groups = new Map();
@@ -740,7 +909,20 @@ export function BusinessCatalogSection({
   );
   const isShowingCheckoutSuccess = Boolean(checkoutResult && !cartItems.length);
   const isAsaasPixSuccess = isAsaasPixCheckoutResult(checkoutResult);
-  const showPendingPixBanner = Boolean(!isCartOpen && isPixCheckoutResult(pendingPixOrder));
+  const showPendingPixBanner = Boolean(!isCartOpen && pendingPixOrder && isPixPayment(pendingPixOrder));
+  const pendingPixStatusCopy = useMemo(
+    () => (showPendingPixBanner ? getRecoverablePixStatusCopy(pendingPixOrder) : null),
+    [pendingPixOrder, showPendingPixBanner],
+  );
+  const checkoutVisualStep = isShowingCheckoutSuccess
+    ? 'pix'
+    : !cartItems.length
+      ? 'cart'
+      : !checkout.deliveryType
+        ? 'delivery'
+        : !checkout.paymentMethod
+          ? 'payment'
+          : 'pix';
 
   useEffect(() => {
     setCheckout((current) => {
@@ -873,6 +1055,22 @@ export function BusinessCatalogSection({
     updateCartQuantity(product, nextQuantity);
   }
 
+  function adjustFractionInput(product, direction) {
+    const config = getFractionInputConfig(product.measurementUnit);
+    const currentValue = parseFractionInputValue(getFractionInputValue(product));
+    const fallbackValue = parseFractionInputValue(defaultFractionInputValue(product.measurementUnit));
+    const baseValue =
+      Number.isFinite(currentValue) && currentValue > 0
+        ? currentValue
+        : fallbackValue;
+    const step = Number(config.step || 1);
+    const nextValue = Math.max(
+      Number(config.min || step || 1),
+      Number((baseValue + step * direction).toFixed(getStepPrecision(step))),
+    );
+    setFractionInput(product.id, String(nextValue));
+  }
+
   function adjustCartQuantity(product, direction) {
     const currentQuantity = normalizeCartQuantityForProduct(product, cart[product.id]);
     const nextQuantity = currentQuantity + getCartAdjustmentStep(product) * direction;
@@ -1000,12 +1198,27 @@ export function BusinessCatalogSection({
           (nextPayment.method === PAYMENT_METHODS.PIX && !nextPayment.pixCopyPaste)
         ) &&
         nextPayment.invoiceUrl;
+      const nextPendingPixOrder = isPixPayment(createdOrder)
+        ? {
+            ...createdOrder,
+            checkoutToken: String(createdOrder?.checkoutToken || '').trim(),
+          }
+        : null;
 
       setCart({});
       setCheckout(defaultCheckoutState());
       setCheckoutResult(createdOrder || null);
-      setPendingPixOrder(isPixCheckoutResult(createdOrder) ? createdOrder : null);
+      setPendingPixOrder(nextPendingPixOrder);
       persistStoredCart(tenantSlug, {});
+      persistStoredPendingPixOrder(
+        tenantSlug,
+        nextPendingPixOrder?.checkoutToken && nextPendingPixOrder?.payment?.status === PAYMENT_STATUS.PENDING
+          ? {
+              checkoutToken: nextPendingPixOrder.checkoutToken,
+              orderId: nextPendingPixOrder.id,
+            }
+          : null,
+      );
       setFeedback('');
       setIsCartOpen(true);
       logCheckoutEvent('checkout_success', {
@@ -1063,6 +1276,10 @@ export function BusinessCatalogSection({
     setCheckoutResult(null);
     setFeedback('');
     setIsCartOpen(false);
+
+    if (pendingPixOrder?.payment?.status && pendingPixOrder.payment.status !== PAYMENT_STATUS.PENDING) {
+      setPendingPixOrder(null);
+    }
   }
 
   return (
@@ -1077,17 +1294,27 @@ export function BusinessCatalogSection({
               </span>
             </Button>
           </div>
+          {recoveringPendingPixOrder && !showPendingPixBanner ? (
+            <div className="catalog-pix-pending-banner" role="status" aria-live="polite">
+              <div className="catalog-pix-pending-banner__copy">
+                <strong>Retomando pagamento</strong>
+                <span>Estamos verificando se existe um Pix pendente para este pedido.</span>
+              </div>
+            </div>
+          ) : null}
           {showPendingPixBanner ? (
             <div className="catalog-pix-pending-banner" role="status" aria-live="polite">
               <div className="catalog-pix-pending-banner__copy">
-                <strong>Pedido pendente</strong>
-                <span>Aguardando pagamento</span>
+                <strong>{pendingPixStatusCopy?.title || 'Pagamento pendente'}</strong>
+                <span>{pendingPixStatusCopy?.description || 'Seu Pix continua disponivel para pagamento.'}</span>
               </div>
               {pixCopyFeedback ? <small>{pixCopyFeedback}</small> : null}
               <div className="catalog-pix-pending-banner__actions">
-                <Button type="button" variant="secondary" onClick={() => handleCopyPixCode(pendingPixOrder)}>
-                  Copiar Pix
-                </Button>
+                {pendingPixOrder?.payment?.status === PAYMENT_STATUS.PENDING && pendingPixOrder?.payment?.pixCopyPaste ? (
+                  <Button type="button" variant="secondary" onClick={() => handleCopyPixCode(pendingPixOrder)}>
+                    Copiar Pix
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="secondary"
@@ -1096,7 +1323,7 @@ export function BusinessCatalogSection({
                     setIsCartOpen(true);
                   }}
                 >
-                  Ver Pix
+                  {pendingPixOrder?.payment?.status === PAYMENT_STATUS.PENDING ? 'Continuar pagamento' : 'Ver pedido'}
                 </Button>
               </div>
             </div>
@@ -1148,6 +1375,24 @@ export function BusinessCatalogSection({
                               <li key={message}>{message}</li>
                             ))}
                           </ul>
+                        </div>
+                      ) : null}
+
+                      {!isShowingCheckoutSuccess ? (
+                        <div className="catalog-checkout__stage-nav" aria-label="Etapas do checkout">
+                          {[
+                            { key: 'cart', label: 'Carrinho' },
+                            { key: 'delivery', label: 'Entrega' },
+                            { key: 'payment', label: 'Pagamento' },
+                            { key: 'pix', label: 'Pix' },
+                          ].map((step) => (
+                            <div
+                              key={step.key}
+                              className={`catalog-checkout__stage-pill${checkoutVisualStep === step.key ? ' is-active' : ''}`}
+                            >
+                              <span>{step.label}</span>
+                            </div>
+                          ))}
                         </div>
                       ) : null}
 
@@ -1268,126 +1513,287 @@ export function BusinessCatalogSection({
                         </div>
                       ) : cartItems.length ? (
                         <>
-                          <ul className="catalog-checkout__list">
-                            {cartItems.map((item) => {
-                              const product = normalizedProducts.find((entry) => entry.id === item.productId) || {
-                                id: item.productId,
-                                measurementUnit: item.measurementUnit,
-                                price: item.unitPrice,
-                                name: item.name,
-                                image: '',
-                              };
-                              const editorConfig = getCartEditorConfig(product);
-                              const itemImageUrl = resolveMediaUrl(product.image, {
-                                width: 160,
-                                height: 160,
-                                fit: 'fill',
-                              });
-
-                              return (
-                                <li key={item.productId} className="catalog-checkout__item">
-                                  <div className={`catalog-checkout__item-media${itemImageUrl ? '' : ' catalog-checkout__item-media--placeholder'}`}>
-                                    {itemImageUrl ? <img src={itemImageUrl} alt={item.name} /> : <span aria-hidden="true">{item.name.slice(0, 1)}</span>}
-                                  </div>
-                                  <div className="catalog-checkout__item-main">
-                                    <div className="catalog-checkout__item-copy">
-                                      <span className="catalog-checkout__item-name">{item.name}</span>
-                                      <small className="catalog-checkout__item-meta">
-                                        {item.displayQuantity} x {formatCurrency(item.unitPrice)}/{getMeasurementUnitLabel(item.measurementUnit)}
-                                      </small>
-                                    </div>
-
-                                    <label className="catalog-checkout__item-editor">
-                                      <span>{editorConfig.label}</span>
-                                      <input
-                                        type="number"
-                                        min={editorConfig.min}
-                                        step={editorConfig.step}
-                                        value={editorConfig.value}
-                                        onChange={(event) => handleCartEditorChange(product, event.target.value)}
-                                      />
-                                    </label>
-
-                                    <div className="catalog-checkout__item-footer">
-                                      <div className="catalog-checkout__stepper" aria-label={`Controles de quantidade para ${item.name}`}>
-                                        <Button
-                                          type="button"
-                                          variant="secondary"
-                                          className="catalog-checkout__stepper-button"
-                                          aria-label={`Diminuir quantidade de ${item.name}`}
-                                          onClick={() => adjustCartQuantity(product, -1)}
-                                        >
-                                          -
-                                        </Button>
-                                        <span className="catalog-checkout__stepper-value">{item.displayQuantity}</span>
-                                        <Button
-                                          type="button"
-                                          variant="secondary"
-                                          className="catalog-checkout__stepper-button"
-                                          aria-label={`Aumentar quantidade de ${item.name}`}
-                                          onClick={() => adjustCartQuantity(product, 1)}
-                                        >
-                                          +
-                                        </Button>
-                                      </div>
-                                      <div className="catalog-checkout__item-actions">
-                                        <strong>{formatCurrency(item.itemTotal)}</strong>
-                                        <Button
-                                          type="button"
-                                          variant="secondary"
-                                          aria-label={`Remover item ${item.name}`}
-                                          onClick={() => updateCartQuantity(product, 0)}
-                                        >
-                                          Remover
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </li>
-                              );
-                            })}
-                          </ul>
-
-                          <div className="catalog-checkout__summary">
-                            <div>
-                              <span>Subtotal</span>
-                              <strong>{formatCurrency(cartSubtotal)}</strong>
+                          <section className="catalog-checkout__stage-card">
+                            <div className="catalog-checkout__stage-header">
+                              <strong>1. Carrinho</strong>
+                              <span>Revise os itens, ajuste quantidades e confira o subtotal antes de seguir.</span>
                             </div>
-                            <div>
-                              <span>Total parcial</span>
-                              <strong>{formatCurrency(cartTotal)}</strong>
-                            </div>
-                          </div>
+                            <ul className="catalog-checkout__list">
+                              {cartItems.map((item) => {
+                                const product = normalizedProducts.find((entry) => entry.id === item.productId) || {
+                                  id: item.productId,
+                                  measurementUnit: item.measurementUnit,
+                                  price: item.unitPrice,
+                                  name: item.name,
+                                  image: '',
+                                };
+                                const editorConfig = getCartEditorConfig(product);
+                                const itemImageUrl = resolveMediaUrl(product.image, {
+                                  width: 160,
+                                  height: 160,
+                                  fit: 'fill',
+                                });
 
-                          <div className="admin-form-grid catalog-checkout__fields">
-                            <label className={`admin-field${checkoutErrors.customerName ? ' admin-field--invalid' : ''}`}>
-                              <span>Nome</span>
-                              <input
-                                ref={(node) => {
-                                  checkoutFieldRefs.current.customerName = node;
-                                }}
-                                value={checkout.customerName}
-                                onChange={(event) => setCheckout((current) => ({ ...current, customerName: event.target.value }))}
-                                aria-label="Nome"
-                                aria-invalid={checkoutErrors.customerName ? 'true' : undefined}
-                                aria-describedby={checkoutErrors.customerName ? 'checkout-customer-name-error' : undefined}
-                              />
-                              {checkoutErrors.customerName ? <small id="checkout-customer-name-error">{checkoutErrors.customerName}</small> : null}
+                                return (
+                                  <li key={item.productId} className="catalog-checkout__item">
+                                    <div className={`catalog-checkout__item-media${itemImageUrl ? '' : ' catalog-checkout__item-media--placeholder'}`}>
+                                      {itemImageUrl ? <img src={itemImageUrl} alt={item.name} /> : <span aria-hidden="true">{item.name.slice(0, 1)}</span>}
+                                    </div>
+                                    <div className="catalog-checkout__item-main">
+                                      <div className="catalog-checkout__item-copy">
+                                        <span className="catalog-checkout__item-name">{item.name}</span>
+                                        <small className="catalog-checkout__item-meta">
+                                          {item.displayQuantity} x {formatCurrency(item.unitPrice)}/{getMeasurementUnitLabel(item.measurementUnit)}
+                                        </small>
+                                      </div>
+
+                                      <label className="catalog-checkout__item-editor">
+                                        <span>{editorConfig.label}</span>
+                                        <input
+                                          type="number"
+                                          min={editorConfig.min}
+                                          step={editorConfig.step}
+                                          value={editorConfig.value}
+                                          onChange={(event) => handleCartEditorChange(product, event.target.value)}
+                                        />
+                                      </label>
+
+                                      <div className="catalog-checkout__item-footer">
+                                        <div className="catalog-checkout__stepper" aria-label={`Controles de quantidade para ${item.name}`}>
+                                          <Button
+                                            type="button"
+                                            variant="secondary"
+                                            className="catalog-checkout__stepper-button"
+                                            aria-label={`Diminuir quantidade de ${item.name}`}
+                                            onClick={() => adjustCartQuantity(product, -1)}
+                                          >
+                                            -
+                                          </Button>
+                                          <span className="catalog-checkout__stepper-value">{item.displayQuantity}</span>
+                                          <Button
+                                            type="button"
+                                            variant="secondary"
+                                            className="catalog-checkout__stepper-button"
+                                            aria-label={`Aumentar quantidade de ${item.name}`}
+                                            onClick={() => adjustCartQuantity(product, 1)}
+                                          >
+                                            +
+                                          </Button>
+                                        </div>
+                                        <div className="catalog-checkout__item-actions">
+                                          <strong>{formatCurrency(item.itemTotal)}</strong>
+                                          <Button
+                                            type="button"
+                                            variant="secondary"
+                                            aria-label={`Remover item ${item.name}`}
+                                            onClick={() => updateCartQuantity(product, 0)}
+                                          >
+                                            Remover
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+
+                            <div className="catalog-checkout__summary">
+                              <div>
+                                <span>Subtotal</span>
+                                <strong>{formatCurrency(cartSubtotal)}</strong>
+                              </div>
+                              <div>
+                                <span>Total parcial</span>
+                                <strong>{formatCurrency(cartTotal)}</strong>
+                              </div>
+                            </div>
+                          </section>
+
+                          <section className="catalog-checkout__stage-card">
+                            <div className="catalog-checkout__stage-header">
+                              <strong>2. Entrega</strong>
+                              <span>Informe seus dados basicos e escolha se o pedido sera entregue ou retirado.</span>
+                            </div>
+
+                            <div className="admin-form-grid catalog-checkout__fields">
+                              <label className={`admin-field${checkoutErrors.customerName ? ' admin-field--invalid' : ''}`}>
+                                <span>Nome</span>
+                                <input
+                                  ref={(node) => {
+                                    checkoutFieldRefs.current.customerName = node;
+                                  }}
+                                  value={checkout.customerName}
+                                  onChange={(event) => setCheckout((current) => ({ ...current, customerName: event.target.value }))}
+                                  aria-label="Nome"
+                                  aria-invalid={checkoutErrors.customerName ? 'true' : undefined}
+                                  aria-describedby={checkoutErrors.customerName ? 'checkout-customer-name-error' : undefined}
+                                />
+                                {checkoutErrors.customerName ? <small id="checkout-customer-name-error">{checkoutErrors.customerName}</small> : null}
+                              </label>
+                              <label className={`admin-field${checkoutErrors.customerPhone ? ' admin-field--invalid' : ''}`}>
+                                <span>Telefone</span>
+                                <input
+                                  ref={(node) => {
+                                    checkoutFieldRefs.current.customerPhone = node;
+                                  }}
+                                  value={checkout.customerPhone}
+                                  onChange={(event) => setCheckout((current) => ({ ...current, customerPhone: event.target.value }))}
+                                  aria-label="Telefone"
+                                  aria-invalid={checkoutErrors.customerPhone ? 'true' : undefined}
+                                  aria-describedby={checkoutErrors.customerPhone ? 'checkout-customer-phone-error' : undefined}
+                                />
+                                {checkoutErrors.customerPhone ? <small id="checkout-customer-phone-error">{checkoutErrors.customerPhone}</small> : null}
+                              </label>
+                            </div>
+
+                            <div
+                              ref={(node) => {
+                                checkoutFieldRefs.current.deliveryType = node;
+                              }}
+                              className={`catalog-checkout__delivery-methods${checkoutErrors.deliveryType ? ' catalog-checkout__choice-group--invalid' : ''}`}
+                              role="group"
+                              aria-labelledby="checkout-delivery-type-title"
+                              aria-invalid={checkoutErrors.deliveryType ? 'true' : undefined}
+                              aria-describedby={checkoutErrors.deliveryType ? 'checkout-delivery-type-error' : undefined}
+                              tabIndex={checkoutErrors.deliveryType ? '-1' : undefined}
+                            >
+                              <div className="catalog-checkout__payment-header">
+                                <strong id="checkout-delivery-type-title">Como voce vai receber?</strong>
+                                <span>Escolha primeiro se o pedido sera entregue ou retirado no estabelecimento.</span>
+                              </div>
+                              <div className="catalog-checkout__delivery-grid">
+                                {[
+                                  {
+                                    value: 'delivery',
+                                    title: 'Entrega',
+                                    description: 'Receber no endereco informado',
+                                  },
+                                  {
+                                    value: 'pickup',
+                                    title: 'Retirada',
+                                    description: 'Buscar no estabelecimento',
+                                  },
+                                ].map((option) => {
+                                  const selected = checkout.deliveryType === option.value;
+
+                                  return (
+                                    <button
+                                      key={option.value}
+                                      type="button"
+                                      className={`catalog-checkout__delivery-card${selected ? ' catalog-checkout__delivery-card--selected' : ''}`}
+                                      aria-label={option.title}
+                                      aria-pressed={selected}
+                                      onClick={() =>
+                                        setCheckout((current) => {
+                                          const nextPaymentMethods = getAvailablePaymentMethodsForDeliveryType(
+                                            availablePaymentMethods,
+                                            option.value,
+                                          );
+
+                                          return {
+                                            ...current,
+                                            deliveryType: option.value,
+                                            address: option.value === 'delivery' ? current.address : '',
+                                            paymentMethod: nextPaymentMethods.includes(current.paymentMethod)
+                                              ? current.paymentMethod
+                                              : '',
+                                          };
+                                        })
+                                      }
+                                    >
+                                      <div className="catalog-checkout__payment-copy">
+                                        <strong>{option.title}</strong>
+                                        <span>{option.description}</span>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {checkoutErrors.deliveryType ? <small id="checkout-delivery-type-error" className="catalog-checkout__choice-error">{checkoutErrors.deliveryType}</small> : null}
+                            </div>
+
+                            {checkout.deliveryType === 'delivery' ? (
+                              <label className={`admin-field catalog-checkout__address${checkoutErrors.address ? ' admin-field--invalid' : ''}`}>
+                                <span>Endereco</span>
+                                <input
+                                  ref={(node) => {
+                                    checkoutFieldRefs.current.address = node;
+                                  }}
+                                  value={checkout.address}
+                                  onChange={(event) => setCheckout((current) => ({ ...current, address: event.target.value }))}
+                                  aria-label="Endereco"
+                                  aria-invalid={checkoutErrors.address ? 'true' : undefined}
+                                  aria-describedby={checkoutErrors.address ? 'checkout-address-error' : undefined}
+                                />
+                                {checkoutErrors.address ? <small id="checkout-address-error">{checkoutErrors.address}</small> : null}
+                              </label>
+                            ) : null}
+
+                            <label className="admin-field catalog-checkout__notes">
+                              <span>Observacoes</span>
+                              <textarea rows="3" value={checkout.notes} onChange={(event) => setCheckout((current) => ({ ...current, notes: event.target.value }))} />
                             </label>
-                            <label className={`admin-field${checkoutErrors.customerPhone ? ' admin-field--invalid' : ''}`}>
-                              <span>Telefone</span>
-                              <input
+                          </section>
+
+                          <section className="catalog-checkout__stage-card">
+                            <div className="catalog-checkout__stage-header">
+                              <strong>3. Pagamento</strong>
+                              <span>As formas de pagamento aparecem conforme o tipo de recebimento escolhido.</span>
+                            </div>
+
+                            {checkout.deliveryType ? (
+                              <div
                                 ref={(node) => {
-                                  checkoutFieldRefs.current.customerPhone = node;
+                                  checkoutFieldRefs.current.paymentMethod = node;
                                 }}
-                                value={checkout.customerPhone}
-                                onChange={(event) => setCheckout((current) => ({ ...current, customerPhone: event.target.value }))}
-                                aria-label="Telefone"
-                                aria-invalid={checkoutErrors.customerPhone ? 'true' : undefined}
-                                aria-describedby={checkoutErrors.customerPhone ? 'checkout-customer-phone-error' : undefined}
-                              />
-                              {checkoutErrors.customerPhone ? <small id="checkout-customer-phone-error">{checkoutErrors.customerPhone}</small> : null}
-                            </label>
+                                className={`catalog-checkout__payment-methods${checkoutErrors.paymentMethod ? ' catalog-checkout__choice-group--invalid' : ''}`}
+                                role="group"
+                                aria-labelledby="checkout-payment-methods-title"
+                                aria-invalid={checkoutErrors.paymentMethod ? 'true' : undefined}
+                                aria-describedby={checkoutErrors.paymentMethod ? 'checkout-payment-method-error' : undefined}
+                                tabIndex={checkoutErrors.paymentMethod ? '-1' : undefined}
+                              >
+                                <div className="catalog-checkout__payment-header">
+                                  <strong id="checkout-payment-methods-title">{getPaymentSectionTitle(checkout.deliveryType)}</strong>
+                                  <span>Escolha apenas entre os metodos liberados por este estabelecimento.</span>
+                                </div>
+                                <div className="catalog-checkout__payment-grid">
+                                  {checkoutPaymentMethods.map((method) => {
+                                    const selected = checkout.paymentMethod === method;
+
+                                    return (
+                                      <button
+                                        key={method}
+                                        type="button"
+                                        className={`catalog-checkout__payment-card${selected ? ' catalog-checkout__payment-card--selected' : ''}`}
+                                        aria-label={PAYMENT_METHOD_LABELS[method]}
+                                        aria-pressed={selected}
+                                        onClick={() =>
+                                          setCheckout((current) => ({
+                                            ...current,
+                                            paymentMethod: method,
+                                          }))
+                                        }
+                                      >
+                                        <div className="catalog-checkout__payment-copy">
+                                          <strong>{PAYMENT_METHOD_LABELS[method]}</strong>
+                                          <span>{getPaymentMethodDescription(method, paymentSettings)}</span>
+                                        </div>
+                                        <span className="catalog-checkout__payment-tag">{getPaymentMethodTag(method, paymentSettings)}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                {checkoutErrors.paymentMethod ? <small id="checkout-payment-method-error" className="catalog-checkout__choice-error">{checkoutErrors.paymentMethod}</small> : null}
+                              </div>
+                            ) : (
+                              <div className="catalog-checkout__payment-placeholder">
+                                <strong>Escolha entrega ou retirada primeiro</strong>
+                                <span>Depois disso, mostraremos apenas as formas de pagamento compativeis com o seu pedido.</span>
+                              </div>
+                            )}
+
                             {requiresCustomerDocument ? (
                               <label className={`admin-field${checkoutErrors.customerDocument ? ' admin-field--invalid' : ''}`}>
                                 <span>CPF ou CNPJ</span>
@@ -1422,142 +1828,7 @@ export function BusinessCatalogSection({
                                 )}
                               </label>
                             ) : null}
-                          </div>
-
-                          <div
-                            ref={(node) => {
-                              checkoutFieldRefs.current.deliveryType = node;
-                            }}
-                            className={`catalog-checkout__delivery-methods${checkoutErrors.deliveryType ? ' catalog-checkout__choice-group--invalid' : ''}`}
-                            role="group"
-                            aria-labelledby="checkout-delivery-type-title"
-                            aria-invalid={checkoutErrors.deliveryType ? 'true' : undefined}
-                            aria-describedby={checkoutErrors.deliveryType ? 'checkout-delivery-type-error' : undefined}
-                            tabIndex={checkoutErrors.deliveryType ? '-1' : undefined}
-                          >
-                            <div className="catalog-checkout__payment-header">
-                              <strong id="checkout-delivery-type-title">Como voce vai receber?</strong>
-                              <span>Escolha primeiro se o pedido sera entregue ou retirado no estabelecimento.</span>
-                            </div>
-                            <div className="catalog-checkout__delivery-grid">
-                              {[
-                                {
-                                  value: 'delivery',
-                                  title: 'Entrega',
-                                  description: 'Receber no endereco informado',
-                                },
-                                {
-                                  value: 'pickup',
-                                  title: 'Retirada',
-                                  description: 'Buscar no estabelecimento',
-                                },
-                              ].map((option) => {
-                                const selected = checkout.deliveryType === option.value;
-
-                                return (
-                                  <button
-                                    key={option.value}
-                                    type="button"
-                                    className={`catalog-checkout__delivery-card${selected ? ' catalog-checkout__delivery-card--selected' : ''}`}
-                                    aria-label={option.title}
-                                    aria-pressed={selected}
-                                    onClick={() =>
-                                      setCheckout((current) => {
-                                        const nextPaymentMethods = getAvailablePaymentMethodsForDeliveryType(
-                                          availablePaymentMethods,
-                                          option.value,
-                                        );
-
-                                        return {
-                                          ...current,
-                                          deliveryType: option.value,
-                                          address: option.value === 'delivery' ? current.address : '',
-                                          paymentMethod: nextPaymentMethods.includes(current.paymentMethod)
-                                            ? current.paymentMethod
-                                            : '',
-                                        };
-                                      })
-                                    }
-                                  >
-                                    <div className="catalog-checkout__payment-copy">
-                                      <strong>{option.title}</strong>
-                                      <span>{option.description}</span>
-                                    </div>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                            {checkoutErrors.deliveryType ? <small id="checkout-delivery-type-error" className="catalog-checkout__choice-error">{checkoutErrors.deliveryType}</small> : null}
-                          </div>
-
-                          {checkout.deliveryType === 'delivery' ? (
-                            <label className={`admin-field catalog-checkout__address${checkoutErrors.address ? ' admin-field--invalid' : ''}`}>
-                              <span>Endereco</span>
-                              <input
-                                ref={(node) => {
-                                  checkoutFieldRefs.current.address = node;
-                                }}
-                                value={checkout.address}
-                                onChange={(event) => setCheckout((current) => ({ ...current, address: event.target.value }))}
-                                aria-label="Endereco"
-                                aria-invalid={checkoutErrors.address ? 'true' : undefined}
-                                aria-describedby={checkoutErrors.address ? 'checkout-address-error' : undefined}
-                              />
-                              {checkoutErrors.address ? <small id="checkout-address-error">{checkoutErrors.address}</small> : null}
-                            </label>
-                          ) : null}
-
-                          {checkout.deliveryType ? (
-                            <div
-                              ref={(node) => {
-                                checkoutFieldRefs.current.paymentMethod = node;
-                              }}
-                              className={`catalog-checkout__payment-methods${checkoutErrors.paymentMethod ? ' catalog-checkout__choice-group--invalid' : ''}`}
-                              role="group"
-                              aria-labelledby="checkout-payment-methods-title"
-                              aria-invalid={checkoutErrors.paymentMethod ? 'true' : undefined}
-                              aria-describedby={checkoutErrors.paymentMethod ? 'checkout-payment-method-error' : undefined}
-                              tabIndex={checkoutErrors.paymentMethod ? '-1' : undefined}
-                            >
-                              <div className="catalog-checkout__payment-header">
-                                <strong id="checkout-payment-methods-title">{getPaymentSectionTitle(checkout.deliveryType)}</strong>
-                                <span>Escolha apenas entre os metodos liberados por este estabelecimento.</span>
-                              </div>
-                              <div className="catalog-checkout__payment-grid">
-                                {checkoutPaymentMethods.map((method) => {
-                                  const selected = checkout.paymentMethod === method;
-
-                                  return (
-                                    <button
-                                      key={method}
-                                      type="button"
-                                      className={`catalog-checkout__payment-card${selected ? ' catalog-checkout__payment-card--selected' : ''}`}
-                                      aria-label={PAYMENT_METHOD_LABELS[method]}
-                                      aria-pressed={selected}
-                                      onClick={() =>
-                                        setCheckout((current) => ({
-                                          ...current,
-                                          paymentMethod: method,
-                                        }))
-                                      }
-                                    >
-                                      <div className="catalog-checkout__payment-copy">
-                                        <strong>{PAYMENT_METHOD_LABELS[method]}</strong>
-                                        <span>{getPaymentMethodDescription(method, paymentSettings)}</span>
-                                      </div>
-                                      <span className="catalog-checkout__payment-tag">{getPaymentMethodTag(method, paymentSettings)}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                              {checkoutErrors.paymentMethod ? <small id="checkout-payment-method-error" className="catalog-checkout__choice-error">{checkoutErrors.paymentMethod}</small> : null}
-                            </div>
-                          ) : null}
-
-                          <label className="admin-field catalog-checkout__notes">
-                            <span>Observacoes</span>
-                            <textarea rows="3" value={checkout.notes} onChange={(event) => setCheckout((current) => ({ ...current, notes: event.target.value }))} />
-                          </label>
+                          </section>
                         </>
                       ) : (
                         <div className="catalog-cart-empty">
@@ -1619,134 +1890,199 @@ export function BusinessCatalogSection({
         </>
       ) : null}
       <Card className="section-card catalog-section">
-      <SectionHeader
-        eyebrow="Modulo ativo"
-        title={segmentConfig?.catalogTitle || 'Catalogo'}
-        description={segmentConfig?.catalogDescription || 'Confira os itens publicados por este tenant.'}
-      />
+        <SectionHeader
+          eyebrow="Modulo ativo"
+          title={segmentConfig?.catalogTitle || 'Catalogo'}
+          description={segmentConfig?.catalogDescription || 'Confira os itens publicados por este tenant.'}
+        />
 
-      <div className="catalog-toolbar">
-        <label className="admin-field catalog-search-field">
-          <span>Buscar produto</span>
-          <input
-            type="search"
-            value={searchValue}
-            onChange={(event) => setSearchValue(event.target.value)}
-            placeholder="Buscar produto, categoria ou descricao"
-          />
-        </label>
-      </div>
+        <div className="catalog-toolbar">
+          <label className="admin-field catalog-search-field">
+            <span>Buscar produto</span>
+            <input
+              type="search"
+              value={searchValue}
+              onChange={(event) => setSearchValue(event.target.value)}
+              placeholder="Buscar produto, categoria ou descricao"
+            />
+          </label>
+          <div className="catalog-category-tabs" aria-label="Filtrar por categoria">
+            {categoryOptions.map((option) => {
+              const selected = activeCategory === option.value;
 
-      {groupedProducts.length ? (
-        <div className="catalog-groups">
-          {groupedProducts.map((group) => (
-            <section key={group.category} className="catalog-category-group">
-              <div className="catalog-category-group__header">
-                <h3>{group.category}</h3>
-                <span>{group.items.length} item(ns)</span>
-              </div>
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`catalog-category-tabs__button${selected ? ' is-active' : ''}`}
+                  aria-pressed={selected}
+                  onClick={() => setActiveCategory(option.value)}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-              <div className="catalog-grid">
-                {group.items.map((product) => {
-                  const imageUrl = resolveMediaUrl(product.image, {
-                    width: 720,
-                    height: 720,
-                    fit: 'fill',
-                  });
-                  const productIsAvailable = product.isAvailable !== false;
+        {groupedProducts.length ? (
+          <div className="catalog-groups">
+            {groupedProducts.map((group) => (
+              <section key={group.category} className="catalog-category-group">
+                <div className="catalog-category-group__header">
+                  <h3>{group.category}</h3>
+                  <span>{group.items.length} item(ns)</span>
+                </div>
 
-                  return (
-                    <article
-                      key={product.id}
-                      className={`catalog-card${productIsAvailable ? '' : ' catalog-card--unavailable'}`}
-                    >
-                      {imageUrl ? (
+                <div className="catalog-grid">
+                  {group.items.map((product) => {
+                    const imageUrl = resolveMediaUrl(product.image, {
+                      width: 720,
+                      height: 720,
+                      fit: 'fill',
+                    });
+                    const productIsAvailable = product.isAvailable !== false;
+                    const cartQuantity = Number(cart[product.id] || 0);
+                    const fractionalConfig = getFractionInputConfig(product.measurementUnit);
+                    const fractionalInputValue = getFractionInputValue(product);
+                    const fractionalPreviewQuantity = convertInputValueToCartQuantity(product, fractionalInputValue);
+                    const fractionalPreviewTotal = fractionalPreviewQuantity
+                      ? calculateMeasuredItemTotal(product.price, fractionalPreviewQuantity)
+                      : 0;
+
+                    return (
+                      <article
+                        key={product.id}
+                        className={`catalog-card${productIsAvailable ? '' : ' catalog-card--unavailable'}`}
+                      >
                         <div className="catalog-card__media">
-                          <img src={imageUrl} alt={product.name} width="720" height="720" loading="lazy" decoding="async" />
+                          {imageUrl ? (
+                            <img src={imageUrl} alt={product.name} width="720" height="720" loading="lazy" decoding="async" />
+                          ) : (
+                            <div className="catalog-card__media-placeholder" aria-hidden="true">
+                              {product.name.slice(0, 1).toUpperCase()}
+                            </div>
+                          )}
                           {!productIsAvailable ? (
                             <span className="catalog-card__media-badge">Indisponivel</span>
                           ) : null}
                         </div>
-                      ) : null}
-                      <div className="catalog-card__content">
-                        <div className="catalog-card__header">
-                          <h3>{product.name}</h3>
-                          <strong>
-                            {formatCurrency(product.price)} / {getMeasurementUnitLabel(product.measurementUnit)}
-                          </strong>
-                        </div>
-                        <div className="catalog-card__chips">
-                          <span className="admin-section-chip admin-section-chip--muted">{group.category}</span>
-                          {!productIsAvailable ? (
-                            <span className="catalog-card__availability-badge">Indisponivel</span>
-                          ) : null}
-                        </div>
-                        {product.description ? <p>{product.description}</p> : null}
-                        {!productIsAvailable ? (
-                          <p className="catalog-card__unavailable-note">
-                            Este produto continua visivel no catalogo, mas esta temporariamente indisponivel para compra.
-                          </p>
-                        ) : null}
-                        {modules.cart || modules.orders ? (
-                          <div className="catalog-card__actions">
+                        <div className="catalog-card__content">
+                          <div className="catalog-card__eyebrow">
+                            <span className="admin-section-chip admin-section-chip--muted">{group.category}</span>
                             {!productIsAvailable ? (
-                              <Button type="button" disabled>
-                                Indisponivel
-                              </Button>
-                            ) : isFractionalMeasurementUnit(product.measurementUnit) ? (
-                              <div className="catalog-card__fractional">
-                                <label className="admin-field">
-                                  <span>{getFractionInputConfig(product.measurementUnit).label}</span>
-                                  <input
-                                    type="number"
-                                    min={getFractionInputConfig(product.measurementUnit).min}
-                                    step={getFractionInputConfig(product.measurementUnit).step}
-                                    value={getFractionInputValue(product)}
-                                    onChange={(event) => setFractionInput(product.id, event.target.value)}
-                                  />
-                                </label>
-                                {getFractionInputConfig(product.measurementUnit).quickOptions.length ? (
-                                  <div className="catalog-card__quick-actions">
-                                    {getFractionInputConfig(product.measurementUnit).quickOptions.map((quickValue) => (
-                                      <Button
-                                        key={`${product.id}-${quickValue}`}
-                                        type="button"
-                                        variant="secondary"
-                                        onClick={() => setFractionInput(product.id, String(quickValue))}
-                                      >
-                                        {product.measurementUnit === 'kg' && quickValue >= 1000
-                                          ? `${quickValue / 1000}kg`
-                                          : `${quickValue}${getFractionInputConfig(product.measurementUnit).suffix}`}
-                                      </Button>
-                                    ))}
-                                  </div>
-                                ) : null}
-                                <div className="catalog-card__fractional-footer">
-                                  <span>
-                                    No carrinho: {buildMeasurementDisplayQuantity(cart[product.id] || 0, product.measurementUnit) || '0'}
-                                  </span>
-                                  <Button type="button" onClick={() => addFractionalProductToCart(product)}>
-                                    Adicionar
-                                  </Button>
-                                </div>
-                              </div>
-                            ) : (
-                              <>
-                                <Button
-                                  type="button"
-                                  variant="secondary"
-                                  aria-label={`Diminuir quantidade de ${product.name}`}
-                                  disabled={!productIsAvailable}
-                                  onClick={() => updateCartQuantity(product, Number(cart[product.id] || 0) - 1)}
-                                >
-                                  -
+                              <span className="catalog-card__availability-badge">Indisponivel no momento</span>
+                            ) : null}
+                          </div>
+                          <div className="catalog-card__header">
+                            <h3>{product.name}</h3>
+                            <strong>
+                              {formatCurrency(product.price)} / {getMeasurementUnitLabel(product.measurementUnit)}
+                            </strong>
+                          </div>
+                          {product.description ? (
+                            <p className="catalog-card__description">{product.description}</p>
+                          ) : null}
+                          <div className="catalog-card__pricing">
+                            <span>
+                              {isFractionalMeasurementUnit(product.measurementUnit)
+                                ? `${buildMeasurementDisplayQuantity(fractionalPreviewQuantity, product.measurementUnit) || buildMeasurementDisplayQuantity(cartQuantity, product.measurementUnit) || getMeasurementUnitLabel(product.measurementUnit)} · ${formatCurrency(fractionalPreviewTotal || 0)}`
+                                : cartQuantity > 0
+                                ? `${cartQuantity} no carrinho`
+                                : 'Pronto para adicionar ao pedido'}
+                            </span>
+                          </div>
+                          {modules.cart || modules.orders ? (
+                            <div className="catalog-card__actions">
+                              {!productIsAvailable ? (
+                                <Button type="button" disabled>
+                                  Indisponivel
                                 </Button>
-                                <span>{cart[product.id] || 0}</span>
+                              ) : isFractionalMeasurementUnit(product.measurementUnit) ? (
+                                <div className="catalog-card__fractional">
+                                  <div className="catalog-card__fractional-controls">
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      className="catalog-card__fractional-button"
+                                      aria-label={`Diminuir quantidade de ${product.name}`}
+                                      onClick={() => adjustFractionInput(product, -1)}
+                                    >
+                                      -
+                                    </Button>
+                                    <label className="catalog-card__fractional-input">
+                                      <span>{fractionalConfig.label}</span>
+                                      <input
+                                        type="number"
+                                        min={fractionalConfig.min}
+                                        step={fractionalConfig.step}
+                                        aria-label={fractionalConfig.label}
+                                        value={fractionalInputValue}
+                                        onChange={(event) => setFractionInput(product.id, event.target.value)}
+                                      />
+                                      <small>{fractionalConfig.suffix || getMeasurementUnitLabel(product.measurementUnit)}</small>
+                                    </label>
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      className="catalog-card__fractional-button"
+                                      aria-label={`Aumentar quantidade de ${product.name}`}
+                                      onClick={() => adjustFractionInput(product, 1)}
+                                    >
+                                      +
+                                    </Button>
+                                  </div>
+                                  <div className="catalog-card__fractional-footer">
+                                    <span>
+                                      {fractionalPreviewQuantity
+                                        ? `${buildMeasurementDisplayQuantity(fractionalPreviewQuantity, product.measurementUnit)} · ${formatCurrency(fractionalPreviewTotal)}`
+                                        : 'Escolha a quantidade desejada'}
+                                    </span>
+                                    <Button type="button" onClick={() => addFractionalProductToCart(product)}>
+                                      Adicionar
+                                    </Button>
+                                  </div>
+                                  <small className="catalog-card__cart-note">
+                                    {cartQuantity > 0
+                                      ? `No carrinho: ${buildMeasurementDisplayQuantity(cartQuantity, product.measurementUnit)}`
+                                      : 'O valor e calculado automaticamente conforme a quantidade escolhida.'}
+                                  </small>
+                                </div>
+                              ) : cartQuantity > 0 ? (
+                                <div className="catalog-card__unit-controls">
+                                  <div className="catalog-card__unit-stepper" aria-label={`Controles de quantidade para ${product.name}`}>
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      aria-label={`Diminuir quantidade de ${product.name}`}
+                                      onClick={() => updateCartQuantity(product, cartQuantity - 1)}
+                                    >
+                                      -
+                                    </Button>
+                                    <span>{cartQuantity}</span>
+                                    <Button
+                                      type="button"
+                                      aria-label={`Aumentar quantidade de ${product.name}`}
+                                      onClick={() => {
+                                        updateCartQuantity(product, cartQuantity + 1);
+                                        onTrackAction?.({
+                                          eventType: 'link_click',
+                                          targetType: 'cart_add',
+                                          targetLabel: product.name,
+                                          sectionType: 'catalog',
+                                        });
+                                      }}
+                                    >
+                                      +
+                                    </Button>
+                                  </div>
+                                  <small className="catalog-card__cart-note">{cartQuantity} no carrinho</small>
+                                </div>
+                              ) : (
                                 <Button
                                   type="button"
-                                  disabled={!productIsAvailable}
                                   onClick={() => {
-                                    updateCartQuantity(product, Number(cart[product.id] || 0) + 1);
+                                    updateCartQuantity(product, cartQuantity + 1);
                                     onTrackAction?.({
                                       eventType: 'link_click',
                                       targetType: 'cart_add',
@@ -1757,24 +2093,23 @@ export function BusinessCatalogSection({
                                 >
                                   Adicionar
                                 </Button>
-                              </>
-                            )}
-                          </div>
-                        ) : null}
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-        </div>
-      ) : (
-        <div className="catalog-search-empty">
-          <strong>Nenhum produto encontrado</strong>
-          <p>Tente buscar por outro nome, categoria ou descricao.</p>
-        </div>
-      )}
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <div className="catalog-search-empty">
+            <strong>Nenhum produto encontrado</strong>
+            <p>Tente buscar por outro nome, categoria ou descricao.</p>
+          </div>
+        )}
       </Card>
     </>
   );

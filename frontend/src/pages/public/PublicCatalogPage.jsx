@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { TENANT_REALTIME_KINDS } from '@shared/constants/index.js';
 import { buildBusinessSegmentState } from '@shared/utils/segments.js';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -11,6 +11,7 @@ import { useAnalytics } from '@/hooks/useAnalytics.js';
 import { useBusinessSite } from '@/hooks/useBusinessSite.js';
 import {
   createPublicOrder,
+  getPublicOrderPayment,
   invalidatePublicSiteCache,
 } from '@/services/publicSiteService.js';
 import { subscribeToTenantUpdates } from '@/services/tenantRealtimeService.js';
@@ -163,13 +164,21 @@ export function PublicCatalogPage() {
     });
   }, [location.search, navigate, previewQuery.preview, previewQuery.previewToken, reload, site?.business?.id, slug]);
 
-  async function handleOrder(payload) {
+  const handleOrder = useCallback(async (payload) => {
     if (!site?.business?.slug) {
       throw new Error('Nao foi possivel identificar este tenant para concluir o pedido.');
     }
 
     return createPublicOrder(site.business.slug, payload);
-  }
+  }, [site?.business?.slug]);
+
+  const handleRecoverPendingPixOrder = useCallback(async (checkoutToken) => {
+    if (!site?.business?.slug) {
+      throw new Error('Nao foi possivel identificar este tenant para retomar o pagamento.');
+    }
+
+    return getPublicOrderPayment(site.business.slug, checkoutToken);
+  }, [site?.business?.slug]);
 
   if (status === 'loading' || status === 'idle') {
     return <TenantLoadingScreen />;
@@ -221,6 +230,7 @@ export function PublicCatalogPage() {
           segmentConfig={segmentState.segmentConfig}
           products={catalogProducts}
           onSubmitOrder={handleOrder}
+          onRecoverPendingPixOrder={handleRecoverPendingPixOrder}
           onTrackAction={trackAction}
         />
       )}

@@ -30,6 +30,18 @@ export function findOrderById(id) {
   return Order.findById(id);
 }
 
+export function findOrderByBusinessIdAndCheckoutTokenHash(
+  businessId,
+  checkoutTokenHash,
+  { includeArchived = false } = {},
+) {
+  const query = includeArchived
+    ? { businessId, publicCheckoutTokenHash: checkoutTokenHash }
+    : { businessId, publicCheckoutTokenHash: checkoutTokenHash, archivedAt: null };
+
+  return Order.findOne(query);
+}
+
 export function updateOrderRecord(id, payload) {
   return Order.findByIdAndUpdate(id, payload, { new: true, runValidators: true });
 }

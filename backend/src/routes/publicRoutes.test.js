@@ -38,6 +38,7 @@ let BusinessSection;
 let Professional;
 let AppointmentService;
 let Product;
+let Order;
 let Payment;
 let PaymentCustomer;
 let SystemSetting;
@@ -69,6 +70,7 @@ describe('Public routes', () => {
     ({ Professional } = await import('../models/Professional.js'));
     ({ AppointmentService } = await import('../models/AppointmentService.js'));
     ({ Product } = await import('../models/Product.js'));
+    ({ Order } = await import('../models/Order.js'));
     ({ Payment } = await import('../models/Payment.js'));
     ({ PaymentCustomer } = await import('../models/PaymentCustomer.js'));
     ({ SystemSetting } = await import('../models/SystemSetting.js'));
@@ -852,8 +854,171 @@ describe('Public routes', () => {
         paidAt: null,
       }),
     );
+    expect(response.body.data.checkoutToken).toEqual(expect.any(String));
+    expect(response.body.data.checkoutToken.length).toBeGreaterThan(20);
     expect(response.body.data.payment.pixCopyPaste).toEqual(expect.any(String));
     expect(response.body.data.payment.pixCopyPaste).toContain('br.gov.bcb.pix');
+  });
+
+  it('recovers a pending public Pix payment using only the opaque checkout token', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Pix recovery test',
+      description: 'Pedido recuperavel apos refresh',
+      price: 42.5,
+      image: '',
+      category: 'Kits',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: false,
+            debitCard: false,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'manual',
+        },
+      },
+    );
+
+    const createResponse = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Renata',
+        customerPhone: '5511988877665',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: product.price,
+          },
+        ],
+        deliveryType: 'pickup',
+        payment: {
+          method: 'pix',
+        },
+      });
+
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.data.checkoutToken).toEqual(expect.any(String));
+
+    const recoveryResponse = await request(app).get(
+      `/api/public/site/barbearia-estilo-vivo/orders/payment/${encodeURIComponent(createResponse.body.data.checkoutToken)}`,
+    );
+
+    expect(recoveryResponse.status).toBe(200);
+    expect(recoveryResponse.body.data).toEqual(
+      expect.objectContaining({
+        id: createResponse.body.data.id,
+        total: 42.5,
+        status: 'received',
+        payment: expect.objectContaining({
+          method: 'pix',
+          status: 'pending',
+          provider: 'manual',
+          amount: 42.5,
+          pixCopyPaste: createResponse.body.data.payment.pixCopyPaste,
+        }),
+      }),
+    );
+    expect(recoveryResponse.body.data.checkoutToken).toBeUndefined();
+    expect(recoveryResponse.body.data.publicCheckoutTokenHash).toBeUndefined();
+    expect(recoveryResponse.body.data.payment.providerPaymentId).toBe('');
+  });
+
+  it('returns the latest paid status when recovering a public Pix payment after confirmation', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Pix paid recovery test',
+      description: 'Recupera status pago apos webhook',
+      price: 31.9,
+      image: '',
+      category: 'Kits',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: false,
+            debitCard: false,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'manual',
+        },
+      },
+    );
+
+    const createResponse = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Paulo',
+        customerPhone: '5511970010020',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: product.price,
+          },
+        ],
+        deliveryType: 'pickup',
+        payment: {
+          method: 'pix',
+        },
+      });
+
+    expect(createResponse.status).toBe(201);
+
+    await Order.findByIdAndUpdate(createResponse.body.data.id, {
+      payment: {
+        ...createResponse.body.data.payment,
+        status: 'paid',
+        paidAt: new Date('2026-08-13T12:45:00.000Z'),
+        updatedAt: new Date('2026-08-13T12:45:00.000Z'),
+      },
+    });
+
+    const recoveryResponse = await request(app).get(
+      `/api/public/site/barbearia-estilo-vivo/orders/payment/${encodeURIComponent(createResponse.body.data.checkoutToken)}`,
+    );
+
+    expect(recoveryResponse.status).toBe(200);
+    expect(recoveryResponse.body.data.payment).toEqual(
+      expect.objectContaining({
+        method: 'pix',
+        status: 'paid',
+        provider: 'manual',
+        amount: 31.9,
+        paidAt: '2026-08-13T12:45:00.000Z',
+      }),
+    );
+  });
+
+  it('returns 404 when trying to recover a Pix payment with an invalid opaque token', async () => {
+    const response = await request(app).get(
+      '/api/public/site/barbearia-estilo-vivo/orders/payment/token-invalido-que-nao-existe-1234567890',
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body.code || response.body.error?.code).toBe('public_order_payment_not_found');
   });
 
   it('creates a public order with manual payment on pickup when that method is selected', async () => {

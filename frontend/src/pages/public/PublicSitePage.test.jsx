@@ -13,6 +13,7 @@ vi.mock('@/services/publicSiteService.js', () => ({
   resolveNfcTag: vi.fn(),
   createPublicAppointmentRequest: vi.fn(),
   createPublicOrder: vi.fn(),
+  getPublicOrderPayment: vi.fn(),
   invalidatePublicSiteCache: vi.fn(),
 }));
 vi.mock('@/services/analyticsService.js', () => ({

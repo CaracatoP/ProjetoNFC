@@ -172,6 +172,18 @@ const orderSchema = new mongoose.Schema(
     notes: { type: String, trim: true },
     payment: { type: orderPaymentSchema, default: undefined },
     paymentEvents: { type: [orderPaymentEventSchema], default: [] },
+    publicCheckoutTokenHash: {
+      type: String,
+      trim: true,
+      default: '',
+      index: true,
+      select: false,
+    },
+    publicCheckoutTokenIssuedAt: {
+      type: Date,
+      default: null,
+      select: false,
+    },
     archivedAt: { type: Date, default: null, index: true },
   },
   {
@@ -184,6 +196,8 @@ const orderSchema = new mongoose.Schema(
         transformed.total = Number(Number(transformed.total || 0).toFixed(2));
         transformed.payment = normalizeOrderPayment(transformed.payment || {}, transformed.total);
         transformed.paymentEvents = normalizeOrderPaymentEvents(transformed.paymentEvents || []);
+        delete transformed.publicCheckoutTokenHash;
+        delete transformed.publicCheckoutTokenIssuedAt;
         return transformed;
       },
     },
@@ -195,6 +209,8 @@ const orderSchema = new mongoose.Schema(
         transformed.total = Number(Number(transformed.total || 0).toFixed(2));
         transformed.payment = normalizeOrderPayment(transformed.payment || {}, transformed.total);
         transformed.paymentEvents = normalizeOrderPaymentEvents(transformed.paymentEvents || []);
+        delete transformed.publicCheckoutTokenHash;
+        delete transformed.publicCheckoutTokenIssuedAt;
         return transformed;
       },
     },

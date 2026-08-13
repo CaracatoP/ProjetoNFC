@@ -183,3 +183,19 @@ export async function createPublicOrder(slug, payload) {
 
   return response.data;
 }
+
+export async function getPublicOrderPayment(slug, checkoutToken) {
+  const normalizedSlug = String(slug || '').trim();
+  const normalizedCheckoutToken = String(checkoutToken || '').trim();
+  const response = await apiRequest(
+    `${appConfig.apiBaseUrl}/public/site/${normalizedSlug}/orders/payment/${encodeURIComponent(normalizedCheckoutToken)}`,
+    {
+      headers: {
+        'Cache-Control': 'no-store',
+      },
+      timeoutMs: appConfig.apiTimeoutMs,
+    },
+  );
+
+  return response.data;
+}

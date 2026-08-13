@@ -484,8 +484,8 @@ describe('ClientPanelPage', () => {
     const receivedOrderCard = await screen.findByTestId('order-card-received');
 
     expect(clientPanelService.fetchClientPanelOrders).toHaveBeenCalledTimes(1);
-    expect(within(receivedOrderCard).getByText('Pix')).toBeInTheDocument();
-    expect(within(receivedOrderCard).getByText('Pendente')).toBeInTheDocument();
+    expect(within(receivedOrderCard).getByText(/Pix · R\$ 79,80/i)).toBeInTheDocument();
+    expect(within(receivedOrderCard).getByText('Aguardando pagamento')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Marcar pagamento como pago/i }));
 
@@ -791,7 +791,7 @@ describe('ClientPanelPage', () => {
     await user.click(getSidebarNavButton('Pedidos'));
     const pendingOrderCard = (await screen.findByText('Carlos')).closest('.admin-order-card');
     expect(pendingOrderCard).toBeInTheDocument();
-    expect(within(pendingOrderCard).getByText('Pendente')).toBeInTheDocument();
+    expect(within(pendingOrderCard).getByText('Aguardando pagamento')).toBeInTheDocument();
 
     await user.click(getSidebarNavButton('Financeiro'));
     expect(await screen.findByText('Historico financeiro')).toBeInTheDocument();

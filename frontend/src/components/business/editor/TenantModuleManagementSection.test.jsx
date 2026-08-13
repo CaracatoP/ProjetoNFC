@@ -697,8 +697,11 @@ describe('TenantModuleManagementSection', () => {
     await user.click(screen.getByRole('button', { name: 'Pedidos' }));
 
     const receivedOrderCard = screen.getByTestId('order-card-received');
-    expect(within(receivedOrderCard).getByText('Pix')).toBeInTheDocument();
-    expect(within(receivedOrderCard).getByText('Pendente')).toBeInTheDocument();
+    expect(within(receivedOrderCard).getByText(/Pix · R\$ 79,80/i)).toBeInTheDocument();
+    expect(within(receivedOrderCard).getByText('Aguardando pagamento')).toBeInTheDocument();
+    expect(within(receivedOrderCard).queryByText(/Taxa da plataforma/i)).not.toBeInTheDocument();
+    expect(within(receivedOrderCard).queryByText(/Historico financeiro/i)).not.toBeInTheDocument();
+    expect(within(receivedOrderCard).queryByText(/Provider:/i)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Expandir grupo Prontos/i }));
     const readyOrderCard = screen.getByTestId('order-card-ready');

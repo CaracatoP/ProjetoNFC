@@ -12,6 +12,7 @@ vi.mock('@/services/publicSiteService.js', () => ({
   resolveNfcTag: vi.fn(),
   createPublicAppointmentRequest: vi.fn(),
   createPublicOrder: vi.fn(),
+  getPublicOrderPayment: vi.fn(),
   invalidatePublicSiteCache: vi.fn(),
 }));
 vi.mock('@/services/analyticsService.js', () => ({
@@ -106,6 +107,7 @@ describe('PublicCatalogPage', () => {
         amount: 59.9,
       },
     });
+    publicSiteService.getPublicOrderPayment?.mockReset();
     publicSiteService.invalidatePublicSiteCache?.mockReset();
     analyticsService.trackEvent.mockReset();
     tenantRealtimeService.subscribeToTenantUpdates.mockReset();

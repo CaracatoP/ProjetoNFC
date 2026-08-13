@@ -1350,7 +1350,8 @@ describe('DashboardHomePage', () => {
     await user.click(screen.getByRole('button', { name: /Modulos/i }));
     await user.click(screen.getByRole('button', { name: 'Pedidos' }));
     const receivedOrderCard = await screen.findByTestId('order-card-received');
-    expect(within(receivedOrderCard).getByText('Pix')).toBeInTheDocument();
+    expect(within(receivedOrderCard).getByText(/Pix · R\$ 59,90/i)).toBeInTheDocument();
+    expect(within(receivedOrderCard).getByText('Aguardando pagamento')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Marcar pagamento como pago/i }));
 
     await waitFor(() => {

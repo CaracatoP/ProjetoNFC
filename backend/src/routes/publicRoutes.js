@@ -3,6 +3,7 @@ import { createEvent } from '../controllers/analyticsController.js';
 import {
   createPublicAppointmentRequestController,
   createPublicOrderController,
+  getPublicOrderPaymentController,
   listPublicProductsController,
 } from '../controllers/moduleController.js';
 import {
@@ -16,6 +17,7 @@ import { analyticsValidators } from '../validators/analyticsValidators.js';
 import {
   appointmentRequestBodySchema,
   orderBodySchema,
+  publicOrderPaymentParamsSchema,
   slugOnlyParamsSchema,
 } from '../validators/moduleValidators.js';
 import { publicSiteValidators } from '../validators/publicSiteValidators.js';
@@ -54,6 +56,11 @@ router.post(
   publicOrderRateLimiter,
   validateRequest({ params: slugOnlyParamsSchema, body: orderBodySchema }),
   asyncHandler(createPublicOrderController),
+);
+router.get(
+  '/site/:slug/orders/payment/:checkoutToken',
+  validateRequest({ params: publicOrderPaymentParamsSchema }),
+  asyncHandler(getPublicOrderPaymentController),
 );
 router.get(
   '/tags/:tagCode/resolve',

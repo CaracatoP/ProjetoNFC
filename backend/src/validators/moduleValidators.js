@@ -68,6 +68,11 @@ export const slugOnlyParamsSchema = z.object({
   slug: z.string().min(2),
 });
 
+export const publicOrderPaymentParamsSchema = z.object({
+  slug: z.string().min(2),
+  checkoutToken: z.string().min(20),
+});
+
 export const professionalBodySchema = z.object({
   name: z.string().min(2),
   role: optionalString,

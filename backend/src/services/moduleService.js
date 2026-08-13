@@ -18,6 +18,7 @@ import {
 import {
   createOrderRecord,
   findOrderById,
+  findOrderByBusinessIdAndCheckoutTokenHash,
   listOrdersByBusinessId,
   archiveOrderRecordByBusinessId,
   updateOrderRecordByBusinessId,
@@ -77,6 +78,7 @@ import {
   isMercadoPagoProviderConnected,
 } from '../utils/paymentProvider.js';
 import { validatePaymentMethodForDeliveryType } from '../utils/paymentDeliveryValidation.js';
+import { createPublicCheckoutToken, hashPublicCheckoutToken } from '../utils/publicCheckoutToken.js';
 import {
   buildAsaasExternalReference,
   buildAsaasSplitRules,
@@ -212,32 +214,65 @@ function serializeOrderItem(item = {}) {
 
 function serializeOrderRecord(item) {
   const record = toPlainRecord(item);
-  const items = Array.isArray(record.items) ? record.items.map(serializeOrderItem) : [];
+  const {
+    publicCheckoutTokenHash: _publicCheckoutTokenHash,
+    publicCheckoutTokenIssuedAt: _publicCheckoutTokenIssuedAt,
+    ...safeRecord
+  } = record || {};
+  const items = Array.isArray(safeRecord.items) ? safeRecord.items.map(serializeOrderItem) : [];
   const total = Number(
     (
-      Number(record.total || 0) ||
+      Number(safeRecord.total || 0) ||
       items.reduce((sum, orderItem) => sum + Number(orderItem.itemTotal || 0), 0)
     ).toFixed(2),
   );
 
   return {
-    ...record,
-    customerName: record.customerName || '',
-    customerPhone: record.customerPhone || '',
+    ...safeRecord,
+    customerName: safeRecord.customerName || '',
+    customerPhone: safeRecord.customerPhone || '',
     items,
     total,
-    deliveryType: record.deliveryType || 'pickup',
-    address: record.address || '',
-    status: record.status || 'received',
-    createdAt: record.createdAt || null,
-    updatedAt: record.updatedAt || null,
-    receivedAt: record.receivedAt || record.createdAt || null,
-    preparingAt: record.preparingAt || null,
-    readyAt: record.readyAt || null,
-    deliveredAt: record.deliveredAt || null,
-    cancelledAt: record.cancelledAt || null,
-    notes: record.notes || '',
-    payment: normalizeOrderPayment(record.payment || {}, total),
+    deliveryType: safeRecord.deliveryType || 'pickup',
+    address: safeRecord.address || '',
+    status: safeRecord.status || 'received',
+    createdAt: safeRecord.createdAt || null,
+    updatedAt: safeRecord.updatedAt || null,
+    receivedAt: safeRecord.receivedAt || safeRecord.createdAt || null,
+    preparingAt: safeRecord.preparingAt || null,
+    readyAt: safeRecord.readyAt || null,
+    deliveredAt: safeRecord.deliveredAt || null,
+    cancelledAt: safeRecord.cancelledAt || null,
+    notes: safeRecord.notes || '',
+    payment: normalizeOrderPayment(safeRecord.payment || {}, total),
+  };
+}
+
+function isRecoverablePublicOrderPayment(payment = {}) {
+  return normalizeOrderPayment(payment).method === PAYMENT_METHODS.PIX;
+}
+
+function buildPublicOrderCheckoutResponse(order, checkoutToken = '') {
+  const serializedOrder = serializeOrderRecord(order);
+
+  return checkoutToken
+    ? {
+        ...serializedOrder,
+        checkoutToken,
+      }
+    : serializedOrder;
+}
+
+function serializePublicOrderPaymentRecovery(order) {
+  const serializedOrder = serializeOrderRecord(order);
+
+  return {
+    id: serializedOrder.id || '',
+    total: serializedOrder.total || 0,
+    status: serializedOrder.status || 'received',
+    createdAt: serializedOrder.createdAt || null,
+    updatedAt: serializedOrder.updatedAt || null,
+    payment: serializedOrder.payment,
   };
 }
 
@@ -1166,6 +1201,8 @@ export async function createPublicOrder(slug, payload) {
   const orderItems = await buildOrderItemsSnapshot(business._id, payload.items || []);
   const total = calculateOrderTotal(orderItems);
   const receivedAt = new Date();
+  const checkoutToken = createPublicCheckoutToken();
+  const checkoutTokenHash = hashPublicCheckoutToken(checkoutToken);
   const storedPaymentSettings = resolveBusinessPaymentSettings(business, { mode: 'storage' });
   const normalizedPaymentMethod = normalizeLegacyPaymentMethodAlias(
     payload?.payment?.method,
@@ -1207,6 +1244,8 @@ export async function createPublicOrder(slug, payload) {
     status: 'received',
     receivedAt,
     payment,
+    publicCheckoutTokenHash: checkoutTokenHash,
+    publicCheckoutTokenIssuedAt: receivedAt,
   });
   let finalOrder = created;
 
@@ -1486,7 +1525,30 @@ export async function createPublicOrder(slug, payload) {
   }
 
   publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_CREATED, 'created');
-  return serializeOrderRecord(finalOrder);
+  return buildPublicOrderCheckoutResponse(
+    finalOrder,
+    isRecoverablePublicOrderPayment(finalOrder?.payment) ? checkoutToken : '',
+  );
+}
+
+export async function getPublicOrderPaymentByCheckoutToken(slug, checkoutToken) {
+  const business = await assertPublicBusinessBySlug(slug);
+  const normalizedCheckoutToken = String(checkoutToken || '').trim();
+
+  if (!normalizedCheckoutToken) {
+    throw new AppError('Pagamento nao encontrado.', 404, 'public_order_payment_not_found');
+  }
+
+  const order = await findOrderByBusinessIdAndCheckoutTokenHash(
+    business._id,
+    hashPublicCheckoutToken(normalizedCheckoutToken),
+  );
+
+  if (!order || !isRecoverablePublicOrderPayment(order.payment || {})) {
+    throw new AppError('Pagamento nao encontrado.', 404, 'public_order_payment_not_found');
+  }
+
+  return serializePublicOrderPaymentRecovery(order);
 }
 
 export async function listTenantOrders(businessId) {

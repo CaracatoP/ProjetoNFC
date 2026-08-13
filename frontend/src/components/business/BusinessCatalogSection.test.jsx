@@ -406,8 +406,9 @@ describe('BusinessCatalogSection', () => {
     const meatsSection = screen.getByRole('heading', { name: 'Carnes' }).closest('section');
     const picanhaCard = within(meatsSection).getByText('Picanha').closest('.catalog-card');
 
-    await user.clear(within(picanhaCard).getByLabelText('Quantidade em gramas'));
-    await user.type(within(picanhaCard).getByLabelText('Quantidade em gramas'), '400');
+    const gramsInput = within(picanhaCard).getByRole('spinbutton', { name: /Quantidade em gramas/i });
+    await user.clear(gramsInput);
+    await user.type(gramsInput, '400');
     await user.click(within(picanhaCard).getByRole('button', { name: 'Adicionar' }));
 
     await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
@@ -560,13 +561,74 @@ describe('BusinessCatalogSection', () => {
     await user.click(screen.getByRole('button', { name: /Adicionar mais produtos/i }));
 
     expect(screen.queryByRole('dialog', { name: /Seu pedido/i })).not.toBeInTheDocument();
-    expect(screen.getByText('Pedido pendente')).toBeInTheDocument();
-    expect(screen.getByText('Aguardando pagamento')).toBeInTheDocument();
+    expect(screen.getByText('Pagamento pendente')).toBeInTheDocument();
+    expect(screen.getByText('Seu Pix continua disponivel. Retome o pagamento quando quiser.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Copiar Pix/i }));
 
     await waitFor(() => {
       expect(writeTextMock).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it('recovers a pending Pix checkout from the opaque storage token after refresh and lets the shopper continue payment', async () => {
+    const user = userEvent.setup();
+    const onRecoverPendingPixOrder = vi.fn().mockResolvedValue({
+      id: 'order-pending-1',
+      total: 59.9,
+      status: 'received',
+      payment: {
+        method: PAYMENT_METHODS.PIX,
+        status: PAYMENT_STATUS.PENDING,
+        provider: 'asaas',
+        amount: 59.9,
+        pixCopyPaste: '000201010212pendingpixpayload',
+        pixQrCode: 'data:image/png;base64,pendingpixqr',
+      },
+    });
+
+    window.localStorage.setItem(
+      'taplink:pending-pix:barbearia-estilo-vivo',
+      JSON.stringify({
+        checkoutToken: 'checkout-token-123',
+        orderId: 'order-pending-1',
+      }),
+    );
+
+    render(
+      <BusinessCatalogSection
+        business={asaasBusinessFixture}
+        tenantSlug="barbearia-estilo-vivo"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={vi.fn()}
+        onRecoverPendingPixOrder={onRecoverPendingPixOrder}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(onRecoverPendingPixOrder).toHaveBeenCalledWith('checkout-token-123');
+    });
+
+    expect(await screen.findByText('Pagamento pendente')).toBeInTheDocument();
+    expect(screen.getByText('Seu Pix continua disponivel. Retome o pagamento quando quiser.')).toBeInTheDocument();
+    expect(window.localStorage.getItem('taplink:pending-pix:barbearia-estilo-vivo')).toBe(
+      JSON.stringify({
+        checkoutToken: 'checkout-token-123',
+        orderId: 'order-pending-1',
+      }),
+    );
+
+    await user.click(screen.getByRole('button', { name: /Continuar pagamento/i }));
+
+    expect(await screen.findByRole('dialog', { name: /Seu pedido/i })).toBeInTheDocument();
+    expect(screen.getByText('Pedido #order-pending-1')).toBeInTheDocument();
+    expect(screen.getByText('Aguardando pagamento')).toBeInTheDocument();
+    expect(screen.getByAltText('QR Code Pix do Asaas')).toHaveAttribute(
+      'src',
+      'data:image/png;base64,pendingpixqr',
+    );
+    expect(screen.getByRole('button', { name: /Copiar codigo Pix/i })).toBeInTheDocument();
   });
 
   it('shows the CPF/CNPJ field only for Asaas Pix and preserves the value when the shopper switches payment methods', async () => {
