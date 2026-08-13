@@ -55,21 +55,21 @@ function upsertHeadLink(attributes) {
 function getPublicErrorContent(error) {
   if (error?.code === 'business_inactive') {
     return {
-      title: 'Este site esta temporariamente indisponivel',
+      title: 'Este site está temporariamente indisponível',
       description: 'Tente novamente mais tarde.',
     };
   }
 
   if (error?.status === 404) {
     return {
-      title: 'Nao foi possivel carregar este tenant',
-      description: error?.message || 'Negocio nao encontrado.',
+      title: 'Não foi possível carregar este tenant',
+      description: error?.message || 'Negócio não encontrado.',
     };
   }
 
   return {
-    title: 'Nao foi possivel carregar este tenant',
-    description: error?.message || 'Verifique a conexao com a API e tente novamente.',
+    title: 'Não foi possível carregar este tenant',
+    description: error?.message || 'Verifique a conexão com a API e tente novamente.',
   };
 }
 
@@ -77,8 +77,8 @@ function TenantLoadingScreen() {
   return (
     <div className="site-loading-screen" role="status" aria-live="polite">
       <div className="site-loading-screen__pulse" aria-hidden="true" />
-      <strong>Carregando pagina NFC</strong>
-      <span>Preparando o conteudo do tenant com o tema mais recente.</span>
+      <strong>Carregando página NFC</strong>
+      <span>Preparando o conteúdo do tenant com o tema mais recente.</span>
     </div>
   );
 }
@@ -139,8 +139,8 @@ export function PublicSitePage() {
       id: 'catalog-shortcut',
       type: 'catalog',
       icon: 'default',
-      label: 'Ver catalogo',
-      subtitle: 'Confira produtos e faca seu pedido',
+      label: 'Ver catálogo',
+      subtitle: 'Confira produtos e faça seu pedido',
       url: catalogHref,
       target: '_self',
     };
@@ -172,8 +172,8 @@ export function PublicSitePage() {
         id: 'catalog-quick-actions',
         key: 'catalog-quick-actions',
         type: 'links',
-        title: 'Acesso rapido',
-        description: 'Atalhos rapidos',
+        title: 'Acesso rápido',
+        description: 'Atalhos rápidos',
         order: 25,
         visible: true,
         settings: { layout: 'compact' },

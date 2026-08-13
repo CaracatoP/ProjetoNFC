@@ -253,7 +253,7 @@ describe('Public routes', () => {
         type: 'custom',
         visible: true,
         title: 'Servicos',
-        description: 'Catalogo atualizado',
+        description: 'Catálogo atualizado',
         items: [
           {
             id: 'service-cut',
@@ -381,7 +381,7 @@ describe('Public routes', () => {
       {
         businessId: business._id,
         name: 'Produto oculto',
-        description: 'Nao deve aparecer',
+        description: 'Não deve aparecer',
         price: 99,
         category: 'Finalizacao',
         active: false,
@@ -631,7 +631,7 @@ describe('Public routes', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error.message).toBe(
-      'Essa forma de pagamento nao esta disponivel para o tipo de recebimento escolhido.',
+      'Essa forma de pagamento não está disponível para o tipo de recebimento escolhido.',
     );
   });
 
@@ -669,7 +669,7 @@ describe('Public routes', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error.message).toBe(
-      'Essa forma de pagamento nao esta disponivel para o tipo de recebimento escolhido.',
+      'Essa forma de pagamento não está disponível para o tipo de recebimento escolhido.',
     );
   });
 
@@ -1443,7 +1443,7 @@ describe('Public routes', () => {
     });
     asaasServiceMock.getAsaasPixQrCode.mockRejectedValue(
       new AppError(
-        'Voce nao possui uma chave Pix cadastrada para recebimentos de cobrancas via Pix.',
+        'Você não possui uma chave Pix cadastrada para recebimentos de cobranças via Pix.',
         400,
         'asaas_validation_error',
       ),
@@ -1562,7 +1562,7 @@ describe('Public routes', () => {
     asaasServiceMock.getAsaasPixQrCode
       .mockRejectedValueOnce(
         new AppError(
-          'Voce nao possui uma chave Pix cadastrada para recebimentos de cobrancas via Pix.',
+          'Você não possui uma chave Pix cadastrada para recebimentos de cobranças via Pix.',
           400,
           'asaas_validation_error',
         ),
@@ -1890,7 +1890,7 @@ describe('Public routes', () => {
       name: 'Bruna',
     });
     asaasServiceMock.createAsaasPaymentCharge.mockRejectedValue(
-      new AppError('Asaas indisponivel no momento.', 502, 'asaas_unavailable'),
+      new AppError('Asaas indisponível no momento.', 502, 'asaas_unavailable'),
     );
 
     const response = await request(app)
@@ -1916,7 +1916,7 @@ describe('Public routes', () => {
 
     expect(response.status).toBe(502);
     expect(response.body.error.code).toBe('asaas_unavailable');
-    expect(response.body.error.message).toBe('Asaas indisponivel no momento.');
+    expect(response.body.error.message).toBe('Asaas indisponível no momento.');
     expect(response.body.data).toBeUndefined();
     expect(asaasServiceMock.createAsaasCustomer).toHaveBeenCalledOnce();
     expect(asaasServiceMock.createAsaasPaymentCharge).toHaveBeenCalledOnce();

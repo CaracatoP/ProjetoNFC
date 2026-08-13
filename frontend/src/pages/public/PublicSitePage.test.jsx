@@ -67,9 +67,9 @@ const siteFixture = {
     segmentConfig: {
       label: 'Barbearia',
       catalogTitle: 'Servicos e produtos',
-      catalogDescription: 'Use o catalogo para itens e combos.',
+      catalogDescription: 'Use o catálogo para itens e combos.',
       appointmentTitle: 'Solicitar agendamento',
-      appointmentDescription: 'Escolha servico e profissional.',
+      appointmentDescription: 'Escolha serviço e profissional.',
       loyaltyTitle: 'Programa de fidelidade',
       loyaltyDescription: 'Cliente recorrente merece vantagem.',
     },
@@ -109,7 +109,7 @@ const siteFixture = {
       key: 'hero-main',
       type: 'hero',
       title: 'Barbearia Estilo Vivo',
-      description: 'Descricao antiga da secao.',
+      description: 'Descrição antiga da secao.',
       order: 10,
       visible: true,
       settings: {
@@ -159,8 +159,8 @@ const siteFixture = {
       id: 'services-1',
       key: 'services',
       type: 'services',
-      title: 'Servicos',
-      description: 'Catalogo',
+      title: 'Serviços',
+      description: 'Catálogo',
       order: 30,
       visible: true,
       settings: {},
@@ -179,7 +179,7 @@ const siteFixture = {
       key: 'hidden',
       type: 'custom',
       title: 'Oculta',
-      description: 'Nao deveria aparecer',
+      description: 'Não deveria aparecer',
       order: 40,
       visible: false,
       settings: {},
@@ -291,7 +291,7 @@ describe('PublicSitePage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Barbearia Estilo Vivo' })).toBeInTheDocument();
     expect(screen.getAllByText('Barbearia Estilo Vivo')).toHaveLength(1);
-    expect(screen.getByText('Servicos')).toBeInTheDocument();
+    expect(screen.getByText('Serviços')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Corte masculino' })).toHaveAttribute(
       'src',
       'https://cdn.example.com/service.jpg',
@@ -303,7 +303,7 @@ describe('PublicSitePage', () => {
       'https://instagram.com/tenant-oficial',
     );
     expect(screen.getByRole('button', { name: /Wi-Fi/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Ver catalogo|Fazer pedido/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Ver catálogo|Fazer pedido/i })).toHaveAttribute(
       'href',
       '/site/barbearia-estilo-vivo/catalog',
     );
@@ -315,7 +315,7 @@ describe('PublicSitePage', () => {
       'href',
       'https://instagram.com/estilovivo',
     );
-    expect(screen.queryByText('Descricao antiga da secao.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Descrição antiga da secao.')).not.toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Logo Barbearia Estilo Vivo/i })).toBeInTheDocument();
     expect(screen.queryByText('Oculta')).not.toBeInTheDocument();
     expect(screen.queryByText('Ver horarios')).not.toBeInTheDocument();
@@ -369,7 +369,7 @@ describe('PublicSitePage', () => {
       expect(publicSiteService.getPublicSiteBySlug).toHaveBeenCalledTimes(1);
     });
     expect(analyticsService.trackEvent).not.toHaveBeenCalled();
-    expect(screen.getByRole('link', { name: /Ver catalogo|Fazer pedido/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Ver catálogo|Fazer pedido/i })).toHaveAttribute(
       'href',
       '/site/barbearia-estilo-vivo/catalog?preview=1&t=1700000000000&previewToken=preview-token-1',
     );
@@ -390,13 +390,13 @@ describe('PublicSitePage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Barbearia Estilo Vivo' })).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText('Servico'), 'appointment-service-1');
+    await user.selectOptions(screen.getByLabelText('Serviço'), 'appointment-service-1');
     await user.selectOptions(screen.getByLabelText('Profissional'), 'professional-1');
     await user.type(screen.getByLabelText('Nome'), 'Marina');
     await user.type(screen.getByLabelText('Telefone'), '5511988887777');
     await user.type(screen.getByLabelText('Data desejada'), '2026-06-20');
-    await user.type(screen.getByLabelText('Horario'), '09:30');
-    await user.click(screen.getByRole('button', { name: /Enviar solicitacao/i }));
+    await user.type(screen.getByLabelText('Horário'), '09:30');
+    await user.click(screen.getByRole('button', { name: /Enviar solicitação/i }));
 
     await waitFor(() => {
       expect(publicSiteService.createPublicAppointmentRequest).toHaveBeenCalledWith(
@@ -409,7 +409,7 @@ describe('PublicSitePage', () => {
         }),
       );
     });
-    expect(screen.getByText(/Solicitacao enviada com sucesso\./)).toBeInTheDocument();
+    expect(screen.getByText(/Solicitação enviada com sucesso\./)).toBeInTheDocument();
 
     landingView.unmount();
 
@@ -445,14 +445,14 @@ describe('PublicSitePage', () => {
         }),
       );
     });
-    expect(screen.getAllByText('Pedido enviado com sucesso. O pagamento sera feito na retirada.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Pedido enviado com sucesso. O pagamento será feito na retirada.').length).toBeGreaterThan(0);
   });
 
   it('shows a neutral message when the tenant is inactive', async () => {
     publicSiteService.getPublicSiteBySlug.mockRejectedValueOnce({
       status: 423,
       code: 'business_inactive',
-      message: 'Este site esta temporariamente indisponivel.',
+      message: 'Este site está temporariamente indisponível.',
     });
 
     render(
@@ -465,7 +465,7 @@ describe('PublicSitePage', () => {
       </TenantProvider>,
     );
 
-    expect(await screen.findByText('Este site esta temporariamente indisponivel')).toBeInTheDocument();
+    expect(await screen.findByText('Este site está temporariamente indisponível')).toBeInTheDocument();
     expect(screen.getByText('Tente novamente mais tarde.')).toBeInTheDocument();
   });
 
@@ -566,7 +566,7 @@ describe('PublicSitePage', () => {
         cacheBust: '1700000000000',
       }),
     );
-    expect(screen.getByRole('link', { name: /Ver catalogo|Fazer pedido/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Ver catálogo|Fazer pedido/i })).toHaveAttribute(
       'href',
       '/site/barbearia-estilo-vivo/catalog?preview=1&t=1700000000000',
     );
@@ -584,7 +584,7 @@ describe('PublicSitePage', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'Barbearia Estilo Vivo' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Voltar para a pagina inicial/i })).toHaveClass('catalog-page-back-button');
+    expect(screen.getByRole('button', { name: /Voltar para a página inicial/i })).toHaveClass('catalog-page-back-button');
   });
 
   it('cleans inline tenant theme variables when the public page unmounts', async () => {

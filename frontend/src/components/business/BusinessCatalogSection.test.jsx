@@ -185,7 +185,7 @@ describe('BusinessCatalogSection', () => {
         modules={modulesFixture}
         segmentConfig={{
           catalogTitle: 'Servicos e produtos',
-          catalogDescription: 'Catalogo do tenant',
+          catalogDescription: 'Catálogo do tenant',
         }}
         products={productsFixture}
         onSubmitOrder={onSubmitOrder}
@@ -269,7 +269,7 @@ describe('BusinessCatalogSection', () => {
     expect(screen.queryByText('Informe seu nome.')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Remover item Pomada modeladora/i }));
-    expect(screen.getByText('Seu carrinho esta vazio')).toBeInTheDocument();
+    expect(screen.getByText('Seu carrinho está vazio')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Adicionar produtos/i })).toBeInTheDocument();
   });
 
@@ -301,12 +301,12 @@ describe('BusinessCatalogSection', () => {
     await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
     expect(screen.getByText('Revise os campos destacados antes de continuar.')).toBeInTheDocument();
-    expect(screen.getAllByText('Informe o endereco para entrega.').length).toBeGreaterThan(0);
-    expect(screen.getByLabelText('Endereco')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getAllByText('Informe o endereço para entrega.').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Endereço')).toHaveAttribute('aria-invalid', 'true');
     expect(onSubmitOrder).not.toHaveBeenCalled();
 
-    await user.type(screen.getByLabelText('Endereco'), 'Rua das Carnes, 123');
-    expect(screen.queryByText('Informe o endereco para entrega.')).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText('Endereço'), 'Rua das Carnes, 123');
+    expect(screen.queryByText('Informe o endereço para entrega.')).not.toBeInTheDocument();
     await waitFor(() => {
       expect(screen.queryByText('Revise os campos destacados antes de continuar.')).not.toBeInTheDocument();
     });
@@ -337,7 +337,7 @@ describe('BusinessCatalogSection', () => {
     await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
     expect(screen.getByText('Revise os campos destacados antes de continuar.')).toBeInTheDocument();
-    expect(screen.getAllByText('Informe um telefone valido.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Informe um telefone válido.').length).toBeGreaterThan(0);
     expect(screen.getByLabelText('Telefone')).toHaveAttribute('aria-invalid', 'true');
     await waitFor(() => {
       expect(screen.getByLabelText('Telefone')).toHaveFocus();
@@ -348,7 +348,7 @@ describe('BusinessCatalogSection', () => {
     await user.type(screen.getByLabelText('Telefone'), '11987654321');
 
     await waitFor(() => {
-      expect(screen.queryByText('Informe um telefone valido.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Informe um telefone válido.')).not.toBeInTheDocument();
     });
   });
 
@@ -408,7 +408,11 @@ describe('BusinessCatalogSection', () => {
     const meatsSection = screen.getByRole('heading', { name: 'Carnes' }).closest('section');
     const picanhaCard = within(meatsSection).getByText('Picanha').closest('.catalog-card');
 
-    const gramsInput = within(picanhaCard).getByRole('spinbutton', { name: /Quantidade em gramas/i });
+    await user.selectOptions(
+      within(picanhaCard).getByRole('combobox', { name: /Atalhos de quantidade para Picanha/i }),
+      'custom',
+    );
+    const gramsInput = within(picanhaCard).getByRole('spinbutton', { name: /Outra quantidade em gramas/i });
     await user.clear(gramsInput);
     await user.type(gramsInput, '400');
     await user.click(within(picanhaCard).getByRole('button', { name: 'Adicionar' }));
@@ -459,7 +463,7 @@ describe('BusinessCatalogSection', () => {
       />,
     );
 
-    const searchInput = screen.getByPlaceholderText(/Buscar produto, categoria ou descricao/i);
+    const searchInput = screen.getByPlaceholderText(/Buscar produto, categoria ou descrição/i);
     expect(screen.getByRole('heading', { name: 'Finalizacao' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Carnes' })).toBeInTheDocument();
 
@@ -473,7 +477,7 @@ describe('BusinessCatalogSection', () => {
     await user.type(searchInput, 'nao existe');
 
     expect(screen.getByText('Nenhum produto encontrado')).toBeInTheDocument();
-    expect(screen.getByText(/Tente buscar por outro nome, categoria ou descricao/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tente buscar por outro nome, categoria ou descrição/i)).toBeInTheDocument();
   });
 
   it('shows payment method cards, submits Pix orders with the selected method, and renders the Pix QR after success', async () => {
@@ -527,7 +531,7 @@ describe('BusinessCatalogSection', () => {
     expect(screen.getByRole('button', { name: /Pix/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Pagamento na retirada/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Pagamento na entrega/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Cartao de credito' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cartão de crédito' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Pix/i }));
     expect(screen.getByRole('button', { name: /Finalizar pedido/i })).toBeEnabled();
@@ -547,12 +551,12 @@ describe('BusinessCatalogSection', () => {
     expect((await screen.findAllByText('Pedido enviado com sucesso')).length).toBeGreaterThan(0);
     expect(screen.getByText('Pedido #order-10')).toBeInTheDocument();
     expect(screen.getByText('Aguardando pagamento')).toBeInTheDocument();
-    expect(screen.getAllByText(/Apos o pagamento, o estabelecimento confirmara seu pedido/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Após o pagamento, o estabelecimento confirmará seu pedido/i).length).toBeGreaterThan(0);
     expect(screen.queryByLabelText('Nome')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Copiar codigo Pix/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Copiar código Pix/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Adicionar mais produtos/i })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Copiar codigo Pix/i }));
+    await user.click(screen.getByRole('button', { name: /Copiar código Pix/i }));
 
     await waitFor(() => {
       expect(writeTextMock).toHaveBeenCalledWith(
@@ -564,7 +568,7 @@ describe('BusinessCatalogSection', () => {
 
     expect(screen.queryByRole('dialog', { name: /Seu pedido/i })).not.toBeInTheDocument();
     expect(screen.getByText('Pagamento pendente')).toBeInTheDocument();
-    expect(screen.getByText('Seu Pix continua disponivel. Retome o pagamento quando quiser.')).toBeInTheDocument();
+    expect(screen.getByText('Seu Pix continua disponível. Retome o pagamento quando quiser.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Copiar Pix/i }));
 
     await waitFor(() => {
@@ -613,7 +617,7 @@ describe('BusinessCatalogSection', () => {
     });
 
     expect(await screen.findByText('Pagamento pendente')).toBeInTheDocument();
-    expect(screen.getByText('Seu Pix continua disponivel. Retome o pagamento quando quiser.')).toBeInTheDocument();
+    expect(screen.getByText('Seu Pix continua disponível. Retome o pagamento quando quiser.')).toBeInTheDocument();
     expect(window.localStorage.getItem('taplink:pending-pix:barbearia-estilo-vivo')).toBe(
       JSON.stringify({
         checkoutToken: 'checkout-token-123',
@@ -630,7 +634,7 @@ describe('BusinessCatalogSection', () => {
       'src',
       'data:image/png;base64,pendingpixqr',
     );
-    expect(screen.getByRole('button', { name: /Copiar codigo Pix/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Copiar código Pix/i })).toBeInTheDocument();
   });
 
   it('shows the CPF/CNPJ field only for Asaas Pix and preserves the value when the shopper switches payment methods', async () => {
@@ -657,7 +661,7 @@ describe('BusinessCatalogSection', () => {
     await user.click(screen.getByRole('button', { name: 'Pix' }));
 
     expect(screen.getByLabelText('CPF ou CNPJ')).toBeInTheDocument();
-    expect(screen.getByText('Necessario para gerar o pagamento pelo Asaas.')).toBeInTheDocument();
+    expect(screen.getByText('Necessário para gerar o pagamento pelo Asaas.')).toBeInTheDocument();
 
     await user.type(screen.getByLabelText('CPF ou CNPJ'), '52998224725');
     expect(screen.getByLabelText('CPF ou CNPJ')).toHaveValue('529.982.247-25');
@@ -692,7 +696,7 @@ describe('BusinessCatalogSection', () => {
     await user.click(screen.getByRole('button', { name: 'Pix' }));
 
     expect(screen.getByLabelText('CPF ou CNPJ')).toBeInTheDocument();
-    expect(screen.getByText('Voce recebera o QR Code para pagamento.')).toBeInTheDocument();
+    expect(screen.getByText('Você receberá o QR Code para pagamento.')).toBeInTheDocument();
     expect(screen.getByText('Online')).toBeInTheDocument();
   });
 
@@ -726,14 +730,14 @@ describe('BusinessCatalogSection', () => {
     await user.type(screen.getByLabelText('CPF ou CNPJ'), '11111111111');
     await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
-    expect(screen.getAllByText('CPF invalido.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('CPF inválido.').length).toBeGreaterThan(0);
     expect(onSubmitOrder).not.toHaveBeenCalled();
 
     await user.clear(screen.getByLabelText('CPF ou CNPJ'));
     await user.type(screen.getByLabelText('CPF ou CNPJ'), '11111111111111');
     await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
-    expect(screen.getAllByText('CNPJ invalido.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('CNPJ inválido.').length).toBeGreaterThan(0);
     expect(onSubmitOrder).not.toHaveBeenCalled();
   });
 
@@ -774,7 +778,7 @@ describe('BusinessCatalogSection', () => {
       );
     });
 
-    expect(screen.queryByText('CPF invalido.')).not.toBeInTheDocument();
+    expect(screen.queryByText('CPF inválido.')).not.toBeInTheDocument();
   });
 
   it('renders the Asaas Pix QR image returned by the backend and explains that confirmation is automatic', async () => {
@@ -835,13 +839,13 @@ describe('BusinessCatalogSection', () => {
       'src',
       'data:image/png;base64,asaasqr123',
     );
-    await user.click(screen.getByRole('button', { name: /Copiar codigo Pix/i }));
+    await user.click(screen.getByRole('button', { name: /Copiar código Pix/i }));
     await waitFor(() => {
       expect(writeTextMock).toHaveBeenCalledWith('000201010212asaaspixpayload');
     });
     expect(
       screen.getAllByText(
-        /Assim que o pagamento for confirmado, o status do pedido sera atualizado automaticamente/i,
+        /Assim que o pagamento for confirmado, o status do pedido será atualizado automaticamente/i,
       ).length,
     ).toBeGreaterThan(0);
   });
@@ -899,10 +903,10 @@ describe('BusinessCatalogSection', () => {
       expect(openSpy).toHaveBeenCalledWith('https://sandbox.asaas.com/i/pay_pix_fallback', '_self');
     });
 
-    expect(await screen.findByText('Abrir cobranca Pix')).toBeInTheDocument();
+    expect(await screen.findByText('Abrir cobrança Pix')).toBeInTheDocument();
     expect(
       screen.getAllByText(
-        /Finalize o Pix no ambiente seguro do Asaas. Depois da confirmacao, o pedido sera atualizado automaticamente./i,
+        /Finalize o Pix no ambiente seguro do Asaas. Depois da confirmação, o pedido será atualizado automaticamente./i,
       ).length,
     ).toBeGreaterThan(0);
 
@@ -937,10 +941,10 @@ describe('BusinessCatalogSection', () => {
 
     expect(screen.getByRole('button', { name: 'Finalizando...' })).toBeDisabled();
 
-    deferred.reject(new Error('Nao foi possivel gerar o pagamento Pix neste momento.'));
+    deferred.reject(new Error('Não foi possível gerar o pagamento Pix neste momento.'));
 
     expect(
-      (await screen.findAllByText('Nao foi possivel gerar o pagamento Pix neste momento.')).length,
+      (await screen.findAllByText('Não foi possível gerar o pagamento Pix neste momento.')).length,
     ).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /Finalizar pedido/i })).toBeEnabled();
     expect(onSubmitOrder).toHaveBeenCalledOnce();
@@ -980,16 +984,16 @@ describe('BusinessCatalogSection', () => {
 
     expect(screen.getByText('Como deseja pagar na entrega?')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Pix' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Cartao de credito' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Cartao de debito' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cartão de crédito' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cartão de débito' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Pagamento na entrega' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Pagamento na retirada' })).not.toBeInTheDocument();
     expect(screen.getAllByText(/Pagamento seguro processado pelo Asaas/i).length).toBeGreaterThan(0);
 
-    await user.click(screen.getByRole('button', { name: 'Cartao de credito' }));
+    await user.click(screen.getByRole('button', { name: 'Cartão de crédito' }));
     await user.type(screen.getByLabelText('Nome'), 'Julia');
     await user.type(screen.getByLabelText('Telefone'), '5511977776666');
-    await user.type(screen.getByLabelText('Endereco'), 'Rua Augusta, 100');
+    await user.type(screen.getByLabelText('Endereço'), 'Rua Augusta, 100');
     await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
     await waitFor(() => {
@@ -1105,8 +1109,8 @@ describe('BusinessCatalogSection', () => {
     const unavailableCard = within(meatsSection).getByText('Costela especial').closest('.catalog-card');
 
     expect(unavailableCard).toHaveClass('catalog-card--unavailable');
-    expect(within(unavailableCard).getAllByText('Indisponivel').length).toBeGreaterThan(0);
-    expect(within(unavailableCard).getByRole('button', { name: 'Indisponivel' })).toBeDisabled();
+    expect(within(unavailableCard).getAllByText('Indisponível').length).toBeGreaterThan(0);
+    expect(within(unavailableCard).getByRole('button', { name: 'Indisponível' })).toBeDisabled();
 
     await waitFor(() => {
       expect(window.localStorage.getItem('taplink:cart:acougue-central')).toBeNull();

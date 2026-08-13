@@ -24,7 +24,7 @@ export function validatePaymentMethodForDeliveryType(deliveryType, paymentMethod
       normalizedPaymentMethod === PAYMENT_METHODS.CASH_ON_DELIVERY)
   ) {
     throw new AppError(
-      'Essa forma de pagamento nao esta disponivel para o tipo de recebimento escolhido.',
+      'Essa forma de pagamento não está disponível para o tipo de recebimento escolhido.',
       400,
       'order_payment_method_incompatible',
     );

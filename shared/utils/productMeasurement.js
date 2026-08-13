@@ -5,11 +5,13 @@ import {
   PRODUCT_MEASUREMENT_UNIT_LABELS,
   PRODUCT_MEASUREMENT_UNIT_VALUES,
 } from '../constants/products.js';
+import { fromMoneyCents, multiplyMoneyByQuantity, toMoneyCents } from './money.js';
 
 function formatNumber(value, options = {}) {
   return new Intl.NumberFormat('pt-BR', {
     maximumFractionDigits: options.maximumFractionDigits ?? 3,
     minimumFractionDigits: options.minimumFractionDigits ?? 0,
+    useGrouping: options.useGrouping ?? true,
   }).format(Number(value || 0));
 }
 
@@ -56,8 +58,22 @@ export function normalizeProductMeasurement(product = {}) {
   };
 }
 
+export function calculateMeasuredItemTotalCents(unitPrice, quantity) {
+  const normalizedQuantity = Number(quantity || 0);
+
+  if (!Number.isFinite(normalizedQuantity) || normalizedQuantity <= 0) {
+    return 0;
+  }
+
+  return Math.round(toMoneyCents(unitPrice) * normalizedQuantity);
+}
+
 export function calculateMeasuredItemTotal(unitPrice, quantity) {
-  return Number((Number(unitPrice || 0) * Number(quantity || 0)).toFixed(2));
+  return multiplyMoneyByQuantity(unitPrice, quantity);
+}
+
+export function roundMeasuredItemTotal(value) {
+  return fromMoneyCents(toMoneyCents(value));
 }
 
 export function buildMeasurementDisplayQuantity(quantity, measurementUnit) {
@@ -72,7 +88,19 @@ export function buildMeasurementDisplayQuantity(quantity, measurementUnit) {
     case 'kg': {
       const grams = numericQuantity * 1000;
       if (Math.abs(grams - Math.round(grams)) < 0.001) {
-        return `${formatNumber(Math.round(grams), { maximumFractionDigits: 0 })}g`;
+        const roundedGrams = Math.round(grams);
+
+        if (roundedGrams % 1000 === 0) {
+          return `${formatNumber(numericQuantity, {
+            maximumFractionDigits: 0,
+            useGrouping: false,
+          })}kg`;
+        }
+
+        return `${formatNumber(roundedGrams, {
+          maximumFractionDigits: 0,
+          useGrouping: false,
+        })}g`;
       }
 
       return `${formatNumber(numericQuantity)}kg`;

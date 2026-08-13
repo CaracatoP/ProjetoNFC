@@ -152,7 +152,7 @@ export function validateCustomerDocument(value = '', { required = false } = {}) 
       type: CUSTOMER_DOCUMENT_TYPES.CPF,
       isValid,
       errorCode: isValid ? '' : 'cpf_invalid',
-      message: isValid ? '' : 'CPF invalido.',
+      message: isValid ? '' : 'CPF inválido.',
     };
   }
 
@@ -164,7 +164,7 @@ export function validateCustomerDocument(value = '', { required = false } = {}) 
       type: CUSTOMER_DOCUMENT_TYPES.CNPJ,
       isValid,
       errorCode: isValid ? '' : 'cnpj_invalid',
-      message: isValid ? '' : 'CNPJ invalido.',
+      message: isValid ? '' : 'CNPJ inválido.',
     };
   }
 
@@ -173,6 +173,6 @@ export function validateCustomerDocument(value = '', { required = false } = {}) 
     type: '',
     isValid: false,
     errorCode: 'document_invalid',
-    message: 'Informe um CPF ou CNPJ valido.',
+    message: 'Informe um CPF ou CNPJ válido.',
   };
 }

@@ -62,9 +62,9 @@ export function BusinessAppointmentsSection({
         sectionType: 'appointments',
       });
       setForm(initialAppointmentState());
-      setFeedback('Solicitacao enviada com sucesso. Aguarde a confirmacao do tenant para validar o horario.');
+      setFeedback('Solicitação enviada com sucesso. Aguarde a confirmação do tenant para validar o horário.');
     } catch (error) {
-      setFeedback(error?.message || 'Nao foi possivel enviar a solicitacao agora.');
+      setFeedback(error?.message || 'Não foi possível enviar a solicitação agora.');
     } finally {
       setSubmitting(false);
     }
@@ -73,9 +73,9 @@ export function BusinessAppointmentsSection({
   return (
     <Card className="section-card">
       <SectionHeader
-        eyebrow="Modulo ativo"
+        eyebrow="Módulo ativo"
         title={segmentConfig?.appointmentTitle || 'Solicitar agendamento'}
-        description={segmentConfig?.appointmentDescription || 'Escolha o servico, o profissional e envie um pedido de horario.'}
+        description={segmentConfig?.appointmentDescription || 'Escolha o serviço, o profissional e envie um pedido de horário.'}
       />
 
       <div className="appointment-service-list">
@@ -90,7 +90,7 @@ export function BusinessAppointmentsSection({
       <form className="appointment-form" onSubmit={handleSubmit}>
         <div className="admin-form-grid">
           <label className="admin-field">
-            <span>Servico</span>
+            <span>Serviço</span>
             <select value={form.serviceId} onChange={(event) => setForm((current) => ({ ...current, serviceId: event.target.value }))}>
               <option value="">Selecione</option>
               {appointmentServices.map((service) => (
@@ -124,16 +124,16 @@ export function BusinessAppointmentsSection({
             <input type="date" value={form.requestedDate} onChange={(event) => setForm((current) => ({ ...current, requestedDate: event.target.value }))} />
           </label>
           <label className="admin-field">
-            <span>Horario</span>
+            <span>Horário</span>
             <input type="time" value={form.requestedTime} onChange={(event) => setForm((current) => ({ ...current, requestedTime: event.target.value }))} />
           </label>
         </div>
         <label className="admin-field">
-          <span>Observacoes</span>
+          <span>Observações</span>
           <textarea rows="3" value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} />
         </label>
         <Button type="submit" disabled={submitting}>
-          {submitting ? 'Enviando...' : 'Enviar solicitacao'}
+          {submitting ? 'Enviando...' : 'Enviar solicitação'}
         </Button>
         {feedback ? <p className="site-inline-feedback">{feedback}</p> : null}
       </form>

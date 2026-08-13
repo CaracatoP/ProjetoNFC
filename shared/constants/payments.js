@@ -68,8 +68,8 @@ export const TENANT_PAYOUT_STATUS_VALUES = Object.values(TENANT_PAYOUT_STATUSES)
 
 export const PAYMENT_METHOD_LABELS = Object.freeze({
   [PAYMENT_METHODS.PIX]: 'Pix',
-  [PAYMENT_METHODS.CREDIT_CARD]: 'Cartao de credito',
-  [PAYMENT_METHODS.DEBIT_CARD]: 'Cartao de debito',
+  [PAYMENT_METHODS.CREDIT_CARD]: 'Cartão de crédito',
+  [PAYMENT_METHODS.DEBIT_CARD]: 'Cartão de débito',
   [PAYMENT_METHODS.CASH_ON_PICKUP]: 'Pagamento na retirada',
   [PAYMENT_METHODS.CASH_ON_DELIVERY]: 'Pagamento na entrega',
 });

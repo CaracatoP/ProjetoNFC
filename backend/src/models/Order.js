@@ -16,6 +16,7 @@ import {
   isValidMeasurementQuantity,
   normalizeMeasurementUnit,
 } from '../../../shared/utils/productMeasurement.js';
+import { roundMoneyValue } from '../../../shared/utils/money.js';
 import {
   normalizeOrderPayment,
   normalizeOrderPaymentEvents,
@@ -40,7 +41,7 @@ function normalizeOrderItems(items = []) {
       displayQuantity:
         displayQuantity || buildLegacyDisplayQuantity(quantity, measurementUnit),
       itemTotal: Number.isFinite(itemTotal)
-        ? Number(itemTotal.toFixed(2))
+        ? roundMoneyValue(itemTotal)
         : calculateMeasuredItemTotal(item.unitPrice, quantity),
     };
   });
@@ -193,7 +194,7 @@ const orderSchema = new mongoose.Schema(
       transform: (doc, ret) => {
         const transformed = baseToJSONTransform ? baseToJSONTransform(doc, ret) : ret;
         transformed.items = normalizeOrderItems(transformed.items);
-        transformed.total = Number(Number(transformed.total || 0).toFixed(2));
+        transformed.total = roundMoneyValue(transformed.total || 0);
         transformed.payment = normalizeOrderPayment(transformed.payment || {}, transformed.total);
         transformed.paymentEvents = normalizeOrderPaymentEvents(transformed.paymentEvents || []);
         delete transformed.publicCheckoutTokenHash;
@@ -206,7 +207,7 @@ const orderSchema = new mongoose.Schema(
       transform: (doc, ret) => {
         const transformed = baseToObjectTransform ? baseToObjectTransform(doc, ret) : ret;
         transformed.items = normalizeOrderItems(transformed.items);
-        transformed.total = Number(Number(transformed.total || 0).toFixed(2));
+        transformed.total = roundMoneyValue(transformed.total || 0);
         transformed.payment = normalizeOrderPayment(transformed.payment || {}, transformed.total);
         transformed.paymentEvents = normalizeOrderPaymentEvents(transformed.paymentEvents || []);
         delete transformed.publicCheckoutTokenHash;

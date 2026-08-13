@@ -60,6 +60,7 @@ import {
   normalizeMeasurementUnit,
   normalizeProductMeasurement,
 } from '../../../shared/utils/productMeasurement.js';
+import { roundMoneyValue, sumMoneyValues } from '../../../shared/utils/money.js';
 import {
   normalizeCustomerDocument,
   validateCustomerDocument,
@@ -118,7 +119,7 @@ async function assertBusinessExists(businessId) {
   const business = await findBusinessById(businessId);
 
   if (!business) {
-    throw new AppError('Negocio nao encontrado', 404, 'business_not_found');
+    throw new AppError('Negócio não encontrado', 404, 'business_not_found');
   }
 
   return business;
@@ -128,11 +129,11 @@ async function assertPublicBusinessBySlug(slug) {
   const business = await findBusinessBySlugStrict(slug);
 
   if (!business) {
-    throw new AppError('Negocio nao encontrado', 404, 'business_not_found');
+    throw new AppError('Negócio não encontrado', 404, 'business_not_found');
   }
 
   if (![BUSINESS_STATUS.ACTIVE, BUSINESS_STATUS.DRAFT].includes(business.status)) {
-    throw new AppError('Este site esta temporariamente indisponivel.', 423, 'business_inactive');
+    throw new AppError('Este site está temporariamente indisponível.', 423, 'business_inactive');
   }
 
   return business;
@@ -155,7 +156,7 @@ function publishBusinessModuleEvent(business, kind, operation = 'updated') {
 
 function assertTenantScope(entity, businessId, resourceLabel) {
   if (!entity) {
-    throw new AppError(`${resourceLabel} nao encontrado`, 404, 'module_resource_not_found');
+    throw new AppError(`${resourceLabel} não encontrado`, 404, 'module_resource_not_found');
   }
 
   if (String(entity.businessId) !== String(businessId)) {
@@ -208,7 +209,7 @@ function serializeOrderItem(item = {}) {
     displayQuantity:
       String(item.displayQuantity || '').trim() || buildLegacyDisplayQuantity(quantity, measurementUnit),
     itemTotal: Number.isFinite(Number(item.itemTotal))
-      ? Number(Number(item.itemTotal).toFixed(2))
+      ? roundMoneyValue(item.itemTotal)
       : calculateMeasuredItemTotal(unitPrice, quantity),
     notes: item.notes || '',
   };
@@ -222,12 +223,9 @@ function serializeOrderRecord(item) {
     ...safeRecord
   } = record || {};
   const items = Array.isArray(safeRecord.items) ? safeRecord.items.map(serializeOrderItem) : [];
-  const total = Number(
-    (
-      Number(safeRecord.total || 0) ||
-      items.reduce((sum, orderItem) => sum + Number(orderItem.itemTotal || 0), 0)
-    ).toFixed(2),
-  );
+  const total = Number(safeRecord.total || 0)
+    ? roundMoneyValue(safeRecord.total || 0)
+    : sumMoneyValues(items.map((orderItem) => orderItem.itemTotal || 0));
 
   return {
     ...safeRecord,
@@ -405,7 +403,7 @@ function resolveRequestedPaymentMethod(payload, paymentSettings) {
 
   if (!isBusinessPaymentMethodEnabled(paymentSettings, paymentMethod)) {
     throw new AppError(
-      'Esta forma de pagamento nao esta disponivel para este tenant.',
+      'Esta forma de pagamento não está disponível para este tenant.',
       400,
       'payment_method_unavailable',
     );
@@ -467,7 +465,7 @@ function resolveRequestedPaymentProvider(payload, method, paymentSettings) {
 function assertMercadoPagoPaymentMethodAllowed(paymentSettings, method) {
   if (!getDeclaredHostedCheckoutProvider(paymentSettings)) {
     throw new AppError(
-      'Pagamento online indisponivel para este tenant no momento.',
+      'Pagamento online indisponível para este tenant no momento.',
       400,
       'payment_provider_unavailable',
     );
@@ -479,7 +477,7 @@ function assertMercadoPagoPaymentMethodAllowed(paymentSettings, method) {
     (method === PAYMENT_METHODS.DEBIT_CARD && !paymentSettings?.methods?.debitCard)
   ) {
     throw new AppError(
-      'Esta forma de pagamento nao esta disponivel para este tenant.',
+      'Esta forma de pagamento não está disponível para este tenant.',
       400,
       'payment_method_unavailable',
     );
@@ -487,7 +485,7 @@ function assertMercadoPagoPaymentMethodAllowed(paymentSettings, method) {
 
   if (!isMercadoPagoProviderConnected(paymentSettings)) {
     throw new AppError(
-      'Este tenant ainda nao concluiu a configuracao do Mercado Pago.',
+      'Este tenant ainda não concluiu a configuração do Mercado Pago.',
       400,
       'payment_provider_unavailable',
     );
@@ -502,7 +500,7 @@ function assertAsaasPaymentMethodAllowed({
 }) {
   if (!getDeclaredHostedCheckoutProvider(paymentSettings)) {
     throw new AppError(
-      'Pagamento online indisponivel para este tenant no momento.',
+      'Pagamento online indisponível para este tenant no momento.',
       400,
       'payment_provider_unavailable',
     );
@@ -514,7 +512,7 @@ function assertAsaasPaymentMethodAllowed({
     (method === PAYMENT_METHODS.DEBIT_CARD && !paymentSettings?.methods?.debitCard)
   ) {
     throw new AppError(
-      'Esta forma de pagamento nao esta disponivel para este tenant.',
+      'Esta forma de pagamento não está disponível para este tenant.',
       400,
       'payment_method_unavailable',
     );
@@ -528,7 +526,7 @@ function assertAsaasPaymentMethodAllowed({
 
   if (!asaasContext.connected) {
     throw new AppError(
-      'Este tenant ainda nao concluiu a configuracao do Asaas.',
+      'Este tenant ainda não concluiu a configuração do Asaas.',
       400,
       'payment_provider_unavailable',
     );
@@ -548,7 +546,7 @@ function buildManualPixPaymentSnapshot(paymentSettings, amount) {
 
   if (!pixPayload) {
     throw new AppError(
-      'O tenant ainda nao configurou uma chave Pix valida para este checkout.',
+      'O tenant ainda não configurou uma chave Pix válida para este checkout.',
       400,
       'payment_method_unavailable',
     );
@@ -1231,7 +1229,7 @@ export async function updateTenantAppointmentRequestStatus(businessId, id, statu
 }
 
 function calculateOrderTotal(items = []) {
-  return Number(items.reduce((sum, item) => sum + Number(item.itemTotal || 0), 0).toFixed(2));
+  return sumMoneyValues(items.map((item) => item.itemTotal || 0));
 }
 
 async function buildOrderItemsSnapshot(businessId, items = []) {
@@ -1262,12 +1260,12 @@ async function buildOrderItemsSnapshot(businessId, items = []) {
     }
 
     if (requestedProductId && !product) {
-      throw new AppError('Produto nao encontrado para este tenant.', 404, 'order_product_not_found');
+      throw new AppError('Produto não encontrado para este tenant.', 404, 'order_product_not_found');
     }
 
     if (product && product.isAvailable === false) {
       throw new AppError(
-        'Um dos produtos selecionados esta indisponivel no momento.',
+        'Um dos produtos selecionados está indisponível no momento.',
         400,
         'order_product_unavailable',
       );
@@ -1401,7 +1399,7 @@ export async function createPublicOrder(slug, payload) {
       const providerCustomerId = String(customer.id || '').trim();
 
       if (!providerCustomerId) {
-        throw new AppError('Asaas nao retornou um customer valido.', 502, 'asaas_customer_missing_id');
+        throw new AppError('Asaas não retornou um customer válido.', 502, 'asaas_customer_missing_id');
       }
       const effectiveSplitSettings = resolveEffectiveAsaasSplitSettings(
         storedPaymentSettings,
@@ -1631,7 +1629,7 @@ export async function getPublicOrderPaymentByCheckoutToken(slug, checkoutToken) 
   const normalizedCheckoutToken = String(checkoutToken || '').trim();
 
   if (!normalizedCheckoutToken) {
-    throw new AppError('Pagamento nao encontrado.', 404, 'public_order_payment_not_found');
+    throw new AppError('Pagamento não encontrado.', 404, 'public_order_payment_not_found');
   }
 
   const order = await findOrderByBusinessIdAndCheckoutTokenHash(
@@ -1640,7 +1638,7 @@ export async function getPublicOrderPaymentByCheckoutToken(slug, checkoutToken) 
   );
 
   if (!order || !isRecoverablePublicOrderPayment(order.payment || {})) {
-    throw new AppError('Pagamento nao encontrado.', 404, 'public_order_payment_not_found');
+    throw new AppError('Pagamento não encontrado.', 404, 'public_order_payment_not_found');
   }
 
   return serializePublicOrderPaymentRecovery(order, business);
@@ -1661,7 +1659,7 @@ export async function updateTenantOrderStatus(businessId, id, status) {
     buildOrderStatusTimestampPatch(existing, status),
   );
   if (!updated) {
-    throw new AppError('Pedido nao encontrado', 404, 'module_resource_not_found');
+    throw new AppError('Pedido não encontrado', 404, 'module_resource_not_found');
   }
   publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_STATUS_UPDATED);
   return serializeOrderRecord(updated);
@@ -1678,7 +1676,7 @@ export async function updateTenantOrderPaymentStatus(businessId, id, status) {
   );
 
   if (!updated) {
-    throw new AppError('Pedido nao encontrado', 404, 'module_resource_not_found');
+    throw new AppError('Pedido não encontrado', 404, 'module_resource_not_found');
   }
 
   publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_PAYMENT_UPDATED);
@@ -1705,7 +1703,7 @@ export async function syncMercadoPagoOrderPaymentWebhook(
   });
 
   if (!updated) {
-    throw new AppError('Pedido nao encontrado', 404, 'module_resource_not_found');
+    throw new AppError('Pedido não encontrado', 404, 'module_resource_not_found');
   }
 
   publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_PAYMENT_UPDATED);
@@ -1726,7 +1724,7 @@ export async function syncAsaasOrderPaymentWebhook(
   const financeSettings = await getPlatformFinanceSettings();
 
   if (existing.payment?.provider !== PAYMENT_PROVIDERS.ASAAS) {
-    throw new AppError('Pedido nao configurado para Asaas', 404, 'module_resource_not_found');
+    throw new AppError('Pedido não configurado para Asaas', 404, 'module_resource_not_found');
   }
 
   const nextPaymentPatch = buildAsaasWebhookPaymentPatch(
@@ -1778,10 +1776,10 @@ export async function syncAsaasOrderPaymentWebhook(
   const updated = await updateOrderRecordByBusinessId(businessId, id, {
     payment: nextPaymentPatch.payment,
     paymentEvents: nextPaymentPatch.paymentEvents,
-  });
+  }, { includeArchived: true });
 
   if (!updated) {
-    throw new AppError('Pedido nao encontrado', 404, 'module_resource_not_found');
+    throw new AppError('Pedido não encontrado', 404, 'module_resource_not_found');
   }
 
   const storedPayment = await upsertPaymentByProviderPaymentId(
@@ -1816,7 +1814,7 @@ export async function archiveTenantOrder(businessId, id) {
   assertTenantScope(existing, businessId, 'Pedido');
   const archived = await archiveOrderRecordByBusinessId(businessId, id, new Date());
   if (!archived) {
-    throw new AppError('Pedido nao encontrado', 404, 'module_resource_not_found');
+    throw new AppError('Pedido não encontrado', 404, 'module_resource_not_found');
   }
   publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_ARCHIVED, 'archived');
   return {

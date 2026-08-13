@@ -13,13 +13,13 @@ export function BusinessLoyaltySection({ business, segmentConfig, onTrackAction 
   return (
     <Card className="section-card section-card--loyalty">
       <SectionHeader
-        eyebrow="Modulo ativo"
+        eyebrow="Módulo ativo"
         title={segmentConfig?.loyaltyTitle || 'Programa de fidelidade'}
-        description={segmentConfig?.loyaltyDescription || 'Mantenha o relacionamento do cliente e destaque beneficios de retorno.'}
+        description={segmentConfig?.loyaltyDescription || 'Mantenha o relacionamento do cliente e destaque benefícios de retorno.'}
       />
       <div className="loyalty-card">
-        <strong>Mostre esta secao para clientes recorrentes</strong>
-        <p>Use a pagina NFC para lembrar beneficios, retornos e campanhas especiais do tenant.</p>
+        <strong>Mostre esta seção para clientes recorrentes</strong>
+        <p>Use a página NFC para lembrar benefícios, retornos e campanhas especiais do tenant.</p>
         {whatsappUrl ? (
           <Button
             href={whatsappUrl}

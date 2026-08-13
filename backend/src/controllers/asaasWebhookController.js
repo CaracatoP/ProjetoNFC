@@ -22,6 +22,16 @@ import { logger } from '../utils/logger.js';
 import { isValidObjectId } from '../validators/objectId.js';
 
 const PAYMENT_DELETED_EVENT = 'PAYMENT_DELETED';
+const SUPPORTED_PAYMENT_EVENTS = new Set([
+  'PAYMENT_CREATED',
+  'PAYMENT_UPDATED',
+  'PAYMENT_CONFIRMED',
+  'PAYMENT_RECEIVED',
+  'PAYMENT_REFUNDED',
+  'PAYMENT_PARTIALLY_REFUNDED',
+  'PAYMENT_DELETED',
+  'PAYMENT_OVERDUE',
+]);
 
 function normalizeAsaasEventType(value) {
   return String(value || '').trim().toUpperCase();
@@ -33,6 +43,10 @@ function isPaymentDeletedEvent(eventType) {
 
 function isPaymentEvent(eventType) {
   return normalizeAsaasEventType(eventType).startsWith('PAYMENT_');
+}
+
+function isSupportedPaymentEvent(eventType) {
+  return SUPPORTED_PAYMENT_EVENTS.has(normalizeAsaasEventType(eventType));
 }
 
 function getWebhookHeaderValue(value) {
@@ -55,16 +69,14 @@ function validateAsaasWebhookAuthToken(requestToken) {
   }
 }
 
-function validateProviderExternalReferenceScope(externalReference, businessId, orderId) {
+function isExternalReferenceScopedToOrder(externalReference, businessId, orderId) {
   const parsedReference = parseAsaasExternalReference(externalReference);
 
-  if (
-    !parsedReference ||
-    String(parsedReference.businessId) !== String(businessId) ||
-    String(parsedReference.orderId) !== String(orderId)
-  ) {
-    throw new AppError('Este pagamento pertence a outro tenant ou pedido.', 404, 'module_resource_not_found');
-  }
+  return Boolean(
+    parsedReference &&
+      String(parsedReference.businessId) === String(businessId) &&
+      String(parsedReference.orderId) === String(orderId),
+  );
 }
 
 function hasValidParsedReference(parsedReference) {
@@ -183,8 +195,11 @@ function logWebhookResolution({
   providerEventId = '',
   providerEvent = '',
   providerPaymentId = '',
+  externalReference = '',
   businessId = '',
   orderId = '',
+  paymentFound = null,
+  orderFound = null,
   resolution = '',
   reason = '',
 } = {}) {
@@ -194,8 +209,11 @@ function logWebhookResolution({
       eventId: providerEventId,
       eventType: providerEvent,
       providerPaymentId,
+      externalReference: String(externalReference || '').trim(),
       businessId: String(businessId || ''),
       orderId: String(orderId || ''),
+      ...(paymentFound === null ? {} : { paymentFound: Boolean(paymentFound) }),
+      ...(orderFound === null ? {} : { orderFound: Boolean(orderFound) }),
       resolution,
       reason: String(reason || ''),
     },
@@ -269,8 +287,31 @@ export async function asaasWebhookController(req, res, next) {
         providerEventId,
         providerEvent,
         providerPaymentId,
+        externalReference: incomingExternalReference,
         resolution: 'duplicate',
         reason: 'already_consumed',
+      });
+      return res.status(204).end();
+    }
+
+    if (!isSupportedPaymentEvent(providerEvent)) {
+      await markWebhookEventIgnored(webhookEventRecord?._id, {
+        reason: 'unsupported_payment_event',
+        message: 'Evento de pagamento Asaas sem acao local configurada.',
+        providerResourceId: providerPaymentId,
+        resourceType: 'payment',
+        metadata: {
+          reason: 'unsupported_payment_event',
+          eventType: providerEvent,
+        },
+      });
+      logWebhookResolution({
+        providerEventId,
+        providerEvent,
+        providerPaymentId,
+        externalReference: incomingExternalReference,
+        resolution: 'ignored',
+        reason: 'unsupported_payment_event',
       });
       return res.status(204).end();
     }
@@ -296,6 +337,8 @@ export async function asaasWebhookController(req, res, next) {
         providerEventId,
         providerEvent,
         providerPaymentId,
+        externalReference: incomingExternalReference,
+        paymentFound: Boolean(localPayment),
         resolution: 'ignored',
         reason: 'invalid_external_reference',
       });
@@ -317,6 +360,8 @@ export async function asaasWebhookController(req, res, next) {
         providerEventId,
         providerEvent,
         providerPaymentId,
+        externalReference: incomingExternalReference,
+        paymentFound: Boolean(localPayment),
         resolution: 'ignored',
         reason: 'missing_external_reference',
       });
@@ -334,7 +379,35 @@ export async function asaasWebhookController(req, res, next) {
         )
       )
     ) {
-      throw new AppError('Este pagamento pertence a outro tenant ou pedido.', 404, 'module_resource_not_found');
+      await markWebhookEventIgnored(webhookEventRecord?._id, {
+        businessId: String(localPayment.businessId || ''),
+        reason: 'local_payment_scope_mismatch',
+        message: 'Evento Asaas aponta para tenant ou pedido diferente do pagamento local.',
+        providerResourceId: providerPaymentId,
+        resourceType: 'payment',
+        resourceId: String(localPayment._id || ''),
+        metadata: {
+          reason: 'local_payment_scope_mismatch',
+          eventType: providerEvent,
+          incomingBusinessId: String(parsedIncomingReference.businessId || ''),
+          incomingOrderId: String(parsedIncomingReference.orderId || ''),
+          localBusinessId: String(localPayment.businessId || ''),
+          localOrderId: String(localPayment.orderId || ''),
+        },
+      });
+      logWebhookResolution({
+        providerEventId,
+        providerEvent,
+        providerPaymentId,
+        externalReference: incomingExternalReference,
+        businessId: String(localPayment.businessId || ''),
+        orderId: String(localPayment.orderId || ''),
+        paymentFound: true,
+        orderFound: null,
+        resolution: 'ignored',
+        reason: 'local_payment_scope_mismatch',
+      });
+      return res.status(204).end();
     }
 
     const businessId = hasValidParsedReference(parsedIncomingReference)
@@ -372,8 +445,10 @@ export async function asaasWebhookController(req, res, next) {
         providerEventId,
         providerEvent,
         providerPaymentId,
+        externalReference: incomingExternalReference,
         businessId,
         orderId,
+        paymentFound: Boolean(localPayment),
         resolution: 'ignored',
         reason: 'invalid_business_id',
       });
@@ -397,8 +472,10 @@ export async function asaasWebhookController(req, res, next) {
         providerEventId,
         providerEvent,
         providerPaymentId,
+        externalReference: incomingExternalReference,
         businessId,
         orderId,
+        paymentFound: Boolean(localPayment),
         resolution: 'ignored',
         reason: 'business_not_found',
       });
@@ -408,7 +485,32 @@ export async function asaasWebhookController(req, res, next) {
     const order = isValidObjectId(orderId) ? await findOrderById(orderId) : null;
 
     if (order && String(order.businessId) !== String(businessId)) {
-      throw new AppError('Este pagamento pertence a outro tenant ou pedido.', 404, 'module_resource_not_found');
+      await markWebhookEventIgnored(webhookEventRecord?._id, {
+        businessId,
+        reason: 'order_scope_mismatch',
+        message: 'Evento Asaas aponta para pedido de outro tenant.',
+        providerResourceId: providerPaymentId,
+        resourceType: 'order_payment',
+        resourceId: String(order._id || orderId),
+        metadata: {
+          reason: 'order_scope_mismatch',
+          eventType: providerEvent,
+          orderBusinessId: String(order.businessId || ''),
+        },
+      });
+      logWebhookResolution({
+        providerEventId,
+        providerEvent,
+        providerPaymentId,
+        externalReference: incomingExternalReference,
+        businessId,
+        orderId,
+        paymentFound: Boolean(localPayment),
+        orderFound: true,
+        resolution: 'ignored',
+        reason: 'order_scope_mismatch',
+      });
+      return res.status(204).end();
     }
 
     if (!order && !localPayment) {
@@ -429,34 +531,11 @@ export async function asaasWebhookController(req, res, next) {
         providerEventId,
         providerEvent,
         providerPaymentId,
+        externalReference: incomingExternalReference,
         businessId,
         orderId,
-        resolution: 'ignored',
-        reason: 'payment_not_found',
-      });
-      return res.status(204).end();
-    }
-
-    if (!localPayment) {
-      await markWebhookEventIgnored(webhookEventRecord?._id, {
-        businessId,
-        reason: 'payment_not_found',
-        message: 'Pagamento local nao encontrado para evento Asaas.',
-        providerResourceId: providerPaymentId,
-        resourceType: 'order_payment',
-        resourceId: String(order?._id || orderId || ''),
-        metadata: {
-          reason: 'payment_not_found',
-          eventType: providerEvent,
-          orderFound: Boolean(order),
-        },
-      });
-      logWebhookResolution({
-        providerEventId,
-        providerEvent,
-        providerPaymentId,
-        businessId,
-        orderId,
+        paymentFound: Boolean(localPayment),
+        orderFound: Boolean(order),
         resolution: 'ignored',
         reason: 'payment_not_found',
       });
@@ -485,8 +564,41 @@ export async function asaasWebhookController(req, res, next) {
           });
         })();
 
-    if (!isPaymentDeletedEvent(providerEvent)) {
-      validateProviderExternalReferenceScope(providerPayment.externalReference, businessId, orderId);
+    const providerExternalReference = String(providerPayment?.externalReference || '').trim();
+
+    if (
+      !isPaymentDeletedEvent(providerEvent) &&
+      providerExternalReference &&
+      !isExternalReferenceScopedToOrder(providerExternalReference, businessId, orderId)
+    ) {
+      await markWebhookEventIgnored(webhookEventRecord?._id, {
+        businessId,
+        reason: 'provider_scope_mismatch',
+        message: 'Asaas retornou referencia externa divergente do pagamento local.',
+        providerResourceId: providerPaymentId,
+        resourceType: order ? 'order_payment' : 'payment',
+        resourceId: String(order?._id || localPayment?._id || orderId || ''),
+        metadata: {
+          reason: 'provider_scope_mismatch',
+          eventType: providerEvent,
+          providerExternalReference,
+          expectedBusinessId: String(businessId || ''),
+          expectedOrderId: String(orderId || ''),
+        },
+      });
+      logWebhookResolution({
+        providerEventId,
+        providerEvent,
+        providerPaymentId,
+        externalReference: providerExternalReference,
+        businessId,
+        orderId,
+        paymentFound: Boolean(localPayment),
+        orderFound: Boolean(order),
+        resolution: 'ignored',
+        reason: 'provider_scope_mismatch',
+      });
+      return res.status(204).end();
     }
 
     if (!order) {
@@ -512,8 +624,11 @@ export async function asaasWebhookController(req, res, next) {
         providerEventId,
         providerEvent,
         providerPaymentId,
+        externalReference: incomingExternalReference || providerExternalReference,
         businessId,
         orderId,
+        paymentFound: true,
+        orderFound: false,
         resolution: 'processed',
         reason: 'payment_reconciled_without_order',
       });
@@ -537,8 +652,11 @@ export async function asaasWebhookController(req, res, next) {
         providerEventId,
         providerEvent,
         providerPaymentId,
+        externalReference: incomingExternalReference || providerExternalReference,
         businessId,
         orderId,
+        paymentFound: Boolean(localPayment),
+        orderFound: true,
         resolution: 'ignored',
         reason: 'order_not_configured_for_asaas',
       });
@@ -565,8 +683,11 @@ export async function asaasWebhookController(req, res, next) {
         providerEventId,
         providerEvent,
         providerPaymentId,
+        externalReference: incomingExternalReference || providerExternalReference,
         businessId,
         orderId,
+        paymentFound: Boolean(localPayment),
+        orderFound: true,
         resolution: 'ignored',
         reason: 'order_payment_mismatch',
       });
@@ -577,7 +698,7 @@ export async function asaasWebhookController(req, res, next) {
       incomingPayment,
       providerPayment,
       providerPaymentId,
-      externalReference: incomingExternalReference,
+      externalReference: incomingExternalReference || providerExternalReference || localPayment?.externalReference || '',
       providerEvent,
     });
 
@@ -611,8 +732,11 @@ export async function asaasWebhookController(req, res, next) {
       providerEventId,
       providerEvent,
       providerPaymentId,
+      externalReference: incomingExternalReference || providerExternalReference || localPayment?.externalReference || '',
       businessId,
       orderId,
+      paymentFound: Boolean(localPayment),
+      orderFound: true,
       resolution: 'processed',
     });
 

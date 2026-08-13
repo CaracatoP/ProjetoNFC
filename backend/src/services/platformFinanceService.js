@@ -8,6 +8,7 @@ import {
   normalizePaymentArchitecture,
   resolveBusinessPaymentSettings,
 } from '../../../shared/utils/businessPayment.js';
+import { fromMoneyCents, toMoneyCents } from '../../../shared/utils/money.js';
 import { env } from '../config/env.js';
 import { getFinanceSettingsRecord, upsertFinanceSettingsRecord } from '../repositories/systemSettingRepository.js';
 
@@ -101,24 +102,6 @@ export function usesCentralizedPaymentArchitecture(financeSettings = {}) {
 
 export function usesSubaccountPaymentArchitecture(financeSettings = {}) {
   return getStoredFinanceSettings(financeSettings).paymentArchitecture === PAYMENT_ARCHITECTURES.SUBACCOUNT;
-}
-
-export function toMoneyCents(value) {
-  const numericValue = Number(value || 0);
-  if (!Number.isFinite(numericValue)) {
-    return 0;
-  }
-
-  return Math.round(numericValue * 100);
-}
-
-export function fromMoneyCents(value) {
-  const numericValue = Number(value || 0);
-  if (!Number.isFinite(numericValue)) {
-    return 0;
-  }
-
-  return Number((numericValue / 100).toFixed(2));
 }
 
 export function calculatePlatformFeeBreakdown(amount, percent = 0) {

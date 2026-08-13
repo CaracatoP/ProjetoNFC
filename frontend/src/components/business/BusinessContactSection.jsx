@@ -54,7 +54,7 @@ export function BusinessContactSection({ section, onTrackAction }) {
 
         {section.settings?.hours?.length ? (
           <div className="hours-card">
-            <h3>Horarios</h3>
+            <h3>Horários</h3>
             <ul>
               {section.settings.hours.map((hour) => (
                 <li key={hour.id}>

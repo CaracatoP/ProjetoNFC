@@ -34,7 +34,7 @@ const baseFixture = {
     status: 'active',
     seo: {
       title: 'Acougue Central',
-      description: 'Catalogo publico',
+      description: 'Catálogo público',
       imageUrl: '',
     },
     segment: 'butcher',
@@ -85,7 +85,7 @@ const baseFixture = {
   },
   seo: {
     title: 'Acougue Central',
-    description: 'Catalogo publico',
+    description: 'Catálogo público',
     imageUrl: '',
   },
 };
@@ -144,8 +144,8 @@ describe('PublicCatalogPage', () => {
       </TenantProvider>,
     );
 
-    expect(await screen.findByText('Catalogo indisponivel no momento')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Voltar para a pagina inicial/i })).toHaveClass('catalog-page-back-button');
+    expect(await screen.findByText('Catálogo indisponível no momento')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Voltar para a página inicial/i })).toHaveClass('catalog-page-back-button');
   });
 
   it('shows a friendly empty state when there are no products yet', async () => {
@@ -186,8 +186,8 @@ describe('PublicCatalogPage', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'Acougue Central' })).toBeInTheDocument();
-    expect(screen.queryByText(/Voltar para a pagina principal/i)).not.toBeInTheDocument();
-    const backButton = screen.getByRole('button', { name: /Voltar para a pagina inicial/i });
+    expect(screen.queryByText(/Voltar para a página principal/i)).not.toBeInTheDocument();
+    const backButton = screen.getByRole('button', { name: /Voltar para a página inicial/i });
     expect(backButton).toHaveClass('catalog-page-back-button');
     await user.click(backButton);
     expect(await screen.findByText('Landing limpa')).toBeInTheDocument();
@@ -213,7 +213,7 @@ describe('PublicCatalogPage', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'Acougue Central' })).toBeInTheDocument();
-    await screen.findByRole('button', { name: /Voltar para a pagina inicial/i });
+    await screen.findByRole('button', { name: /Voltar para a página inicial/i });
     expect(analyticsService.trackEvent).not.toHaveBeenCalled();
   });
 
@@ -260,8 +260,8 @@ describe('PublicCatalogPage', () => {
       });
     });
 
-    expect(await screen.findByRole('button', { name: 'Indisponivel' })).toBeDisabled();
-    expect(screen.getAllByText('Indisponivel').length).toBeGreaterThan(0);
+    expect(await screen.findByRole('button', { name: 'Indisponível' })).toBeDisabled();
+    expect(screen.getAllByText('Indisponível').length).toBeGreaterThan(0);
     expect(publicSiteService.invalidatePublicSiteCache).toHaveBeenCalledWith(
       expect.objectContaining({
         slug: 'acougue-central',

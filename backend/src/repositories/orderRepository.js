@@ -46,8 +46,17 @@ export function updateOrderRecord(id, payload) {
   return Order.findByIdAndUpdate(id, payload, { new: true, runValidators: true });
 }
 
-export function updateOrderRecordByBusinessId(businessId, id, payload) {
-  return Order.findOneAndUpdate({ _id: id, businessId, archivedAt: null }, payload, { new: true, runValidators: true });
+export function updateOrderRecordByBusinessId(
+  businessId,
+  id,
+  payload,
+  { includeArchived = false } = {},
+) {
+  return Order.findOneAndUpdate(
+    includeArchived ? { _id: id, businessId } : { _id: id, businessId, archivedAt: null },
+    payload,
+    { new: true, runValidators: true },
+  );
 }
 
 export function archiveOrderRecordByBusinessId(businessId, id, archivedAt = new Date()) {

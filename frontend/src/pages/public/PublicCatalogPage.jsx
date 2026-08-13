@@ -32,7 +32,7 @@ function TenantLoadingScreen() {
   return (
     <div className="site-loading-screen" role="status" aria-live="polite">
       <div className="site-loading-screen__pulse" aria-hidden="true" />
-      <strong>Carregando catalogo</strong>
+      <strong>Carregando catálogo</strong>
       <span>Preparando os produtos e o carrinho deste tenant.</span>
     </div>
   );
@@ -41,21 +41,21 @@ function TenantLoadingScreen() {
 function getPublicErrorContent(error) {
   if (error?.code === 'business_inactive') {
     return {
-      title: 'Este site esta temporariamente indisponivel',
+      title: 'Este site está temporariamente indisponível',
       description: 'Tente novamente mais tarde.',
     };
   }
 
   if (error?.status === 404) {
     return {
-      title: 'Nao foi possivel carregar este tenant',
-      description: error?.message || 'Negocio nao encontrado.',
+      title: 'Não foi possível carregar este tenant',
+      description: error?.message || 'Negócio não encontrado.',
     };
   }
 
   return {
-    title: 'Nao foi possivel carregar o catalogo',
-    description: error?.message || 'Verifique a conexao com a API e tente novamente.',
+    title: 'Não foi possível carregar o catálogo',
+    description: error?.message || 'Verifique a conexão com a API e tente novamente.',
   };
 }
 
@@ -69,10 +69,24 @@ function BackToLandingButton({ slug, search, navigate }) {
       type="button"
       variant="secondary"
       className="catalog-page-back-button"
-      aria-label="Voltar para a pagina inicial"
+      aria-label="Voltar para a página inicial"
       onClick={() => navigate(buildBackHref(slug, search))}
     >
-      ←
+      <svg
+        className="catalog-page-back-button__icon"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path
+          d="M15 18l-6-6 6-6"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="2"
+        />
+      </svg>
     </Button>
   );
 }
@@ -111,7 +125,7 @@ export function PublicCatalogPage() {
       trackPageView();
     }
 
-    document.title = `${site.business.name} | Catalogo`;
+    document.title = `${site.business.name} | Catálogo`;
   }, [setSite, site, trackPageView]);
 
   useEffect(() => {
@@ -166,7 +180,7 @@ export function PublicCatalogPage() {
 
   const handleOrder = useCallback(async (payload) => {
     if (!site?.business?.slug) {
-      throw new Error('Nao foi possivel identificar este tenant para concluir o pedido.');
+      throw new Error('Não foi possível identificar este tenant para concluir o pedido.');
     }
 
     return createPublicOrder(site.business.slug, payload);
@@ -174,7 +188,7 @@ export function PublicCatalogPage() {
 
   const handleRecoverPendingPixOrder = useCallback(async (checkoutToken) => {
     if (!site?.business?.slug) {
-      throw new Error('Nao foi possivel identificar este tenant para retomar o pagamento.');
+      throw new Error('Não foi possível identificar este tenant para retomar o pagamento.');
     }
 
     return getPublicOrderPayment(site.business.slug, checkoutToken);
@@ -199,7 +213,7 @@ export function PublicCatalogPage() {
       <PublicSiteLayout business={site.business}>
         <BackToLandingButton slug={site.business.slug} search={location.search} navigate={navigate} />
         <Card className="section-card">
-          <EmptyState title="Catalogo indisponivel no momento" description="Este tenant nao esta com o catalogo liberado agora." />
+          <EmptyState title="Catálogo indisponível no momento" description="Este tenant não está com o catálogo liberado agora." />
         </Card>
       </PublicSiteLayout>
     );
@@ -211,9 +225,9 @@ export function PublicCatalogPage() {
       <Card className="section-card catalog-page-shell catalog-page-hero">
         <div className="catalog-page-header">
           <div className="catalog-page-header__content">
-            <span className="admin-section-chip admin-section-chip--muted">Catalogo</span>
+            <span className="admin-section-chip admin-section-chip--muted">Catálogo</span>
             <h1>{site.business.name}</h1>
-            <p>{site.business.description || 'Confira os produtos e faca seu pedido online.'}</p>
+            <p>{site.business.description || 'Confira os produtos e faça seu pedido online.'}</p>
           </div>
           <div className="catalog-page-header__meta">
             <div>
