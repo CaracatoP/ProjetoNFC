@@ -600,6 +600,11 @@
   display: none;
 }
 
+.catalog-drawer__header-spacer {
+  min-width: 5.5rem;
+  min-height: 2.8rem;
+}
+
 .catalog-drawer__header-copy {
   display: grid;
   gap: 0.22rem;
@@ -723,6 +728,7 @@
 
 .catalog-checkout-block,
 .catalog-choice-card,
+.catalog-checkout-choice-group,
 .catalog-summary-card,
 .catalog-success-view__hero,
 .catalog-success-view__meta-card,
@@ -771,6 +777,17 @@
   display: grid;
   gap: 0.8rem;
   padding: 0.95rem;
+}
+
+.catalog-checkout-choice-group {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.1rem 0;
+}
+
+.catalog-checkout-choice-grid {
+  display: grid;
+  gap: 0.75rem;
 }
 
 .catalog-choice-card__header {
@@ -858,6 +875,51 @@
   font-weight: 800;
   letter-spacing: 0.03em;
   text-transform: uppercase;
+}
+
+.catalog-inline-action {
+  border: 0;
+  background: transparent;
+  padding: 0.25rem 0;
+  color: var(--theme-text-muted);
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.18rem;
+}
+
+.catalog-inline-action--danger {
+  color: #fca5a5;
+}
+
+.catalog-checkout__success-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.catalog-cancel-dialog {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.catalog-cancel-dialog p,
+.catalog-cancel-dialog small {
+  margin: 0;
+  color: var(--theme-text-muted);
+  line-height: 1.55;
+}
+
+.catalog-cancel-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.catalog-cancel-dialog__confirm {
+  min-width: 180px;
 }
 
 .catalog-checkout__choice-group--invalid,
@@ -1285,6 +1347,10 @@
     display: inline-flex;
   }
 
+  .catalog-drawer__header-spacer {
+    display: inline-block;
+  }
+
   .catalog-drawer__close {
     min-width: auto;
     padding-inline: 0.85rem;
@@ -1304,6 +1370,8 @@
   .catalog-drawer__footer-success,
   .catalog-cart-item__footer,
   .catalog-payment-alert__actions,
+  .catalog-checkout__success-actions,
+  .catalog-cancel-dialog__actions,
   .catalog-success-view__meta,
   .catalog-summary-card div,
   .catalog-product-card__summary {

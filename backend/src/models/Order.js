@@ -170,6 +170,7 @@ const orderSchema = new mongoose.Schema(
     readyAt: { type: Date, default: null },
     deliveredAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
+    customerCancelledAt: { type: Date, default: null },
     notes: { type: String, trim: true },
     payment: { type: orderPaymentSchema, default: undefined },
     paymentEvents: { type: [orderPaymentEventSchema], default: [] },

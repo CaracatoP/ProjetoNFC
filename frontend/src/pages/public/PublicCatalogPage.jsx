@@ -10,6 +10,7 @@ import { PublicSiteLayout } from '@/components/layout/PublicSiteLayout.jsx';
 import { useAnalytics } from '@/hooks/useAnalytics.js';
 import { useBusinessSite } from '@/hooks/useBusinessSite.js';
 import {
+  cancelPublicOrderPayment,
   createPublicOrder,
   getPublicOrderPayment,
   invalidatePublicSiteCache,
@@ -194,6 +195,14 @@ export function PublicCatalogPage() {
     return getPublicOrderPayment(site.business.slug, checkoutToken);
   }, [site?.business?.slug]);
 
+  const handleCancelPendingPixOrder = useCallback(async (checkoutToken) => {
+    if (!site?.business?.slug) {
+      throw new Error('NÃ£o foi possÃ­vel identificar este tenant para cancelar o pagamento.');
+    }
+
+    return cancelPublicOrderPayment(site.business.slug, checkoutToken);
+  }, [site?.business?.slug]);
+
   if (status === 'loading' || status === 'idle') {
     return <TenantLoadingScreen />;
   }
@@ -250,6 +259,7 @@ export function PublicCatalogPage() {
         products={catalogProducts}
         onSubmitOrder={handleOrder}
         onRecoverPendingPixOrder={handleRecoverPendingPixOrder}
+        onCancelPendingPixOrder={handleCancelPendingPixOrder}
         onTrackAction={trackAction}
       />
     </PublicSiteLayout>

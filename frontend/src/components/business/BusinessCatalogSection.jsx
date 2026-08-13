@@ -31,6 +31,7 @@ import {
 } from '@shared/utils/customerDocument.js';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
+import { Modal } from '@/components/common/Modal.jsx';
 import { formatCurrency, resolveMediaUrl } from '@/utils/formatters.js';
 import './BusinessCatalogSection.css';
 
@@ -69,6 +70,30 @@ function buildCheckoutErrorMessage(error) {
   }
 
   return 'Não foi possível criar o pedido.';
+}
+
+function buildPendingPixRecoveryErrorMessage(error) {
+  if (error?.code === 'timeout_error') {
+    return 'O pagamento existe, mas nÃ£o conseguimos retomar agora. Tente novamente em instantes.';
+  }
+
+  if (error?.code === 'network_error') {
+    return 'NÃ£o foi possÃ­vel retomar o pagamento agora. Verifique sua conexÃ£o e tente novamente.';
+  }
+
+  if (typeof error?.message === 'string' && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  return 'NÃ£o foi possÃ­vel retomar o pagamento agora. Tente novamente em instantes.';
+}
+
+function isPublicOrderPaymentNotFoundError(error) {
+  return error?.code === 'public_order_payment_not_found' || Number(error?.status || 0) === 404;
+}
+
+function isTerminalRecoverablePixStatus(status) {
+  return [PAYMENT_STATUS.PAID, PAYMENT_STATUS.FAILED, PAYMENT_STATUS.CANCELLED].includes(status);
 }
 
 function isValidCheckoutResponse(order) {
@@ -725,6 +750,7 @@ export function BusinessCatalogSection({
   products = [],
   onSubmitOrder,
   onRecoverPendingPixOrder,
+  onCancelPendingPixOrder,
   onTrackAction,
 }) {
   const [cart, setCart] = useState({});
@@ -737,8 +763,13 @@ export function BusinessCatalogSection({
   const [searchValue, setSearchValue] = useState('');
   const [activeCategory, setActiveCategory] = useState(ALL_CATEGORIES_VALUE);
   const [checkoutResult, setCheckoutResult] = useState(null);
+  const [pendingPixReference, setPendingPixReference] = useState(null);
   const [pendingPixOrder, setPendingPixOrder] = useState(null);
   const [recoveringPendingPixOrder, setRecoveringPendingPixOrder] = useState(false);
+  const [pendingPixRecoveryError, setPendingPixRecoveryError] = useState('');
+  const [pendingPixActionFeedback, setPendingPixActionFeedback] = useState('');
+  const [pendingPixCancelDialogOpen, setPendingPixCancelDialogOpen] = useState(false);
+  const [cancellingPendingPixOrder, setCancellingPendingPixOrder] = useState(false);
   const [pixCopyFeedback, setPixCopyFeedback] = useState('');
   const [checkoutErrors, setCheckoutErrors] = useState({});
   const [isMobileViewport, setIsMobileViewport] = useState(isMobileCheckoutViewport);
@@ -770,6 +801,67 @@ export function BusinessCatalogSection({
     [checkout, paymentSettings],
   );
 
+  function syncPendingPixOrderState(order, checkoutToken = '') {
+    if (!isValidCheckoutResponse(order) || !isPixPayment(order)) {
+      return null;
+    }
+
+    const normalizedCheckoutToken = String(checkoutToken || order?.checkoutToken || '').trim();
+    const nextOrder = normalizedCheckoutToken
+      ? {
+          ...order,
+          checkoutToken: normalizedCheckoutToken,
+        }
+      : { ...order };
+
+    setPendingPixOrder(nextOrder);
+
+    if (normalizedCheckoutToken && nextOrder?.payment?.status === PAYMENT_STATUS.PENDING) {
+      setPendingPixReference({
+        checkoutToken: normalizedCheckoutToken,
+        orderId: String(nextOrder?.id || '').trim(),
+      });
+    } else {
+      setPendingPixReference(null);
+    }
+
+    return nextOrder;
+  }
+
+  async function recoverPendingPixOrderReference(reference = pendingPixReference) {
+    const checkoutToken = String(reference?.checkoutToken || '').trim();
+
+    if (!checkoutToken || typeof onRecoverPendingPixOrder !== 'function') {
+      return null;
+    }
+
+    setRecoveringPendingPixOrder(true);
+    setPendingPixRecoveryError('');
+    setPendingPixActionFeedback('');
+
+    try {
+      const order = await onRecoverPendingPixOrder(checkoutToken);
+
+      if (!isValidCheckoutResponse(order) || !isPixPayment(order)) {
+        throw new Error('NÃ£o foi possÃ­vel retomar o pagamento agora.');
+      }
+
+      return syncPendingPixOrderState(order, checkoutToken);
+    } catch (error) {
+      if (isPublicOrderPaymentNotFoundError(error)) {
+        setPendingPixReference(null);
+        setPendingPixOrder(null);
+        setPendingPixRecoveryError('');
+        return null;
+      }
+
+      setPendingPixRecoveryError(buildPendingPixRecoveryErrorMessage(error));
+      throw error;
+    } finally {
+      setRecoveringPendingPixOrder(false);
+    }
+  }
+
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
       return undefined;
@@ -795,8 +887,13 @@ export function BusinessCatalogSection({
     pendingPixStorageReadyRef.current = false;
     setCheckout(defaultCheckoutState());
     setCheckoutResult(null);
+    setPendingPixReference(null);
     setPendingPixOrder(null);
     setRecoveringPendingPixOrder(false);
+    setPendingPixRecoveryError('');
+    setPendingPixActionFeedback('');
+    setPendingPixCancelDialogOpen(false);
+    setCancellingPendingPixOrder(false);
     setActiveCategory(ALL_CATEGORIES_VALUE);
     setPixCopyFeedback('');
     setCheckoutErrors({});
@@ -813,23 +910,16 @@ export function BusinessCatalogSection({
   }, [cart, tenantSlug]);
 
   useEffect(() => {
-    if (!pendingPixStorageReadyRef.current && !pendingPixOrder?.checkoutToken) {
+    if (!pendingPixStorageReadyRef.current) {
       return;
     }
 
-    persistStoredPendingPixOrder(
-      tenantSlug,
-      pendingPixOrder?.checkoutToken && pendingPixOrder?.payment?.status === PAYMENT_STATUS.PENDING
-        ? {
-            checkoutToken: pendingPixOrder.checkoutToken,
-            orderId: pendingPixOrder.id,
-          }
-        : null,
-    );
-  }, [pendingPixOrder, tenantSlug]);
+    persistStoredPendingPixOrder(tenantSlug, pendingPixReference);
+  }, [pendingPixReference, tenantSlug]);
 
   useEffect(() => {
     const pendingOrderReference = readStoredPendingPixOrder(tenantSlug);
+    setPendingPixReference(pendingOrderReference);
 
     if (!pendingOrderReference?.checkoutToken || typeof onRecoverPendingPixOrder !== 'function') {
       pendingPixStorageReadyRef.current = true;
@@ -842,7 +932,12 @@ export function BusinessCatalogSection({
 
     Promise.resolve(onRecoverPendingPixOrder(pendingOrderReference.checkoutToken))
       .then((order) => {
-        if (!active || !isValidCheckoutResponse(order) || !isPixPayment(order)) {
+        if (!active) {
+          return;
+        }
+
+        if (!isValidCheckoutResponse(order) || !isPixPayment(order)) {
+          setPendingPixRecoveryError('NÃ£o foi possÃ­vel retomar o pagamento agora. Tente novamente em instantes.');
           return;
         }
 
@@ -850,18 +945,30 @@ export function BusinessCatalogSection({
           ...order,
           checkoutToken: pendingOrderReference.checkoutToken,
         });
+        setPendingPixRecoveryError('');
 
-        if (order?.payment?.status !== PAYMENT_STATUS.PENDING) {
-          persistStoredPendingPixOrder(tenantSlug, null);
+        if (order?.payment?.status === PAYMENT_STATUS.PENDING) {
+          setPendingPixReference({
+            checkoutToken: pendingOrderReference.checkoutToken,
+            orderId: String(order?.id || pendingOrderReference.orderId || '').trim(),
+          });
+        } else if (isTerminalRecoverablePixStatus(order?.payment?.status)) {
+          setPendingPixReference(null);
         }
       })
-      .catch(() => {
+      .catch((error) => {
         if (!active) {
           return;
         }
 
-        persistStoredPendingPixOrder(tenantSlug, null);
-        setPendingPixOrder(null);
+        if (isPublicOrderPaymentNotFoundError(error)) {
+          setPendingPixReference(null);
+          setPendingPixOrder(null);
+          setPendingPixRecoveryError('');
+          return;
+        }
+
+        setPendingPixRecoveryError(buildPendingPixRecoveryErrorMessage(error));
       })
       .finally(() => {
         if (active) {
@@ -1026,6 +1133,11 @@ export function BusinessCatalogSection({
 
   const cartTotal = cartSubtotal;
   const cartItemCount = cartItems.length;
+  const pendingPixCheckoutToken = String(
+    pendingPixReference?.checkoutToken || pendingPixOrder?.checkoutToken || '',
+  ).trim();
+  const pendingPixDisplayOrder = pendingPixOrder && isPixPayment(pendingPixOrder) ? pendingPixOrder : null;
+  const pendingPixDisplayStatus = pendingPixDisplayOrder?.payment?.status || '';
   const cartBadgeCount = useMemo(
     () =>
       cartItems.reduce(
@@ -1037,13 +1149,23 @@ export function BusinessCatalogSection({
   );
   const hasCatalogProducts = normalizedProducts.length > 0;
   const hasFilteredProducts = groupedProducts.length > 0;
-  const isShowingCheckoutSuccess = Boolean(checkoutResult && !cartItems.length);
+  const isShowingCheckoutSuccess = Boolean(checkoutResult);
   const isAsaasPixSuccess = isAsaasPixCheckoutResult(checkoutResult);
   const isMobileCheckout = isMobileViewport;
-  const showPendingPixBanner = Boolean(!isCartOpen && pendingPixOrder && isPixPayment(pendingPixOrder));
+  const showPendingPixBanner = Boolean(
+    !isCartOpen && (pendingPixCheckoutToken || (pendingPixDisplayOrder && isPixPayment(pendingPixDisplayOrder))),
+  );
   const pendingPixStatusCopy = useMemo(
-    () => (showPendingPixBanner ? getRecoverablePixStatusCopy(pendingPixOrder) : null),
-    [pendingPixOrder, showPendingPixBanner],
+    () =>
+      showPendingPixBanner
+        ? pendingPixDisplayOrder
+          ? getRecoverablePixStatusCopy(pendingPixDisplayOrder)
+          : {
+              title: 'Pagamento pendente',
+              description: 'Encontramos um Pix pendente e vamos retomar a mesma cobranÃ§a quando vocÃª continuar.',
+            }
+        : null,
+    [pendingPixDisplayOrder, showPendingPixBanner],
   );
   const checkoutVisualStep = getCheckoutVisualProgress(cartItems, checkout, isShowingCheckoutSuccess);
   const cartSummaryText = cartItems.length
@@ -1051,12 +1173,25 @@ export function BusinessCatalogSection({
     : 'Abrir carrinho';
   const categoryCount = Math.max(0, categoryOptions.length - 1);
   const submitDisabled = submitting || !cartItems.length || !checkout.deliveryType || !checkout.paymentMethod;
-  const dialogEyebrow = isShowingCheckoutSuccess ? 'Pedido criado' : 'Seu pedido';
+  const dialogEyebrow = isShowingCheckoutSuccess
+    ? checkoutResult?.payment?.status === PAYMENT_STATUS.PAID
+      ? 'Pagamento confirmado'
+      : checkoutResult?.payment?.status === PAYMENT_STATUS.CANCELLED
+      ? 'Pedido cancelado'
+      : checkoutResult?.payment?.status === PAYMENT_STATUS.FAILED
+      ? 'Pagamento indisponÃ­vel'
+      : 'Pedido criado'
+    : 'Seu pedido';
   const dialogTitle = isShowingCheckoutSuccess
     ? checkoutResult?.payment?.status === PAYMENT_STATUS.PAID
       ? 'Pagamento confirmado'
+      : checkoutResult?.payment?.status === PAYMENT_STATUS.CANCELLED
+      ? 'Pedido cancelado'
+      : checkoutResult?.payment?.status === PAYMENT_STATUS.FAILED
+      ? 'Pagamento indisponÃ­vel'
       : 'Pedido enviado'
     : 'Seu pedido';
+  const canGoBack = Boolean(isMobileCheckout && !isShowingCheckoutSuccess && mobileCheckoutStep !== 'cart');
   const mobileStepIndex =
     mobileCheckoutStep === 'delivery'
       ? 2
@@ -1225,6 +1360,10 @@ export function BusinessCatalogSection({
     setIsCartOpen(true);
   }
 
+  function closeCartPanel() {
+    setIsCartOpen(false);
+  }
+
   function handleMobileStepBack() {
     if (mobileCheckoutStep === 'payment') {
       setMobileCheckoutStep('delivery');
@@ -1236,7 +1375,7 @@ export function BusinessCatalogSection({
       return;
     }
 
-    setIsCartOpen(false);
+    closeCartPanel();
   }
 
   function handleMobileStepAdvance() {
@@ -1351,17 +1490,16 @@ export function BusinessCatalogSection({
       setCart({});
       setCheckout(defaultCheckoutState());
       setCheckoutResult(createdOrder || null);
-      setPendingPixOrder(nextPendingPixOrder);
+      setPendingPixActionFeedback('');
+      setPendingPixRecoveryError('');
+      setPendingPixCancelDialogOpen(false);
+      if (nextPendingPixOrder) {
+        syncPendingPixOrderState(nextPendingPixOrder, nextPendingPixOrder.checkoutToken);
+      } else {
+        setPendingPixReference(null);
+        setPendingPixOrder(null);
+      }
       persistStoredCart(tenantSlug, {});
-      persistStoredPendingPixOrder(
-        tenantSlug,
-        nextPendingPixOrder?.checkoutToken && nextPendingPixOrder?.payment?.status === PAYMENT_STATUS.PENDING
-          ? {
-              checkoutToken: nextPendingPixOrder.checkoutToken,
-              orderId: nextPendingPixOrder.id,
-            }
-          : null,
-      );
       setFeedback('');
       setIsCartOpen(true);
       setMobileCheckoutStep('success');
@@ -1420,11 +1558,87 @@ export function BusinessCatalogSection({
   function handleContinueShopping() {
     setCheckoutResult(null);
     setFeedback('');
-    setIsCartOpen(false);
+    closeCartPanel();
     setMobileCheckoutStep('cart');
 
-    if (pendingPixOrder?.payment?.status && pendingPixOrder.payment.status !== PAYMENT_STATUS.PENDING) {
+    if (pendingPixOrder?.payment?.status && isTerminalRecoverablePixStatus(pendingPixOrder.payment.status)) {
       setPendingPixOrder(null);
+    }
+  }
+
+  async function handleResumePendingPixPayment() {
+    const fallbackReference = pendingPixCheckoutToken
+      ? {
+          checkoutToken: pendingPixCheckoutToken,
+          orderId: String(pendingPixDisplayOrder?.id || pendingPixReference?.orderId || '').trim(),
+        }
+      : null;
+
+    if (!fallbackReference?.checkoutToken) {
+      return;
+    }
+
+    setPendingPixActionFeedback('');
+
+    try {
+      const recoveredOrder =
+        typeof onRecoverPendingPixOrder === 'function'
+          ? await recoverPendingPixOrderReference(fallbackReference)
+          : pendingPixDisplayOrder;
+
+      if (!recoveredOrder) {
+        setPendingPixActionFeedback('Esse pagamento nÃ£o estÃ¡ mais disponÃ­vel.');
+        return;
+      }
+
+      setCheckoutResult(recoveredOrder);
+      openCartPanel('success');
+    } catch (error) {
+      setPendingPixActionFeedback(buildPendingPixRecoveryErrorMessage(error));
+    }
+  }
+
+  async function handleConfirmPendingPixCancellation() {
+    const fallbackReference = pendingPixCheckoutToken
+      ? {
+          checkoutToken: pendingPixCheckoutToken,
+          orderId: String(pendingPixDisplayOrder?.id || pendingPixReference?.orderId || '').trim(),
+        }
+      : null;
+
+    if (!fallbackReference?.checkoutToken || typeof onCancelPendingPixOrder !== 'function') {
+      return;
+    }
+
+    setCancellingPendingPixOrder(true);
+    setPendingPixActionFeedback('');
+
+    try {
+      const cancelledOrder = await onCancelPendingPixOrder(fallbackReference.checkoutToken);
+
+      if (!isValidCheckoutResponse(cancelledOrder) || !isPixPayment(cancelledOrder)) {
+        throw new Error('NÃ£o foi possÃ­vel cancelar o pedido agora.');
+      }
+
+      const nextOrder = {
+        ...cancelledOrder,
+        checkoutToken: fallbackReference.checkoutToken,
+      };
+
+      setPendingPixReference(null);
+      setPendingPixOrder(nextOrder);
+      setCheckoutResult(nextOrder);
+      setPendingPixRecoveryError('');
+      setPendingPixCancelDialogOpen(false);
+      openCartPanel('success');
+    } catch (error) {
+      setPendingPixActionFeedback(
+        typeof error?.message === 'string' && error.message.trim()
+          ? error.message.trim()
+          : 'NÃ£o foi possÃ­vel cancelar o pedido agora. Tente novamente.',
+      );
+    } finally {
+      setCancellingPendingPixOrder(false);
     }
   }
 
@@ -1477,20 +1691,22 @@ export function BusinessCatalogSection({
                 type="button"
                 className="catalog-drawer-layer__backdrop"
                 aria-label="Fechar painel do carrinho"
-                onClick={() => setIsCartOpen(false)}
+                onClick={closeCartPanel}
               />
               <div className="catalog-drawer" role="dialog" aria-modal="true" aria-label="Seu pedido">
                 <div className="catalog-drawer__shell" data-testid="catalog-cart-shell">
                   <div className="catalog-drawer__header" data-testid="catalog-cart-header">
-                    {isMobileCheckout ? (
+                    {canGoBack ? (
                       <Button
                         type="button"
                         variant="secondary"
                         className="catalog-drawer__nav-button"
                         onClick={handleMobileStepBack}
                       >
-                        {isShowingCheckoutSuccess || mobileCheckoutStep === 'cart' ? 'Fechar' : 'Voltar'}
+                        Voltar
                       </Button>
+                    ) : isMobileCheckout ? (
+                      <span className="catalog-drawer__header-spacer" aria-hidden="true" />
                     ) : null}
 
                     <div className="catalog-drawer__header-copy">
@@ -1514,7 +1730,7 @@ export function BusinessCatalogSection({
                       type="button"
                       variant="secondary"
                       className="catalog-drawer__close"
-                      onClick={() => setIsCartOpen(false)}
+                      onClick={closeCartPanel}
                       aria-label="Fechar carrinho"
                     >
                       Fechar
@@ -1561,12 +1777,20 @@ export function BusinessCatalogSection({
                             <span className="catalog-success-view__pill">
                               {checkoutResult?.payment?.status === PAYMENT_STATUS.PAID
                                 ? 'Pagamento confirmado'
+                                : checkoutResult?.payment?.status === PAYMENT_STATUS.CANCELLED
+                                ? 'Pedido cancelado'
+                                : checkoutResult?.payment?.status === PAYMENT_STATUS.FAILED
+                                ? 'Pagamento indisponÃ­vel'
                                 : 'Pedido enviado com sucesso'}
                             </span>
                             <div className="catalog-success-view__copy">
                               <strong>
                                 {checkoutResult?.payment?.status === PAYMENT_STATUS.PAID
                                   ? 'Pagamento confirmado'
+                                  : checkoutResult?.payment?.status === PAYMENT_STATUS.CANCELLED
+                                  ? 'Pedido cancelado'
+                                  : checkoutResult?.payment?.status === PAYMENT_STATUS.FAILED
+                                  ? 'Pagamento indisponÃ­vel'
                                   : 'Pedido enviado com sucesso'}
                               </strong>
                               <p>{getPaymentSuccessMessage(checkoutResult?.payment)}</p>
@@ -1581,6 +1805,10 @@ export function BusinessCatalogSection({
                                 <strong>
                                   {checkoutResult?.payment?.status === PAYMENT_STATUS.PAID
                                     ? 'Pagamento confirmado'
+                                    : checkoutResult?.payment?.status === PAYMENT_STATUS.CANCELLED
+                                    ? 'Cancelado'
+                                    : checkoutResult?.payment?.status === PAYMENT_STATUS.FAILED
+                                    ? 'Indisponivel'
                                     : isPixPayment(checkoutResult)
                                     ? 'Aguardando pagamento'
                                     : 'Aguardando confirmação'}
@@ -1600,7 +1828,8 @@ export function BusinessCatalogSection({
                             </div>
                           </div>
 
-                          {isPixPayment(checkoutResult) ? (
+                          {isPixPayment(checkoutResult) &&
+                          ![PAYMENT_STATUS.CANCELLED, PAYMENT_STATUS.FAILED].includes(checkoutResult?.payment?.status) ? (
                             <div className="catalog-pix-result">
                               <div className="catalog-pix-result__qr">
                                 <div className="catalog-pix-result__qr-frame">
@@ -1676,10 +1905,21 @@ export function BusinessCatalogSection({
                           ) : null}
 
                           <div className="catalog-checkout__success-actions">
+                            {isPixPayment(checkoutResult) && checkoutResult?.payment?.status === PAYMENT_STATUS.PENDING ? (
+                              <button
+                                type="button"
+                                className="catalog-inline-action catalog-inline-action--danger"
+                                onClick={() => setPendingPixCancelDialogOpen(true)}
+                              >
+                                Cancelar pedido
+                              </button>
+                            ) : null}
                             <Button type="button" variant="secondary" onClick={handleContinueShopping}>
-                              Adicionar mais produtos
+                              {checkoutResult?.payment?.status === PAYMENT_STATUS.CANCELLED
+                                ? 'Voltar ao catalogo'
+                                : 'Adicionar mais produtos'}
                             </Button>
-                            <Button type="button" variant="secondary" onClick={() => setIsCartOpen(false)}>
+                            <Button type="button" variant="secondary" onClick={closeCartPanel}>
                               Fechar
                             </Button>
                           </div>
@@ -1763,16 +2003,6 @@ export function BusinessCatalogSection({
                                 })}
                               </ul>
 
-                              <div className="catalog-summary-card">
-                                <div>
-                                  <span>Subtotal</span>
-                                  <strong>{formatCurrency(cartSubtotal)}</strong>
-                                </div>
-                                <div>
-                                  <span>Total</span>
-                                  <strong>{formatCurrency(cartTotal)}</strong>
-                                </div>
-                              </div>
                             </section>
                           ) : null}
 
@@ -1787,18 +2017,14 @@ export function BusinessCatalogSection({
                                 ref={(node) => {
                                   checkoutFieldRefs.current.deliveryType = node;
                                 }}
-                                className={`catalog-choice-card${checkoutErrors.deliveryType ? ' catalog-checkout__choice-group--invalid' : ''}`}
+                                className={`catalog-checkout-choice-group${checkoutErrors.deliveryType ? ' catalog-checkout__choice-group--invalid' : ''}`}
                                 role="group"
                                 aria-labelledby="checkout-delivery-type-title"
                                 aria-invalid={checkoutErrors.deliveryType ? 'true' : undefined}
                                 aria-describedby={checkoutErrors.deliveryType ? 'checkout-delivery-type-error' : undefined}
                                 tabIndex={checkoutErrors.deliveryType ? '-1' : undefined}
                               >
-                                <div className="catalog-choice-card__header">
-                                  <strong id="checkout-delivery-type-title">Como você vai receber?</strong>
-                                  <span>Escolha entre entrega ou retirada antes de ver as formas de pagamento.</span>
-                                </div>
-                                <div className="catalog-choice-card__grid catalog-choice-card__grid--delivery">
+                                <div className="catalog-choice-card__grid catalog-choice-card__grid--delivery" id="checkout-delivery-type-title">
                                   {[
                                     {
                                       value: 'delivery',
@@ -1872,8 +2098,18 @@ export function BusinessCatalogSection({
                           {showPaymentStep ? (
                             <section className="catalog-checkout-block">
                               <div className="catalog-checkout-block__header">
-                                <strong>{isMobileCheckout ? 'Como deseja pagar?' : '3. Pagamento e dados do pedido'}</strong>
-                                <span>Preencha seus dados e escolha uma forma de pagamento compatível com o recebimento.</span>
+                                <strong>
+                                  {checkout.deliveryType
+                                    ? getPaymentSectionTitle(checkout.deliveryType)
+                                    : isMobileCheckout
+                                    ? 'Como deseja pagar?'
+                                    : '3. Pagamento e dados do pedido'}
+                                </strong>
+                                <span>
+                                  {checkout.deliveryType
+                                    ? 'Preencha seus dados e escolha uma forma de pagamento compatível com o recebimento.'
+                                    : 'Escolha entrega ou retirada para liberar apenas as formas de pagamento compatíveis.'}
+                                </span>
                               </div>
 
                               <div className="admin-form-grid catalog-checkout__fields">
@@ -1952,18 +2188,14 @@ export function BusinessCatalogSection({
                                   ref={(node) => {
                                     checkoutFieldRefs.current.paymentMethod = node;
                                   }}
-                                  className={`catalog-choice-card${checkoutErrors.paymentMethod ? ' catalog-checkout__choice-group--invalid' : ''}`}
+                                  className={`catalog-checkout-choice-group${checkoutErrors.paymentMethod ? ' catalog-checkout__choice-group--invalid' : ''}`}
                                   role="group"
                                   aria-labelledby="checkout-payment-methods-title"
                                   aria-invalid={checkoutErrors.paymentMethod ? 'true' : undefined}
                                   aria-describedby={checkoutErrors.paymentMethod ? 'checkout-payment-method-error' : undefined}
                                   tabIndex={checkoutErrors.paymentMethod ? '-1' : undefined}
                                 >
-                                  <div className="catalog-choice-card__header">
-                                    <strong id="checkout-payment-methods-title">{getPaymentSectionTitle(checkout.deliveryType)}</strong>
-                                    <span>Escolha como deseja pagar.</span>
-                                  </div>
-                                  <div className="catalog-choice-card__grid">
+                                  <div className="catalog-checkout-choice-grid" id="checkout-payment-methods-title">
                                     {checkoutPaymentMethods.map((method) => {
                                       const selected = checkout.paymentMethod === method;
 
@@ -2008,7 +2240,7 @@ export function BusinessCatalogSection({
                           </div>
                           <strong>Seu carrinho está vazio</strong>
                           <p>Adicione produtos do catálogo para montar o pedido antes de finalizar.</p>
-                          <Button type="button" variant="secondary" onClick={() => setIsCartOpen(false)}>
+                          <Button type="button" variant="secondary" onClick={closeCartPanel}>
                             Adicionar produtos
                           </Button>
                         </div>
@@ -2022,12 +2254,12 @@ export function BusinessCatalogSection({
                             <span>Total do pedido</span>
                             <strong>{formatCurrency(checkoutResult?.payment?.amount || checkoutResult?.total || 0)}</strong>
                           </div>
-                          {isPixPayment(checkoutResult) && checkoutResult?.payment?.status !== PAYMENT_STATUS.PAID ? (
+                          {isPixPayment(checkoutResult) && checkoutResult?.payment?.status === PAYMENT_STATUS.PENDING ? (
                             <Button type="button" className="catalog-drawer__submit" onClick={() => handleCopyPixCode(checkoutResult)}>
                               Copiar código Pix
                             </Button>
                           ) : (
-                            <Button type="button" className="catalog-drawer__submit" onClick={() => setIsCartOpen(false)}>
+                            <Button type="button" className="catalog-drawer__submit" onClick={closeCartPanel}>
                               Fechar
                             </Button>
                           )}
@@ -2104,33 +2336,69 @@ export function BusinessCatalogSection({
           <div className="catalog-payment-alert" role="status" aria-live="polite">
             <div className="catalog-payment-alert__copy">
               <span className="catalog-payment-alert__eyebrow">{pendingPixStatusCopy?.title || 'Pagamento pendente'}</span>
-              <strong>{pendingPixOrder?.id ? `Pedido #${pendingPixOrder.id}` : 'Pagamento pendente'}</strong>
-              <span>{pendingPixStatusCopy?.description || 'Seu Pix continua disponível para pagamento.'}</span>
+              <strong>{pendingPixDisplayOrder?.id ? `Pedido #${pendingPixDisplayOrder.id}` : 'Pagamento pendente'}</strong>
+              <span>{pendingPixRecoveryError || pendingPixStatusCopy?.description || 'Seu Pix continua disponível para pagamento.'}</span>
             </div>
             <div className="catalog-payment-alert__meta">
               <span>Total</span>
-              <strong>{formatCurrency(pendingPixOrder?.payment?.amount || pendingPixOrder?.total || 0)}</strong>
+              <strong>{formatCurrency(pendingPixDisplayOrder?.payment?.amount || pendingPixDisplayOrder?.total || 0)}</strong>
             </div>
             {pixCopyFeedback ? <small>{pixCopyFeedback}</small> : null}
+            {!pixCopyFeedback && pendingPixActionFeedback ? <small>{pendingPixActionFeedback}</small> : null}
             <div className="catalog-payment-alert__actions">
-              {pendingPixOrder?.payment?.status === PAYMENT_STATUS.PENDING && pendingPixOrder?.payment?.pixCopyPaste ? (
-                <Button type="button" variant="secondary" onClick={() => handleCopyPixCode(pendingPixOrder)}>
+              {pendingPixDisplayStatus === PAYMENT_STATUS.PENDING && pendingPixDisplayOrder?.payment?.pixCopyPaste ? (
+                <Button type="button" variant="secondary" onClick={() => handleCopyPixCode(pendingPixDisplayOrder)}>
                   Copiar Pix
                 </Button>
               ) : null}
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setCheckoutResult(pendingPixOrder);
-                  openCartPanel('success');
-                }}
-              >
-                {pendingPixOrder?.payment?.status === PAYMENT_STATUS.PENDING ? 'Continuar pagamento' : 'Ver pedido'}
+              <Button type="button" variant="secondary" onClick={handleResumePendingPixPayment}>
+                {pendingPixDisplayStatus === PAYMENT_STATUS.PENDING ? 'Continuar pagamento' : 'Ver pedido'}
               </Button>
+              {pendingPixDisplayStatus === PAYMENT_STATUS.PENDING ? (
+                <button
+                  type="button"
+                  className="catalog-inline-action catalog-inline-action--danger"
+                  onClick={() => setPendingPixCancelDialogOpen(true)}
+                >
+                  Cancelar pedido
+                </button>
+              ) : null}
             </div>
           </div>
         ) : null}
+
+        <Modal
+          open={pendingPixCancelDialogOpen}
+          title="Cancelar este pedido?"
+          onClose={() => {
+            if (!cancellingPendingPixOrder) {
+              setPendingPixCancelDialogOpen(false);
+            }
+          }}
+        >
+          <div className="catalog-cancel-dialog">
+            <p>O pagamento pendente será encerrado e o pedido não será enviado ao estabelecimento.</p>
+            {pendingPixActionFeedback ? <small>{pendingPixActionFeedback}</small> : null}
+            <div className="catalog-cancel-dialog__actions">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setPendingPixCancelDialogOpen(false)}
+                disabled={cancellingPendingPixOrder}
+              >
+                Voltar
+              </Button>
+              <Button
+                type="button"
+                className="catalog-cancel-dialog__confirm"
+                onClick={handleConfirmPendingPixCancellation}
+                disabled={cancellingPendingPixOrder}
+              >
+                {cancellingPendingPixOrder ? 'Cancelando...' : 'Cancelar pedido'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
 
         <div className="catalog-toolbar">
           <label className="admin-field catalog-search-field">

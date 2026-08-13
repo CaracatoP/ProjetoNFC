@@ -84,6 +84,7 @@ import {
   buildAsaasExternalReference,
   buildAsaasSplitRules,
   createAsaasPaymentCharge,
+  deleteAsaasPayment,
   getAsaasPayment,
   getAsaasPixQrCode,
   mapAsaasPaymentStatus,
@@ -243,6 +244,8 @@ function serializeOrderRecord(item) {
     readyAt: safeRecord.readyAt || null,
     deliveredAt: safeRecord.deliveredAt || null,
     cancelledAt: safeRecord.cancelledAt || null,
+    customerCancelledAt: safeRecord.customerCancelledAt || null,
+    archivedAt: safeRecord.archivedAt || null,
     notes: safeRecord.notes || '',
     payment: normalizeOrderPayment(safeRecord.payment || {}, total),
   };
@@ -261,6 +264,25 @@ function buildPublicOrderCheckoutResponse(order, checkoutToken = '') {
         checkoutToken,
       }
     : serializedOrder;
+}
+
+function buildPublicOrderPaymentSummary(order, paymentOverride = null) {
+  const serializedOrder = order?.payment ? serializeOrderRecord(order) : order;
+  const nextPayment = paymentOverride
+    ? normalizeOrderPayment(paymentOverride, serializedOrder?.total || paymentOverride?.amount || 0)
+    : normalizeOrderPayment(serializedOrder?.payment || {}, serializedOrder?.total || 0);
+
+  return {
+    id: serializedOrder?.id || '',
+    total: serializedOrder?.total || 0,
+    status: serializedOrder?.status || 'received',
+    createdAt: serializedOrder?.createdAt || null,
+    updatedAt: serializedOrder?.updatedAt || null,
+    cancelledAt: serializedOrder?.cancelledAt || null,
+    customerCancelledAt: serializedOrder?.customerCancelledAt || null,
+    archivedAt: serializedOrder?.archivedAt || null,
+    payment: nextPayment,
+  };
 }
 
 async function serializePublicOrderPaymentRecovery(order, business = null) {
@@ -359,14 +381,7 @@ async function serializePublicOrderPaymentRecovery(order, business = null) {
     }
   }
 
-  return {
-    id: serializedOrder.id || '',
-    total: serializedOrder.total || 0,
-    status: serializedOrder.status || 'received',
-    createdAt: serializedOrder.createdAt || null,
-    updatedAt: serializedOrder.updatedAt || null,
-    payment: recoveredPayment,
-  };
+  return buildPublicOrderPaymentSummary(serializedOrder, recoveredPayment);
 }
 
 const ORDER_STATUS_TIMESTAMP_FIELDS = {
@@ -1635,6 +1650,7 @@ export async function getPublicOrderPaymentByCheckoutToken(slug, checkoutToken) 
   const order = await findOrderByBusinessIdAndCheckoutTokenHash(
     business._id,
     hashPublicCheckoutToken(normalizedCheckoutToken),
+    { includeArchived: true },
   );
 
   if (!order || !isRecoverablePublicOrderPayment(order.payment || {})) {
@@ -1642,6 +1658,288 @@ export async function getPublicOrderPaymentByCheckoutToken(slug, checkoutToken) 
   }
 
   return serializePublicOrderPaymentRecovery(order, business);
+}
+
+function buildPublicPendingPaymentCancellationPatch(existingOrder, payment, occurredAt = new Date()) {
+  const currentPaymentEvents = normalizeOrderPaymentEvents(existingOrder?.paymentEvents || []);
+  const nextPayment = normalizeOrderPayment(
+    {
+      ...normalizeOrderPayment(existingOrder?.payment || {}, existingOrder?.total || 0),
+      ...payment,
+      status: PAYMENT_STATUS.CANCELLED,
+      updatedAt: occurredAt,
+    },
+    existingOrder?.total || payment?.amount || 0,
+  );
+
+  return {
+    status: 'cancelled',
+    cancelledAt: existingOrder?.cancelledAt || occurredAt,
+    customerCancelledAt: existingOrder?.customerCancelledAt || occurredAt,
+    archivedAt: existingOrder?.archivedAt || occurredAt,
+    payment: nextPayment,
+    paymentEvents: appendUniquePaymentEvents(currentPaymentEvents, [
+      {
+        type: 'payment_cancelled',
+        provider: nextPayment.provider,
+        status: PAYMENT_STATUS.CANCELLED,
+        providerPaymentId: nextPayment.providerPaymentId || '',
+        occurredAt,
+        meta: {
+          origin: 'public_checkout_cancel',
+          method: nextPayment.method,
+        },
+      },
+    ]),
+  };
+}
+
+async function persistCancelledPublicOrderState({
+  business,
+  existingOrder,
+  nextPayment,
+  nextPaymentEvents = [],
+  providerPayment = {},
+  providerStatus = '',
+  billingType = '',
+  externalReference = '',
+  storedPaymentSettings = {},
+  financeSettings = null,
+  occurredAt = new Date(),
+  providerEvent = '',
+} = {}) {
+  const updated = await updateOrderRecordByBusinessId(
+    business._id,
+    existingOrder._id,
+    {
+      status: 'cancelled',
+      cancelledAt: existingOrder.cancelledAt || occurredAt,
+      customerCancelledAt: existingOrder.customerCancelledAt || occurredAt,
+      archivedAt: existingOrder.archivedAt || occurredAt,
+      payment: nextPayment,
+      paymentEvents: nextPaymentEvents,
+    },
+    { includeArchived: true },
+  );
+
+  if (!updated) {
+    throw new AppError('Pagamento não encontrado.', 404, 'public_order_payment_not_found');
+  }
+
+  if (nextPayment?.provider === PAYMENT_PROVIDERS.ASAAS && nextPayment?.providerPaymentId) {
+    const storedPayment = await upsertPaymentByProviderPaymentId(
+      PAYMENT_PROVIDERS.ASAAS,
+      nextPayment.providerPaymentId,
+      buildAsaasPaymentReferencePayload({
+        businessId: business._id,
+        orderId: existingOrder._id,
+        payment: nextPayment,
+        providerPayment,
+        providerStatus,
+        billingType,
+        externalReference,
+        occurredAt,
+      }),
+    );
+
+    await syncTenantLedgerForPayment(storedPayment, {
+      businessPaymentSettings: storedPaymentSettings,
+      financeSettings: financeSettings || (await getPlatformFinanceSettings()),
+      providerEvent,
+      occurredAt,
+    });
+  }
+
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.PAYMENT_UPDATED);
+  publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.ORDER_ARCHIVED, 'archived');
+  return buildPublicOrderPaymentSummary(updated);
+}
+
+export async function cancelPublicOrderPaymentByCheckoutToken(slug, checkoutToken) {
+  const business = await assertPublicBusinessBySlug(slug);
+  const normalizedCheckoutToken = String(checkoutToken || '').trim();
+
+  if (!normalizedCheckoutToken) {
+    throw new AppError('Pagamento não encontrado.', 404, 'public_order_payment_not_found');
+  }
+
+  const existingOrder = await findOrderByBusinessIdAndCheckoutTokenHash(
+    business._id,
+    hashPublicCheckoutToken(normalizedCheckoutToken),
+    { includeArchived: true },
+  );
+
+  if (!existingOrder || !isRecoverablePublicOrderPayment(existingOrder.payment || {})) {
+    throw new AppError('Pagamento não encontrado.', 404, 'public_order_payment_not_found');
+  }
+
+  const currentPayment = normalizeOrderPayment(existingOrder.payment || {}, existingOrder.total || 0);
+  const occurredAt = new Date();
+
+  if (currentPayment.status === PAYMENT_STATUS.PAID) {
+    throw new AppError(
+      'Este pagamento já foi confirmado e não pode ser cancelado por aqui.',
+      409,
+      'public_order_payment_already_paid',
+    );
+  }
+
+  if (currentPayment.status === PAYMENT_STATUS.CANCELLED || existingOrder.status === 'cancelled') {
+    return buildPublicOrderPaymentSummary(existingOrder);
+  }
+
+  if (currentPayment.provider === PAYMENT_PROVIDERS.ASAAS) {
+    const storedPaymentSettings = resolveBusinessPaymentSettings(business, { mode: 'storage' });
+    const financeSettings = await getPlatformFinanceSettings();
+    const asaasContext = resolveAsaasProviderContext({
+      business,
+      paymentSettings: storedPaymentSettings,
+      financeSettings,
+    });
+    const providerPaymentId = String(currentPayment.providerPaymentId || '').trim();
+
+    if (!providerPaymentId || !asaasContext.connected) {
+      throw new AppError(
+        'Não foi possível cancelar o pedido agora. Tente novamente.',
+        502,
+        'public_order_cancel_failed',
+      );
+    }
+
+    const providerPayment = await getAsaasPayment({
+      apiKey: asaasContext.apiKey,
+      paymentId: providerPaymentId,
+    });
+    const providerStatus = mapAsaasPaymentStatus(providerPayment?.status);
+
+    if (providerStatus === PAYMENT_STATUS.PAID) {
+      await syncAsaasOrderPaymentWebhook(
+        business._id,
+        existingOrder._id,
+        providerPayment,
+        'PUBLIC_CANCEL_SYNC_PAID',
+        occurredAt,
+      );
+      throw new AppError(
+        'Este pagamento já foi confirmado e não pode ser cancelado por aqui.',
+        409,
+        'public_order_payment_already_paid',
+      );
+    }
+
+    let cancelledSnapshot = {
+      ...providerPayment,
+      status: providerStatus === PAYMENT_STATUS.CANCELLED ? providerPayment?.status || 'CANCELLED' : 'CANCELLED',
+      externalReference:
+        String(providerPayment?.externalReference || '').trim() ||
+        buildAsaasExternalReference(business._id, existingOrder._id),
+    };
+
+    if (providerStatus === PAYMENT_STATUS.PENDING) {
+      try {
+        await deleteAsaasPayment({
+          apiKey: asaasContext.apiKey,
+          paymentId: providerPaymentId,
+        });
+      } catch (error) {
+        try {
+          const refreshedProviderPayment = await getAsaasPayment({
+            apiKey: asaasContext.apiKey,
+            paymentId: providerPaymentId,
+          });
+          const refreshedStatus = mapAsaasPaymentStatus(refreshedProviderPayment?.status);
+
+          if (refreshedStatus === PAYMENT_STATUS.PAID) {
+            await syncAsaasOrderPaymentWebhook(
+              business._id,
+              existingOrder._id,
+              refreshedProviderPayment,
+              'PUBLIC_CANCEL_SYNC_PAID',
+              occurredAt,
+            );
+            throw new AppError(
+              'Este pagamento já foi confirmado e não pode ser cancelado por aqui.',
+              409,
+              'public_order_payment_already_paid',
+            );
+          }
+
+          if (refreshedStatus !== PAYMENT_STATUS.CANCELLED) {
+            throw error;
+          }
+
+          cancelledSnapshot = {
+            ...refreshedProviderPayment,
+            status: refreshedProviderPayment?.status || 'CANCELLED',
+            externalReference:
+              String(refreshedProviderPayment?.externalReference || '').trim() ||
+              buildAsaasExternalReference(business._id, existingOrder._id),
+          };
+        } catch (refreshError) {
+          if (refreshError instanceof AppError) {
+            throw refreshError;
+          }
+
+          throw new AppError(
+            'Não foi possível cancelar o pedido agora. Tente novamente.',
+            502,
+            'public_order_cancel_failed',
+          );
+        }
+      }
+    } else if (providerStatus !== PAYMENT_STATUS.CANCELLED) {
+      throw new AppError(
+        'Não foi possível cancelar o pedido agora. Tente novamente.',
+        409,
+        'public_order_cancel_failed',
+      );
+    }
+
+    const nextPaymentPatch = buildAsaasWebhookPaymentPatch(
+      existingOrder,
+      cancelledSnapshot,
+      'PAYMENT_DELETED',
+      occurredAt,
+    );
+
+    return persistCancelledPublicOrderState({
+      business,
+      existingOrder,
+      nextPayment: nextPaymentPatch.payment,
+      nextPaymentEvents: nextPaymentPatch.paymentEvents,
+      providerPayment: cancelledSnapshot,
+      providerStatus: 'DELETED',
+      billingType: String(cancelledSnapshot?.billingType || '').trim(),
+      externalReference: String(cancelledSnapshot?.externalReference || '').trim(),
+      storedPaymentSettings,
+      financeSettings,
+      occurredAt,
+      providerEvent: 'PAYMENT_DELETED',
+    });
+  }
+
+  const manualCancellationPatch = buildPublicPendingPaymentCancellationPatch(
+    existingOrder,
+    {
+      ...currentPayment,
+      providerUpdatedAt: occurredAt,
+    },
+    occurredAt,
+  );
+
+  return persistCancelledPublicOrderState({
+    business,
+    existingOrder,
+    nextPayment: manualCancellationPatch.payment,
+    nextPaymentEvents: manualCancellationPatch.paymentEvents,
+    providerPayment: {},
+    providerStatus: PAYMENT_STATUS.CANCELLED,
+    billingType: '',
+    externalReference: '',
+    storedPaymentSettings: resolveBusinessPaymentSettings(business, { mode: 'storage' }),
+    occurredAt,
+    providerEvent: 'PUBLIC_PAYMENT_CANCELLED',
+  });
 }
 
 export async function listTenantOrders(businessId) {

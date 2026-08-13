@@ -199,3 +199,17 @@ export async function getPublicOrderPayment(slug, checkoutToken) {
 
   return response.data;
 }
+
+export async function cancelPublicOrderPayment(slug, checkoutToken) {
+  const normalizedSlug = String(slug || '').trim();
+  const normalizedCheckoutToken = String(checkoutToken || '').trim();
+  const response = await apiRequest(
+    `${appConfig.apiBaseUrl}/public/site/${normalizedSlug}/orders/payment/${encodeURIComponent(normalizedCheckoutToken)}/cancel`,
+    {
+      method: 'POST',
+      timeoutMs: appConfig.apiTimeoutMs,
+    },
+  );
+
+  return response.data;
+}

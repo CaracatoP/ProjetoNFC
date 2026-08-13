@@ -1119,4 +1119,67 @@ describe('BusinessCatalogSection', () => {
     const cartTrigger = screen.getByRole('button', { name: /Abrir carrinho/i });
     expect(within(cartTrigger).getByText('0')).toBeInTheDocument();
   });
+
+  it('keeps the pending Pix token after closing the recovered payment modal on mobile', async () => {
+    window.matchMedia = vi.fn().mockImplementation(() => ({
+      matches: true,
+      media: '(max-width: 768px)',
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    const user = userEvent.setup();
+    const onRecoverPendingPixOrder = vi.fn().mockResolvedValue({
+      id: 'order-pending-mobile',
+      total: 59.9,
+      status: 'received',
+      payment: {
+        method: PAYMENT_METHODS.PIX,
+        status: PAYMENT_STATUS.PENDING,
+        provider: 'asaas',
+        amount: 59.9,
+        pixCopyPaste: '000201010212pendingpixpayloadmobile',
+        pixQrCode: 'data:image/png;base64,pendingpixqrmobile',
+      },
+    });
+
+    window.localStorage.setItem(
+      'taplink:pending-pix:barbearia-estilo-vivo',
+      JSON.stringify({
+        checkoutToken: 'checkout-token-mobile',
+        orderId: 'order-pending-mobile',
+      }),
+    );
+
+    render(
+      <BusinessCatalogSection
+        business={asaasBusinessFixture}
+        tenantSlug="barbearia-estilo-vivo"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={vi.fn()}
+        onRecoverPendingPixOrder={onRecoverPendingPixOrder}
+      />,
+    );
+
+    await screen.findByText('Pagamento pendente');
+    await user.click(screen.getByRole('button', { name: /Continuar pagamento/i }));
+    expect(await screen.findByRole('dialog', { name: /Seu pedido/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^Fechar$/i }));
+
+    expect(screen.queryByRole('dialog', { name: /Seu pedido/i })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('taplink:pending-pix:barbearia-estilo-vivo')).toBe(
+      JSON.stringify({
+        checkoutToken: 'checkout-token-mobile',
+        orderId: 'order-pending-mobile',
+      }),
+    );
+    expect(screen.getByRole('button', { name: /Continuar pagamento/i })).toBeInTheDocument();
+  });
 });

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { createEvent } from '../controllers/analyticsController.js';
 import {
+  cancelPublicOrderPaymentController,
   createPublicAppointmentRequestController,
   createPublicOrderController,
   getPublicOrderPaymentController,
@@ -61,6 +62,12 @@ router.get(
   '/site/:slug/orders/payment/:checkoutToken',
   validateRequest({ params: publicOrderPaymentParamsSchema }),
   asyncHandler(getPublicOrderPaymentController),
+);
+router.post(
+  '/site/:slug/orders/payment/:checkoutToken/cancel',
+  publicOrderRateLimiter,
+  validateRequest({ params: publicOrderPaymentParamsSchema }),
+  asyncHandler(cancelPublicOrderPaymentController),
 );
 router.get(
   '/tags/:tagCode/resolve',

@@ -1,6 +1,7 @@
 import { successResponse } from '../utils/apiResponse.js';
 import {
   createPublicAppointmentRequest,
+  cancelPublicOrderPaymentByCheckoutToken,
   createPublicOrder,
   getPublicOrderPaymentByCheckoutToken,
   createTenantAppointmentService,
@@ -178,6 +179,15 @@ export async function getPublicOrderPaymentController(req, res, next) {
   try {
     const { slug, checkoutToken } = getParams(req);
     return successResponse(res, await getPublicOrderPaymentByCheckoutToken(slug, checkoutToken));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function cancelPublicOrderPaymentController(req, res, next) {
+  try {
+    const { slug, checkoutToken } = getParams(req);
+    return successResponse(res, await cancelPublicOrderPaymentByCheckoutToken(slug, checkoutToken));
   } catch (error) {
     return next(error);
   }

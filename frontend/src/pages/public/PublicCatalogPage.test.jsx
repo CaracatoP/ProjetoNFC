@@ -13,6 +13,7 @@ vi.mock('@/services/publicSiteService.js', () => ({
   createPublicAppointmentRequest: vi.fn(),
   createPublicOrder: vi.fn(),
   getPublicOrderPayment: vi.fn(),
+  cancelPublicOrderPayment: vi.fn(),
   invalidatePublicSiteCache: vi.fn(),
 }));
 vi.mock('@/services/analyticsService.js', () => ({
@@ -108,6 +109,7 @@ describe('PublicCatalogPage', () => {
       },
     });
     publicSiteService.getPublicOrderPayment?.mockReset();
+    publicSiteService.cancelPublicOrderPayment?.mockReset();
     publicSiteService.invalidatePublicSiteCache?.mockReset();
     analyticsService.trackEvent.mockReset();
     tenantRealtimeService.subscribeToTenantUpdates.mockReset();

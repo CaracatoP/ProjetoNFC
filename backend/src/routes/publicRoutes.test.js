@@ -12,6 +12,7 @@ const asaasServiceMock = vi.hoisted(() => ({
   createAsaasPaymentCharge: vi.fn(),
   getAsaasPayment: vi.fn(),
   getAsaasPixQrCode: vi.fn(),
+  deleteAsaasPayment: vi.fn(),
 }));
 
 vi.mock('../services/mercadoPagoService.js', () => ({
@@ -24,9 +25,10 @@ vi.mock('../services/asaasService.js', async () => {
     ...actual,
     createAsaasCustomer: asaasServiceMock.createAsaasCustomer,
     listAsaasCustomers: asaasServiceMock.listAsaasCustomers,
-    createAsaasPaymentCharge: asaasServiceMock.createAsaasPaymentCharge,
-    getAsaasPayment: asaasServiceMock.getAsaasPayment,
-    getAsaasPixQrCode: asaasServiceMock.getAsaasPixQrCode,
+      createAsaasPaymentCharge: asaasServiceMock.createAsaasPaymentCharge,
+      getAsaasPayment: asaasServiceMock.getAsaasPayment,
+      getAsaasPixQrCode: asaasServiceMock.getAsaasPixQrCode,
+      deleteAsaasPayment: asaasServiceMock.deleteAsaasPayment,
   };
 });
 
@@ -99,6 +101,7 @@ describe('Public routes', () => {
     asaasServiceMock.createAsaasPaymentCharge.mockReset();
     asaasServiceMock.getAsaasPayment.mockReset();
     asaasServiceMock.getAsaasPixQrCode.mockReset();
+    asaasServiceMock.deleteAsaasPayment.mockReset();
     const loginResponse = await request(app).post('/api/admin/auth/login').send({
       username: 'admin@nfc.local',
       password: 'admin123456',
@@ -1022,6 +1025,155 @@ describe('Public routes', () => {
 
     expect(response.status).toBe(404);
     expect(response.body.code || response.body.error?.code).toBe('public_order_payment_not_found');
+  });
+
+  it('cancels a pending Asaas Pix order through the public checkout token and archives it from the operational queue', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Pix cancel public test',
+      description: 'Cancela pedido pendente no checkout publico',
+      price: 28.5,
+      image: '',
+      category: 'Combos',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    await SystemSetting.create({
+      key: 'finance:asaas',
+      value: {
+        paymentArchitecture: 'centralized',
+        defaultPlatformFeePercent: 3,
+      },
+    });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: false,
+            debitCard: false,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'asaas',
+          asaas: {
+            enabled: true,
+            status: 'active',
+            document: '19131243000197',
+          },
+        },
+      },
+    );
+
+    asaasServiceMock.createAsaasCustomer.mockResolvedValue({
+      id: 'cus_cancel_public',
+    });
+    asaasServiceMock.createAsaasPaymentCharge.mockResolvedValue({
+      id: 'pay_cancel_public',
+      customer: 'cus_cancel_public',
+      status: 'PENDING',
+      invoiceUrl: 'https://sandbox.asaas.com/i/pay_cancel_public',
+      externalReference: `tenant:${business._id}:order:pending`,
+    });
+    asaasServiceMock.getAsaasPixQrCode.mockResolvedValue({
+      payload: '000201010212cancelpublicpayload',
+      encodedImage: 'iVBORw0KGgoAAAANSUhEUgAAAAUA',
+    });
+    asaasServiceMock.getAsaasPayment
+      .mockResolvedValueOnce({
+        id: 'pay_cancel_public',
+        customer: 'cus_cancel_public',
+        status: 'PENDING',
+        invoiceUrl: 'https://sandbox.asaas.com/i/pay_cancel_public',
+        billingType: 'PIX',
+        externalReference: `tenant:${business._id}:order:pending`,
+      });
+    asaasServiceMock.deleteAsaasPayment.mockResolvedValue({
+      deleted: true,
+      id: 'pay_cancel_public',
+    });
+
+    const createResponse = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Joao Cancelamento',
+        customerPhone: '5511988877665',
+        customerDocument: '529.982.247-25',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: product.price,
+          },
+        ],
+        deliveryType: 'pickup',
+        payment: {
+          method: 'pix',
+          provider: 'asaas',
+        },
+      });
+
+    expect(createResponse.status).toBe(201);
+
+    const createdOrder = await Order.findById(createResponse.body.data.id);
+    const externalReference = `tenant:${business._id}:order:${createdOrder._id}`;
+
+    asaasServiceMock.getAsaasPayment.mockResolvedValueOnce({
+      id: 'pay_cancel_public',
+      customer: 'cus_cancel_public',
+      status: 'PENDING',
+      invoiceUrl: 'https://sandbox.asaas.com/i/pay_cancel_public',
+      billingType: 'PIX',
+      externalReference,
+    });
+
+    const cancelResponse = await request(app).post(
+      `/api/public/site/barbearia-estilo-vivo/orders/payment/${encodeURIComponent(createResponse.body.data.checkoutToken)}/cancel`,
+    );
+
+    expect(cancelResponse.status).toBe(200);
+    expect(cancelResponse.body.data).toEqual(
+      expect.objectContaining({
+        id: createResponse.body.data.id,
+        status: 'cancelled',
+        payment: expect.objectContaining({
+          method: 'pix',
+          provider: 'asaas',
+          status: 'cancelled',
+          providerPaymentId: 'pay_cancel_public',
+        }),
+      }),
+    );
+    expect(asaasServiceMock.deleteAsaasPayment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paymentId: 'pay_cancel_public',
+      }),
+    );
+
+    const archivedOrder = await Order.findById(createResponse.body.data.id).lean();
+    expect(archivedOrder.status).toBe('cancelled');
+    expect(archivedOrder.archivedAt).toBeTruthy();
+    expect(archivedOrder.cancelledAt).toBeTruthy();
+    expect(archivedOrder.customerCancelledAt).toBeTruthy();
+
+    const updatedPayment = await Payment.findOne({ provider: 'asaas', providerPaymentId: 'pay_cancel_public' }).lean();
+    expect(updatedPayment.status).toBe('cancelled');
+
+    const tenantOrders = await request(app)
+      .get(`/api/admin/businesses/${business._id}/orders`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(tenantOrders.status).toBe(200);
+    expect(tenantOrders.body.data.some((order) => order.id === createResponse.body.data.id)).toBe(false);
+
+    const ledgerEntries = await TenantLedgerEntry.find({ orderId: createdOrder._id }).lean();
+    expect(ledgerEntries).toHaveLength(0);
   });
 
   it('creates a public order with manual payment on pickup when that method is selected', async () => {

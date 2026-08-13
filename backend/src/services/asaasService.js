@@ -175,6 +175,15 @@ export async function getAsaasPayment({ apiKey, paymentId }) {
   });
 }
 
+export async function deleteAsaasPayment({ apiKey, paymentId }) {
+  return asaasRequest({
+    apiKey,
+    method: 'DELETE',
+    path: `/payments/${encodeURIComponent(String(paymentId || '').trim())}`,
+    operation: 'delete_payment',
+  });
+}
+
 export function normalizeAsaasPixQrCodeImage(encodedImage) {
   const rawValue = String(encodedImage || '').trim();
 
