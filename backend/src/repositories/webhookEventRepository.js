@@ -119,6 +119,20 @@ export function markWebhookEventProcessed(id, payload = {}) {
   );
 }
 
+export function markWebhookEventIgnored(id, { reason = 'ignored', message = '', ...payload } = {}) {
+  return WebhookEvent.findByIdAndUpdate(
+    id,
+    {
+      ...payload,
+      status: 'ignored',
+      processedAt: new Date(),
+      errorCode: String(reason || 'ignored').trim(),
+      errorMessage: String(message || reason || 'Evento ignorado com seguranca.').trim().slice(0, 500),
+    },
+    { new: true },
+  );
+}
+
 export function markWebhookEventFailed(id, error) {
   return WebhookEvent.findByIdAndUpdate(
     id,

@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 const objectIdPattern = /^[a-f\d]{24}$/i;
 
-function isValidObjectId(value) {
+export function isValidObjectId(value) {
   const normalized = String(value || '').trim();
   return objectIdPattern.test(normalized) && mongoose.Types.ObjectId.isValid(normalized);
 }

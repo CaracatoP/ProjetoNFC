@@ -58,6 +58,28 @@ export function findPaymentByExternalReference(provider, externalReference) {
   return Payment.findOne({ provider, externalReference });
 }
 
+export function updatePaymentByProviderPaymentId(provider, providerPaymentId, payload) {
+  const {
+    provider: _payloadProvider,
+    providerPaymentId: _payloadProviderPaymentId,
+    ...safePayload
+  } = normalizePaymentPayload(payload);
+
+  return Payment.findOneAndUpdate(
+    {
+      provider,
+      providerPaymentId,
+    },
+    {
+      $set: safePayload,
+    },
+    {
+      new: true,
+      runValidators: true,
+    },
+  );
+}
+
 export function listPaymentsByBusinessId(businessId, { limit = 100 } = {}) {
   return Payment.find({ businessId })
     .sort({ createdAt: -1, _id: -1 })

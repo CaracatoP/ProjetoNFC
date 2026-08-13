@@ -208,32 +208,36 @@ export function PublicCatalogPage() {
   return (
     <PublicSiteLayout business={site.business}>
       <BackToLandingButton slug={site.business.slug} search={location.search} navigate={navigate} />
-      <Card className="section-card catalog-page-shell">
+      <Card className="section-card catalog-page-shell catalog-page-hero">
         <div className="catalog-page-header">
           <div className="catalog-page-header__content">
             <span className="admin-section-chip admin-section-chip--muted">Catalogo</span>
             <h1>{site.business.name}</h1>
             <p>{site.business.description || 'Confira os produtos e faca seu pedido online.'}</p>
           </div>
+          <div className="catalog-page-header__meta">
+            <div>
+              <span>Produtos</span>
+              <strong>{catalogProducts.length}</strong>
+            </div>
+            <div>
+              <span>Pedido online</span>
+              <strong>{segmentState.modules.orders ? 'Ativo' : 'Consulta'}</strong>
+            </div>
+          </div>
         </div>
       </Card>
 
-      {!catalogProducts.length ? (
-        <Card className="section-card">
-          <EmptyState title="Nenhum produto cadastrado ainda" description="Os produtos deste tenant aparecerao aqui assim que forem publicados." />
-        </Card>
-      ) : (
-        <BusinessCatalogSection
-          business={site.business}
-          tenantSlug={site.business.slug}
-          modules={segmentState.modules}
-          segmentConfig={segmentState.segmentConfig}
-          products={catalogProducts}
-          onSubmitOrder={handleOrder}
-          onRecoverPendingPixOrder={handleRecoverPendingPixOrder}
-          onTrackAction={trackAction}
-        />
-      )}
+      <BusinessCatalogSection
+        business={site.business}
+        tenantSlug={site.business.slug}
+        modules={segmentState.modules}
+        segmentConfig={segmentState.segmentConfig}
+        products={catalogProducts}
+        onSubmitOrder={handleOrder}
+        onRecoverPendingPixOrder={handleRecoverPendingPixOrder}
+        onTrackAction={trackAction}
+      />
     </PublicSiteLayout>
   );
 }

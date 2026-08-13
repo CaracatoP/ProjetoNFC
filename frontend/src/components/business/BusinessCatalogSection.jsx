@@ -30,8 +30,8 @@ import {
 } from '@shared/utils/customerDocument.js';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
-import { SectionHeader } from '@/components/common/SectionHeader.jsx';
 import { formatCurrency, resolveMediaUrl } from '@/utils/formatters.js';
+import './BusinessCatalogSection.css';
 
 const CART_STORAGE_PREFIX = 'taplink:cart:';
 const PENDING_PIX_STORAGE_PREFIX = 'taplink:pending-pix:';
@@ -351,6 +351,15 @@ function getPaymentMethodTag(method, paymentSettings = {}) {
 function getPaymentSuccessMessage(payment = {}) {
   const method = payment?.method;
   const provider = payment?.provider;
+  const status = payment?.status;
+
+  if (status === PAYMENT_STATUS.PAID) {
+    return 'Pagamento confirmado. O estabelecimento ja recebeu a confirmacao desta cobranca.';
+  }
+
+  if (status === PAYMENT_STATUS.FAILED || status === PAYMENT_STATUS.CANCELLED) {
+    return 'Esta cobranca nao pode mais ser concluida. Revise o pedido para tentar novamente.';
+  }
 
   switch (method) {
     case PAYMENT_METHODS.PIX:
@@ -539,6 +548,70 @@ function defaultFractionInputValue(measurementUnit) {
   }
 }
 
+function formatFractionQuickOptionLabel(measurementUnit, rawValue) {
+  const numericValue = Number(rawValue || 0);
+
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return '';
+  }
+
+  if (measurementUnit === 'kg') {
+    if (numericValue >= 1000 && numericValue % 1000 === 0) {
+      return `${numericValue / 1000}kg`;
+    }
+
+    return `${numericValue}g`;
+  }
+
+  if (measurementUnit === 'g') {
+    return `${numericValue}g`;
+  }
+
+  if (measurementUnit === 'ml') {
+    return `${numericValue}ml`;
+  }
+
+  if (measurementUnit === 'l') {
+    return `${numericValue}L`;
+  }
+
+  return String(rawValue);
+}
+
+function getCheckoutVisualProgress(cartItems, checkout, isShowingCheckoutSuccess) {
+  if (isShowingCheckoutSuccess) {
+    return 'payment';
+  }
+
+  if (!cartItems.length) {
+    return 'cart';
+  }
+
+  if (!checkout.deliveryType) {
+    return 'delivery';
+  }
+
+  if (!checkout.paymentMethod) {
+    return 'payment';
+  }
+
+  return 'payment';
+}
+
+function truncatePixCode(value, { head = 14, tail = 8 } = {}) {
+  const normalizedValue = String(value || '').trim();
+
+  if (!normalizedValue) {
+    return '';
+  }
+
+  if (normalizedValue.length <= head + tail + 3) {
+    return normalizedValue;
+  }
+
+  return `${normalizedValue.slice(0, head)}...${normalizedValue.slice(-tail)}`;
+}
+
 function getFractionInputConfig(measurementUnit) {
   switch (measurementUnit) {
     case 'kg':
@@ -697,6 +770,7 @@ export function BusinessCatalogSection({
   const [pixCopyFeedback, setPixCopyFeedback] = useState('');
   const [checkoutErrors, setCheckoutErrors] = useState({});
   const hydratedSlugRef = useRef('');
+  const pendingPixStorageReadyRef = useRef(false);
   const checkoutBodyRef = useRef(null);
   const checkoutFieldRefs = useRef({});
   const normalizedProducts = useMemo(
@@ -725,6 +799,7 @@ export function BusinessCatalogSection({
   useEffect(() => {
     setCart(readStoredCart(tenantSlug));
     hydratedSlugRef.current = tenantSlug;
+    pendingPixStorageReadyRef.current = false;
     setCheckout(defaultCheckoutState());
     setCheckoutResult(null);
     setPendingPixOrder(null);
@@ -743,13 +818,31 @@ export function BusinessCatalogSection({
   }, [cart, tenantSlug]);
 
   useEffect(() => {
+    if (!pendingPixStorageReadyRef.current && !pendingPixOrder?.checkoutToken) {
+      return;
+    }
+
+    persistStoredPendingPixOrder(
+      tenantSlug,
+      pendingPixOrder?.checkoutToken && pendingPixOrder?.payment?.status === PAYMENT_STATUS.PENDING
+        ? {
+            checkoutToken: pendingPixOrder.checkoutToken,
+            orderId: pendingPixOrder.id,
+          }
+        : null,
+    );
+  }, [pendingPixOrder, tenantSlug]);
+
+  useEffect(() => {
     const pendingOrderReference = readStoredPendingPixOrder(tenantSlug);
 
     if (!pendingOrderReference?.checkoutToken || typeof onRecoverPendingPixOrder !== 'function') {
+      pendingPixStorageReadyRef.current = true;
       return undefined;
     }
 
     let active = true;
+    pendingPixStorageReadyRef.current = true;
     setRecoveringPendingPixOrder(true);
 
     Promise.resolve(onRecoverPendingPixOrder(pendingOrderReference.checkoutToken))
@@ -785,6 +878,27 @@ export function BusinessCatalogSection({
       active = false;
     };
   }, [onRecoverPendingPixOrder, tenantSlug]);
+
+  useEffect(() => {
+    if (!isCartOpen || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const previousOverflow = window.document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsCartOpen(false);
+      }
+    };
+
+    window.document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isCartOpen]);
 
   useEffect(() => {
     const productsById = new Map(normalizedProducts.map((product) => [product.id, product]));
@@ -899,6 +1013,8 @@ export function BusinessCatalogSection({
 
   const cartTotal = cartSubtotal;
   const cartItemCount = cartItems.length;
+  const hasCatalogProducts = normalizedProducts.length > 0;
+  const hasFilteredProducts = groupedProducts.length > 0;
   const cartBadgeCount = useMemo(
     () =>
       cartItems.reduce(
@@ -914,15 +1030,12 @@ export function BusinessCatalogSection({
     () => (showPendingPixBanner ? getRecoverablePixStatusCopy(pendingPixOrder) : null),
     [pendingPixOrder, showPendingPixBanner],
   );
-  const checkoutVisualStep = isShowingCheckoutSuccess
-    ? 'pix'
-    : !cartItems.length
-      ? 'cart'
-      : !checkout.deliveryType
-        ? 'delivery'
-        : !checkout.paymentMethod
-          ? 'payment'
-          : 'pix';
+  const checkoutVisualStep = getCheckoutVisualProgress(cartItems, checkout, isShowingCheckoutSuccess);
+  const cartSummaryText = cartItems.length
+    ? `${cartBadgeCount} ${cartBadgeCount === 1 ? 'item' : 'itens'} · ${formatCurrency(cartTotal)}`
+    : 'Abrir carrinho';
+  const categoryCount = Math.max(0, categoryOptions.length - 1);
+  const submitDisabled = submitting || !cartItems.length || !checkout.deliveryType || !checkout.paymentMethod;
 
   useEffect(() => {
     setCheckout((current) => {
@@ -961,10 +1074,6 @@ export function BusinessCatalogSection({
       return unresolvedErrors;
     });
   }, [cartItems, checkout, checkoutErrors, checkoutPaymentMethods, requiresCustomerDocument]);
-
-  if (!normalizedProducts.length) {
-    return null;
-  }
 
   function updateCartQuantity(product, quantity) {
     if (product?.isAvailable === false) {
@@ -1284,69 +1393,66 @@ export function BusinessCatalogSection({
 
   return (
     <>
-      {modules.cart || modules.orders ? (
+      {(modules.cart || modules.orders) ? (
         <>
-          <div className="catalog-cart-trigger">
-            <Button type="button" variant="secondary" onClick={() => setIsCartOpen(true)} aria-label="Abrir carrinho">
-              Carrinho
+          <div className="catalog-cart-floating">
+            <Button
+              type="button"
+              variant="secondary"
+              className="catalog-cart-floating__button"
+              onClick={() => setIsCartOpen(true)}
+              aria-label="Abrir carrinho"
+            >
+              <span className="catalog-cart-floating__copy">
+                <strong>Carrinho</strong>
+                <span>{cartSummaryText}</span>
+              </span>
               <span className="catalog-cart-trigger__badge" aria-hidden="true">
                 {cartBadgeCount}
               </span>
             </Button>
           </div>
-          {recoveringPendingPixOrder && !showPendingPixBanner ? (
-            <div className="catalog-pix-pending-banner" role="status" aria-live="polite">
-              <div className="catalog-pix-pending-banner__copy">
-                <strong>Retomando pagamento</strong>
-                <span>Estamos verificando se existe um Pix pendente para este pedido.</span>
-              </div>
-            </div>
-          ) : null}
-          {showPendingPixBanner ? (
-            <div className="catalog-pix-pending-banner" role="status" aria-live="polite">
-              <div className="catalog-pix-pending-banner__copy">
-                <strong>{pendingPixStatusCopy?.title || 'Pagamento pendente'}</strong>
-                <span>{pendingPixStatusCopy?.description || 'Seu Pix continua disponivel para pagamento.'}</span>
-              </div>
-              {pixCopyFeedback ? <small>{pixCopyFeedback}</small> : null}
-              <div className="catalog-pix-pending-banner__actions">
-                {pendingPixOrder?.payment?.status === PAYMENT_STATUS.PENDING && pendingPixOrder?.payment?.pixCopyPaste ? (
-                  <Button type="button" variant="secondary" onClick={() => handleCopyPixCode(pendingPixOrder)}>
-                    Copiar Pix
-                  </Button>
-                ) : null}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setCheckoutResult(pendingPixOrder);
-                    setIsCartOpen(true);
-                  }}
-                >
-                  {pendingPixOrder?.payment?.status === PAYMENT_STATUS.PENDING ? 'Continuar pagamento' : 'Ver pedido'}
-                </Button>
-              </div>
+          {cartItems.length ? (
+            <div className="catalog-cart-mobilebar">
+              <Button
+                type="button"
+                className="catalog-cart-mobilebar__button"
+                onClick={() => setIsCartOpen(true)}
+                aria-label="Ver carrinho"
+              >
+                <span className="catalog-cart-mobilebar__copy">
+                  <strong>{cartBadgeCount} {cartBadgeCount === 1 ? 'item' : 'itens'}</strong>
+                  <span>{formatCurrency(cartTotal)}</span>
+                </span>
+                <span>Ver carrinho</span>
+              </Button>
             </div>
           ) : null}
           {isCartOpen ? (
-            <div className="catalog-cart-layer">
+            <div className="catalog-drawer-layer">
               <button
                 type="button"
-                className="catalog-cart-layer__backdrop"
+                className="catalog-drawer-layer__backdrop"
                 aria-label="Fechar painel do carrinho"
                 onClick={() => setIsCartOpen(false)}
               />
-              <div className="catalog-cart-panel" role="dialog" aria-modal="true" aria-label="Seu pedido">
-                <div className="catalog-cart-shell" data-testid="catalog-cart-shell">
-                  <div className="catalog-cart-panel__header" data-testid="catalog-cart-header">
-                    <div className="catalog-cart-panel__header-copy">
-                      <span className="catalog-cart-panel__eyebrow" aria-hidden="true">
-                        {isShowingCheckoutSuccess ? 'Pagamento' : 'Carrinho'}
+              <div className="catalog-drawer" role="dialog" aria-modal="true" aria-label="Seu pedido">
+                <div className="catalog-drawer__shell" data-testid="catalog-cart-shell">
+                  <div className="catalog-drawer__header" data-testid="catalog-cart-header">
+                    <div className="catalog-drawer__header-copy">
+                      <span className="catalog-drawer__eyebrow" aria-hidden="true">
+                        {isShowingCheckoutSuccess ? 'Pagamento' : 'Seu pedido'}
                       </span>
-                      <strong>{isShowingCheckoutSuccess ? 'Pedido enviado' : 'Seu pedido'}</strong>
+                      <strong>
+                        {isShowingCheckoutSuccess
+                          ? checkoutResult?.payment?.status === PAYMENT_STATUS.PAID
+                            ? 'Pagamento confirmado'
+                            : 'Pedido enviado'
+                          : 'Seu pedido'}
+                      </strong>
                       <span>
                         {isShowingCheckoutSuccess
-                          ? 'Conclua o pagamento para o estabelecimento confirmar seu pedido.'
+                          ? 'Revise o pagamento e acompanhe a confirmacao do pedido.'
                           : cartItemCount
                           ? `${cartItemCount} item(ns) selecionado(s). Revise antes de finalizar.`
                           : 'Escolha os produtos e finalize com nome e telefone.'}
@@ -1355,7 +1461,7 @@ export function BusinessCatalogSection({
                     <Button
                       type="button"
                       variant="secondary"
-                      className="catalog-cart-panel__close"
+                      className="catalog-drawer__close"
                       onClick={() => setIsCartOpen(false)}
                       aria-label="Fechar carrinho"
                     >
@@ -1364,7 +1470,7 @@ export function BusinessCatalogSection({
                   </div>
 
                   <form className="catalog-checkout catalog-checkout--drawer" onSubmit={handleSubmitOrder}>
-                    <div className="catalog-cart-panel__body" data-testid="catalog-cart-body" ref={checkoutBodyRef}>
+                    <div className="catalog-drawer__body" data-testid="catalog-cart-body" ref={checkoutBodyRef}>
                       {feedback ? <p className="site-inline-feedback catalog-checkout__feedback">{feedback}</p> : null}
                       {Object.keys(checkoutErrors).length ? (
                         <div className="catalog-checkout__validation-summary" role="alert" tabIndex="-1">
@@ -1379,17 +1485,17 @@ export function BusinessCatalogSection({
                       ) : null}
 
                       {!isShowingCheckoutSuccess ? (
-                        <div className="catalog-checkout__stage-nav" aria-label="Etapas do checkout">
+                        <div className="catalog-checkout-progress" aria-label="Etapas do checkout">
                           {[
                             { key: 'cart', label: 'Carrinho' },
-                            { key: 'delivery', label: 'Entrega' },
+                            { key: 'delivery', label: 'Recebimento' },
                             { key: 'payment', label: 'Pagamento' },
-                            { key: 'pix', label: 'Pix' },
                           ].map((step) => (
                             <div
                               key={step.key}
-                              className={`catalog-checkout__stage-pill${checkoutVisualStep === step.key ? ' is-active' : ''}`}
+                              className={`catalog-checkout-progress__step${checkoutVisualStep === step.key ? ' is-active' : ''}`}
                             >
+                              <i aria-hidden="true" />
                               <span>{step.label}</span>
                             </div>
                           ))}
@@ -1397,27 +1503,40 @@ export function BusinessCatalogSection({
                       ) : null}
 
                       {isShowingCheckoutSuccess ? (
-                        <div className="catalog-checkout__success" data-testid="catalog-checkout-success">
-                          {/** Keep Pix waiting states clear even when the QR must open in the hosted Asaas page. */}
-                          <div className="catalog-checkout__success-hero">
-                            <span className="catalog-checkout__success-pill">Pedido enviado com sucesso</span>
-                            <div className="catalog-checkout__success-copy">
-                              <strong>Pedido enviado com sucesso</strong>
+                        <div className="catalog-success-view" data-testid="catalog-checkout-success">
+                          <div className="catalog-success-view__hero">
+                            <span className="catalog-success-view__pill">
+                              {checkoutResult?.payment?.status === PAYMENT_STATUS.PAID
+                                ? 'Pagamento confirmado'
+                                : 'Pedido enviado com sucesso'}
+                            </span>
+                            <div className="catalog-success-view__copy">
+                              <strong>
+                                {checkoutResult?.payment?.status === PAYMENT_STATUS.PAID
+                                  ? 'Pagamento confirmado'
+                                  : 'Pedido enviado com sucesso'}
+                              </strong>
                               <p>{getPaymentSuccessMessage(checkoutResult?.payment)}</p>
                             </div>
-                            <div className="catalog-checkout__success-meta">
-                              <div className="catalog-checkout__success-meta-card">
+                            <div className="catalog-success-view__meta">
+                              <div className="catalog-success-view__meta-card">
                                 <span>Pedido</span>
                                 <strong>{`Pedido #${checkoutResult?.id || 'novo'}`}</strong>
                               </div>
-                              <div className="catalog-checkout__success-meta-card">
+                              <div className="catalog-success-view__meta-card">
                                 <span>Status</span>
-                                <strong>{isPixPayment(checkoutResult) ? 'Aguardando pagamento' : 'Aguardando confirmacao'}</strong>
+                                <strong>
+                                  {checkoutResult?.payment?.status === PAYMENT_STATUS.PAID
+                                    ? 'Pagamento confirmado'
+                                    : isPixPayment(checkoutResult)
+                                    ? 'Aguardando pagamento'
+                                    : 'Aguardando confirmacao'}
+                                </strong>
                               </div>
                             </div>
                           </div>
 
-                          <div className="catalog-checkout__summary catalog-checkout__summary--success">
+                          <div className="catalog-summary-card catalog-summary-card--success">
                             <div>
                               <span>Total do pedido</span>
                               <strong>{formatCurrency(checkoutResult?.payment?.amount || checkoutResult?.total || 0)}</strong>
@@ -1429,17 +1548,14 @@ export function BusinessCatalogSection({
                           </div>
 
                           {isPixPayment(checkoutResult) ? (
-                            <div className="catalog-checkout__pix-success-card">
-                              <div className="catalog-checkout__pix-qr-wrap">
-                                <div className="catalog-checkout__pix-qr">
+                            <div className="catalog-pix-result">
+                              <div className="catalog-pix-result__qr">
+                                <div className="catalog-pix-result__qr-frame">
                                   {checkoutResult?.payment?.provider === PAYMENT_PROVIDERS.ASAAS ? (
                                     checkoutResult?.payment?.pixQrCode ? (
-                                      <img
-                                        src={checkoutResult.payment.pixQrCode}
-                                        alt="QR Code Pix do Asaas"
-                                      />
+                                      <img src={checkoutResult.payment.pixQrCode} alt="QR Code Pix do Asaas" />
                                     ) : (
-                                      <div className="catalog-checkout__pix-qr-fallback">
+                                      <div className="catalog-pix-result__qr-fallback">
                                         <strong>Abra a cobranca Pix</strong>
                                         <span>
                                           {isAsaasPixHostedFallback(checkoutResult)
@@ -1450,15 +1566,15 @@ export function BusinessCatalogSection({
                                     )
                                   ) : (
                                     <div aria-hidden="true">
-                                      <QRCode value={checkoutResult.payment.pixCopyPaste} size={196} />
+                                      <QRCode value={checkoutResult.payment.pixCopyPaste} size={240} />
                                     </div>
                                   )}
                                 </div>
                               </div>
 
-                              <div className="catalog-checkout__pix-copy">
-                                <div className="catalog-checkout__pix-copy-header">
-                                  <strong>{checkoutResult?.payment?.pixCopyPaste ? 'Codigo Pix' : 'Pagamento Pix'}</strong>
+                              <div className="catalog-pix-result__content">
+                                <div className="catalog-pix-result__header">
+                                  <strong>{checkoutResult?.payment?.pixCopyPaste ? 'Pix copia e cola' : 'Pagamento Pix'}</strong>
                                   <span>
                                     {checkoutResult?.payment?.pixCopyPaste
                                       ? 'Use o QR Code ou copie o codigo completo para pagar agora.'
@@ -1466,10 +1582,14 @@ export function BusinessCatalogSection({
                                   </span>
                                 </div>
                                 {checkoutResult?.payment?.pixCopyPaste ? (
-                                  <label className="admin-field catalog-checkout__pix-code-field">
+                                  <div className="catalog-pix-result__code">
                                     <span>Copia e cola Pix</span>
-                                    <textarea readOnly rows="4" value={checkoutResult.payment.pixCopyPaste} />
-                                  </label>
+                                    <code>{truncatePixCode(checkoutResult.payment.pixCopyPaste)}</code>
+                                    <details>
+                                      <summary>Ver codigo completo</summary>
+                                      <pre>{checkoutResult.payment.pixCopyPaste}</pre>
+                                    </details>
+                                  </div>
                                 ) : null}
                                 {!checkoutResult?.payment?.pixCopyPaste && checkoutResult?.payment?.invoiceUrl ? (
                                   <Button
@@ -1481,9 +1601,9 @@ export function BusinessCatalogSection({
                                   </Button>
                                 ) : null}
                                 {checkoutResult?.payment?.pixCopyPaste && pixCopyFeedback ? (
-                                  <p className="catalog-checkout__pix-feedback">{pixCopyFeedback}</p>
+                                  <p className="catalog-pix-result__feedback">{pixCopyFeedback}</p>
                                 ) : null}
-                                <p className="admin-muted-copy">
+                                <p className="catalog-pix-result__note">
                                   {isAsaasPixSuccess
                                     ? 'Assim que o pagamento for confirmado, o status do pedido sera atualizado automaticamente.'
                                     : isAsaasPixHostedFallback(checkoutResult)
@@ -1513,12 +1633,12 @@ export function BusinessCatalogSection({
                         </div>
                       ) : cartItems.length ? (
                         <>
-                          <section className="catalog-checkout__stage-card">
-                            <div className="catalog-checkout__stage-header">
+                          <section className="catalog-checkout-block">
+                            <div className="catalog-checkout-block__header">
                               <strong>1. Carrinho</strong>
                               <span>Revise os itens, ajuste quantidades e confira o subtotal antes de seguir.</span>
                             </div>
-                            <ul className="catalog-checkout__list">
+                            <ul className="catalog-cart-list">
                               {cartItems.map((item) => {
                                 const product = normalizedProducts.find((entry) => entry.id === item.productId) || {
                                   id: item.productId,
@@ -1533,21 +1653,25 @@ export function BusinessCatalogSection({
                                   height: 160,
                                   fit: 'fill',
                                 });
+                                const itemIsFractional = isFractionalMeasurementUnit(product.measurementUnit);
 
                                 return (
-                                  <li key={item.productId} className="catalog-checkout__item">
-                                    <div className={`catalog-checkout__item-media${itemImageUrl ? '' : ' catalog-checkout__item-media--placeholder'}`}>
+                                  <li key={item.productId} className="catalog-cart-item">
+                                    <div className={`catalog-cart-item__media${itemImageUrl ? '' : ' catalog-cart-item__media--placeholder'}`}>
                                       {itemImageUrl ? <img src={itemImageUrl} alt={item.name} /> : <span aria-hidden="true">{item.name.slice(0, 1)}</span>}
                                     </div>
-                                    <div className="catalog-checkout__item-main">
-                                      <div className="catalog-checkout__item-copy">
-                                        <span className="catalog-checkout__item-name">{item.name}</span>
-                                        <small className="catalog-checkout__item-meta">
-                                          {item.displayQuantity} x {formatCurrency(item.unitPrice)}/{getMeasurementUnitLabel(item.measurementUnit)}
-                                        </small>
+                                    <div className="catalog-cart-item__main">
+                                      <div className="catalog-cart-item__copy">
+                                        <div>
+                                          <span className="catalog-cart-item__name">{item.name}</span>
+                                          <small className="catalog-cart-item__meta">
+                                            {item.displayQuantity} x {formatCurrency(item.unitPrice)}/{getMeasurementUnitLabel(item.measurementUnit)}
+                                          </small>
+                                        </div>
+                                        <strong>{formatCurrency(item.itemTotal)}</strong>
                                       </div>
 
-                                      <label className="catalog-checkout__item-editor">
+                                      <label className="catalog-cart-item__editor">
                                         <span>{editorConfig.label}</span>
                                         <input
                                           type="number"
@@ -1558,30 +1682,34 @@ export function BusinessCatalogSection({
                                         />
                                       </label>
 
-                                      <div className="catalog-checkout__item-footer">
-                                        <div className="catalog-checkout__stepper" aria-label={`Controles de quantidade para ${item.name}`}>
+                                      <div className="catalog-cart-item__footer">
+                                        <div className="catalog-cart-item__stepper" aria-label={`Controles de quantidade para ${item.name}`}>
                                           <Button
                                             type="button"
                                             variant="secondary"
-                                            className="catalog-checkout__stepper-button"
+                                            className="catalog-cart-item__stepper-button"
                                             aria-label={`Diminuir quantidade de ${item.name}`}
                                             onClick={() => adjustCartQuantity(product, -1)}
                                           >
                                             -
                                           </Button>
-                                          <span className="catalog-checkout__stepper-value">{item.displayQuantity}</span>
+                                          <span className="catalog-cart-item__stepper-value">{item.displayQuantity}</span>
                                           <Button
                                             type="button"
                                             variant="secondary"
-                                            className="catalog-checkout__stepper-button"
+                                            className="catalog-cart-item__stepper-button"
                                             aria-label={`Aumentar quantidade de ${item.name}`}
                                             onClick={() => adjustCartQuantity(product, 1)}
                                           >
                                             +
                                           </Button>
                                         </div>
-                                        <div className="catalog-checkout__item-actions">
-                                          <strong>{formatCurrency(item.itemTotal)}</strong>
+                                        <div className="catalog-cart-item__actions">
+                                          {itemIsFractional ? (
+                                            <span className="catalog-cart-item__hint">
+                                              Ajuste em {editorConfig.step}{product.measurementUnit === 'kg' ? 'g' : getMeasurementUnitLabel(product.measurementUnit)}
+                                            </span>
+                                          ) : null}
                                           <Button
                                             type="button"
                                             variant="secondary"
@@ -1598,7 +1726,7 @@ export function BusinessCatalogSection({
                               })}
                             </ul>
 
-                            <div className="catalog-checkout__summary">
+                            <div className="catalog-summary-card">
                               <div>
                                 <span>Subtotal</span>
                                 <strong>{formatCurrency(cartSubtotal)}</strong>
@@ -1610,10 +1738,101 @@ export function BusinessCatalogSection({
                             </div>
                           </section>
 
-                          <section className="catalog-checkout__stage-card">
-                            <div className="catalog-checkout__stage-header">
-                              <strong>2. Entrega</strong>
-                              <span>Informe seus dados basicos e escolha se o pedido sera entregue ou retirado.</span>
+                          <section className="catalog-checkout-block">
+                            <div className="catalog-checkout-block__header">
+                              <strong>2. Como voce vai receber?</strong>
+                              <span>Escolha primeiro se o pedido sera entregue ou retirado no estabelecimento.</span>
+                            </div>
+
+                            <div
+                              ref={(node) => {
+                                checkoutFieldRefs.current.deliveryType = node;
+                              }}
+                              className={`catalog-choice-card${checkoutErrors.deliveryType ? ' catalog-checkout__choice-group--invalid' : ''}`}
+                              role="group"
+                              aria-labelledby="checkout-delivery-type-title"
+                              aria-invalid={checkoutErrors.deliveryType ? 'true' : undefined}
+                              aria-describedby={checkoutErrors.deliveryType ? 'checkout-delivery-type-error' : undefined}
+                              tabIndex={checkoutErrors.deliveryType ? '-1' : undefined}
+                            >
+                              <div className="catalog-choice-card__header">
+                                <strong id="checkout-delivery-type-title">Como voce vai receber?</strong>
+                                <span>Escolha primeiro se o pedido sera entregue ou retirado no estabelecimento.</span>
+                              </div>
+                              <div className="catalog-choice-card__grid catalog-choice-card__grid--delivery">
+                                {[
+                                  {
+                                    value: 'delivery',
+                                    title: 'Entrega',
+                                    description: 'Receber no endereco informado',
+                                  },
+                                  {
+                                    value: 'pickup',
+                                    title: 'Retirada',
+                                    description: 'Buscar no estabelecimento',
+                                  },
+                                ].map((option) => {
+                                  const selected = checkout.deliveryType === option.value;
+
+                                  return (
+                                    <button
+                                      key={option.value}
+                                      type="button"
+                                      className={`catalog-choice-card__option${selected ? ' is-selected' : ''}`}
+                                      aria-label={option.title}
+                                      aria-pressed={selected}
+                                      onClick={() =>
+                                        setCheckout((current) => {
+                                          const nextPaymentMethods = getAvailablePaymentMethodsForDeliveryType(
+                                            availablePaymentMethods,
+                                            option.value,
+                                          );
+
+                                          return {
+                                            ...current,
+                                            deliveryType: option.value,
+                                            address: option.value === 'delivery' ? current.address : '',
+                                            paymentMethod: nextPaymentMethods.includes(current.paymentMethod)
+                                              ? current.paymentMethod
+                                              : '',
+                                          };
+                                        })
+                                      }
+                                    >
+                                      <div className="catalog-choice-card__copy">
+                                        <strong>{option.title}</strong>
+                                        <span>{option.description}</span>
+                                      </div>
+                                      <i aria-hidden="true" />
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {checkoutErrors.deliveryType ? <small id="checkout-delivery-type-error" className="catalog-checkout__choice-error">{checkoutErrors.deliveryType}</small> : null}
+                            </div>
+
+                            {checkout.deliveryType === 'delivery' ? (
+                              <label className={`admin-field catalog-checkout__address${checkoutErrors.address ? ' admin-field--invalid' : ''}`}>
+                                <span>Endereco</span>
+                                <input
+                                  ref={(node) => {
+                                    checkoutFieldRefs.current.address = node;
+                                  }}
+                                  value={checkout.address}
+                                  onChange={(event) => setCheckout((current) => ({ ...current, address: event.target.value }))}
+                                  aria-label="Endereco"
+                                  aria-invalid={checkoutErrors.address ? 'true' : undefined}
+                                  aria-describedby={checkoutErrors.address ? 'checkout-address-error' : undefined}
+                                />
+                                {checkoutErrors.address ? <small id="checkout-address-error">{checkoutErrors.address}</small> : null}
+                              </label>
+                            ) : null}
+                          </section>
+
+                          <section className="catalog-checkout-block">
+                            <div className="catalog-checkout-block__header">
+                              <strong>3. Seus dados</strong>
+                              <span>Usaremos essas informacoes para identificar o pedido e falar com voce se necessario.</span>
                             </div>
 
                             <div className="admin-form-grid catalog-checkout__fields">
@@ -1647,152 +1866,10 @@ export function BusinessCatalogSection({
                               </label>
                             </div>
 
-                            <div
-                              ref={(node) => {
-                                checkoutFieldRefs.current.deliveryType = node;
-                              }}
-                              className={`catalog-checkout__delivery-methods${checkoutErrors.deliveryType ? ' catalog-checkout__choice-group--invalid' : ''}`}
-                              role="group"
-                              aria-labelledby="checkout-delivery-type-title"
-                              aria-invalid={checkoutErrors.deliveryType ? 'true' : undefined}
-                              aria-describedby={checkoutErrors.deliveryType ? 'checkout-delivery-type-error' : undefined}
-                              tabIndex={checkoutErrors.deliveryType ? '-1' : undefined}
-                            >
-                              <div className="catalog-checkout__payment-header">
-                                <strong id="checkout-delivery-type-title">Como voce vai receber?</strong>
-                                <span>Escolha primeiro se o pedido sera entregue ou retirado no estabelecimento.</span>
-                              </div>
-                              <div className="catalog-checkout__delivery-grid">
-                                {[
-                                  {
-                                    value: 'delivery',
-                                    title: 'Entrega',
-                                    description: 'Receber no endereco informado',
-                                  },
-                                  {
-                                    value: 'pickup',
-                                    title: 'Retirada',
-                                    description: 'Buscar no estabelecimento',
-                                  },
-                                ].map((option) => {
-                                  const selected = checkout.deliveryType === option.value;
-
-                                  return (
-                                    <button
-                                      key={option.value}
-                                      type="button"
-                                      className={`catalog-checkout__delivery-card${selected ? ' catalog-checkout__delivery-card--selected' : ''}`}
-                                      aria-label={option.title}
-                                      aria-pressed={selected}
-                                      onClick={() =>
-                                        setCheckout((current) => {
-                                          const nextPaymentMethods = getAvailablePaymentMethodsForDeliveryType(
-                                            availablePaymentMethods,
-                                            option.value,
-                                          );
-
-                                          return {
-                                            ...current,
-                                            deliveryType: option.value,
-                                            address: option.value === 'delivery' ? current.address : '',
-                                            paymentMethod: nextPaymentMethods.includes(current.paymentMethod)
-                                              ? current.paymentMethod
-                                              : '',
-                                          };
-                                        })
-                                      }
-                                    >
-                                      <div className="catalog-checkout__payment-copy">
-                                        <strong>{option.title}</strong>
-                                        <span>{option.description}</span>
-                                      </div>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                              {checkoutErrors.deliveryType ? <small id="checkout-delivery-type-error" className="catalog-checkout__choice-error">{checkoutErrors.deliveryType}</small> : null}
-                            </div>
-
-                            {checkout.deliveryType === 'delivery' ? (
-                              <label className={`admin-field catalog-checkout__address${checkoutErrors.address ? ' admin-field--invalid' : ''}`}>
-                                <span>Endereco</span>
-                                <input
-                                  ref={(node) => {
-                                    checkoutFieldRefs.current.address = node;
-                                  }}
-                                  value={checkout.address}
-                                  onChange={(event) => setCheckout((current) => ({ ...current, address: event.target.value }))}
-                                  aria-label="Endereco"
-                                  aria-invalid={checkoutErrors.address ? 'true' : undefined}
-                                  aria-describedby={checkoutErrors.address ? 'checkout-address-error' : undefined}
-                                />
-                                {checkoutErrors.address ? <small id="checkout-address-error">{checkoutErrors.address}</small> : null}
-                              </label>
-                            ) : null}
-
                             <label className="admin-field catalog-checkout__notes">
                               <span>Observacoes</span>
                               <textarea rows="3" value={checkout.notes} onChange={(event) => setCheckout((current) => ({ ...current, notes: event.target.value }))} />
                             </label>
-                          </section>
-
-                          <section className="catalog-checkout__stage-card">
-                            <div className="catalog-checkout__stage-header">
-                              <strong>3. Pagamento</strong>
-                              <span>As formas de pagamento aparecem conforme o tipo de recebimento escolhido.</span>
-                            </div>
-
-                            {checkout.deliveryType ? (
-                              <div
-                                ref={(node) => {
-                                  checkoutFieldRefs.current.paymentMethod = node;
-                                }}
-                                className={`catalog-checkout__payment-methods${checkoutErrors.paymentMethod ? ' catalog-checkout__choice-group--invalid' : ''}`}
-                                role="group"
-                                aria-labelledby="checkout-payment-methods-title"
-                                aria-invalid={checkoutErrors.paymentMethod ? 'true' : undefined}
-                                aria-describedby={checkoutErrors.paymentMethod ? 'checkout-payment-method-error' : undefined}
-                                tabIndex={checkoutErrors.paymentMethod ? '-1' : undefined}
-                              >
-                                <div className="catalog-checkout__payment-header">
-                                  <strong id="checkout-payment-methods-title">{getPaymentSectionTitle(checkout.deliveryType)}</strong>
-                                  <span>Escolha apenas entre os metodos liberados por este estabelecimento.</span>
-                                </div>
-                                <div className="catalog-checkout__payment-grid">
-                                  {checkoutPaymentMethods.map((method) => {
-                                    const selected = checkout.paymentMethod === method;
-
-                                    return (
-                                      <button
-                                        key={method}
-                                        type="button"
-                                        className={`catalog-checkout__payment-card${selected ? ' catalog-checkout__payment-card--selected' : ''}`}
-                                        aria-label={PAYMENT_METHOD_LABELS[method]}
-                                        aria-pressed={selected}
-                                        onClick={() =>
-                                          setCheckout((current) => ({
-                                            ...current,
-                                            paymentMethod: method,
-                                          }))
-                                        }
-                                      >
-                                        <div className="catalog-checkout__payment-copy">
-                                          <strong>{PAYMENT_METHOD_LABELS[method]}</strong>
-                                          <span>{getPaymentMethodDescription(method, paymentSettings)}</span>
-                                        </div>
-                                        <span className="catalog-checkout__payment-tag">{getPaymentMethodTag(method, paymentSettings)}</span>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                                {checkoutErrors.paymentMethod ? <small id="checkout-payment-method-error" className="catalog-checkout__choice-error">{checkoutErrors.paymentMethod}</small> : null}
-                              </div>
-                            ) : (
-                              <div className="catalog-checkout__payment-placeholder">
-                                <strong>Escolha entrega ou retirada primeiro</strong>
-                                <span>Depois disso, mostraremos apenas as formas de pagamento compativeis com o seu pedido.</span>
-                              </div>
-                            )}
 
                             {requiresCustomerDocument ? (
                               <label className={`admin-field${checkoutErrors.customerDocument ? ' admin-field--invalid' : ''}`}>
@@ -1829,6 +1906,65 @@ export function BusinessCatalogSection({
                               </label>
                             ) : null}
                           </section>
+
+                          <section className="catalog-checkout-block">
+                            <div className="catalog-checkout-block__header">
+                              <strong>4. Pagamento</strong>
+                              <span>Mostramos apenas as formas compativeis com a entrega ou retirada escolhida.</span>
+                            </div>
+
+                            {checkout.deliveryType ? (
+                              <div
+                                ref={(node) => {
+                                  checkoutFieldRefs.current.paymentMethod = node;
+                                }}
+                                className={`catalog-choice-card${checkoutErrors.paymentMethod ? ' catalog-checkout__choice-group--invalid' : ''}`}
+                                role="group"
+                                aria-labelledby="checkout-payment-methods-title"
+                                aria-invalid={checkoutErrors.paymentMethod ? 'true' : undefined}
+                                aria-describedby={checkoutErrors.paymentMethod ? 'checkout-payment-method-error' : undefined}
+                                tabIndex={checkoutErrors.paymentMethod ? '-1' : undefined}
+                              >
+                                <div className="catalog-choice-card__header">
+                                  <strong id="checkout-payment-methods-title">{getPaymentSectionTitle(checkout.deliveryType)}</strong>
+                                  <span>Escolha apenas entre os metodos liberados por este estabelecimento.</span>
+                                </div>
+                                <div className="catalog-choice-card__grid">
+                                  {checkoutPaymentMethods.map((method) => {
+                                    const selected = checkout.paymentMethod === method;
+
+                                    return (
+                                      <button
+                                        key={method}
+                                        type="button"
+                                        className={`catalog-choice-card__option${selected ? ' is-selected' : ''}`}
+                                        aria-label={PAYMENT_METHOD_LABELS[method]}
+                                        aria-pressed={selected}
+                                        onClick={() =>
+                                          setCheckout((current) => ({
+                                            ...current,
+                                            paymentMethod: method,
+                                          }))
+                                        }
+                                      >
+                                        <div className="catalog-choice-card__copy">
+                                          <strong>{PAYMENT_METHOD_LABELS[method]}</strong>
+                                          <span>{getPaymentMethodDescription(method, paymentSettings)}</span>
+                                        </div>
+                                        <span className="catalog-choice-card__tag">{getPaymentMethodTag(method, paymentSettings)}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                {checkoutErrors.paymentMethod ? <small id="checkout-payment-method-error" className="catalog-checkout__choice-error">{checkoutErrors.paymentMethod}</small> : null}
+                              </div>
+                            ) : (
+                              <div className="catalog-payment-placeholder">
+                                <strong>Escolha entrega ou retirada primeiro</strong>
+                                <span>Depois disso, mostraremos apenas as formas de pagamento compativeis com o seu pedido.</span>
+                              </div>
+                            )}
+                          </section>
                         </>
                       ) : (
                         <div className="catalog-cart-empty">
@@ -1844,25 +1980,25 @@ export function BusinessCatalogSection({
                       )}
                     </div>
 
-                    <div className="catalog-cart-panel__footer" data-testid="catalog-cart-footer">
+                    <div className="catalog-drawer__footer" data-testid="catalog-cart-footer">
                       {isShowingCheckoutSuccess ? (
-                        <div className="catalog-cart-panel__footer-success">
-                          <div className="catalog-cart-panel__total catalog-cart-panel__total--compact">
+                        <div className="catalog-drawer__footer-success">
+                          <div className="catalog-drawer__total catalog-drawer__total--compact">
                             <span>Total do pedido</span>
                             <strong>{formatCurrency(checkoutResult?.payment?.amount || checkoutResult?.total || 0)}</strong>
                           </div>
-                          {isPixCheckoutResult(checkoutResult) ? (
-                            <Button type="button" className="catalog-cart-panel__submit" onClick={() => handleCopyPixCode(checkoutResult)}>
+                          {isPixPayment(checkoutResult) && checkoutResult?.payment?.status !== PAYMENT_STATUS.PAID ? (
+                            <Button type="button" className="catalog-drawer__submit" onClick={() => handleCopyPixCode(checkoutResult)}>
                               Copiar codigo Pix
                             </Button>
                           ) : (
-                            <Button type="button" className="catalog-cart-panel__submit" onClick={() => setIsCartOpen(false)}>
+                            <Button type="button" className="catalog-drawer__submit" onClick={() => setIsCartOpen(false)}>
                               Fechar carrinho
                             </Button>
                           )}
                         </div>
                       ) : (
-                        <div className="catalog-cart-panel__footer-main">
+                        <div className="catalog-drawer__footer-main">
                           {feedback ? (
                             <p
                               className="site-inline-feedback catalog-checkout__footer-feedback"
@@ -1872,11 +2008,11 @@ export function BusinessCatalogSection({
                               {feedback}
                             </p>
                           ) : null}
-                          <div className="catalog-cart-panel__total">
+                          <div className="catalog-drawer__total">
                             <span>Total do pedido</span>
                             <strong>{formatCurrency(cartTotal)}</strong>
                           </div>
-                          <Button type="submit" disabled={submitting} className="catalog-cart-panel__submit">
+                          <Button type="submit" disabled={submitDisabled} className="catalog-drawer__submit">
                             {submitting ? 'Finalizando...' : 'Finalizar pedido'}
                           </Button>
                         </div>
@@ -1889,12 +2025,66 @@ export function BusinessCatalogSection({
           ) : null}
         </>
       ) : null}
-      <Card className="section-card catalog-section">
-        <SectionHeader
-          eyebrow="Modulo ativo"
-          title={segmentConfig?.catalogTitle || 'Catalogo'}
-          description={segmentConfig?.catalogDescription || 'Confira os itens publicados por este tenant.'}
-        />
+
+      <Card className="section-card catalog-experience">
+        <div className="catalog-experience__hero">
+          <div className="catalog-experience__copy">
+            <span className="catalog-experience__eyebrow">Modulo ativo</span>
+            <h2>{segmentConfig?.catalogTitle || 'Catalogo'}</h2>
+            <p>{segmentConfig?.catalogDescription || 'Confira os itens publicados por este tenant.'}</p>
+          </div>
+          <div className="catalog-experience__stats">
+            <div>
+              <span>Produtos</span>
+              <strong>{normalizedProducts.length}</strong>
+            </div>
+            <div>
+              <span>Categorias</span>
+              <strong>{categoryCount}</strong>
+            </div>
+          </div>
+        </div>
+
+        {recoveringPendingPixOrder && !showPendingPixBanner ? (
+          <div className="catalog-payment-alert catalog-payment-alert--loading" role="status" aria-live="polite">
+            <div className="catalog-payment-alert__copy">
+              <strong>Retomando pagamento</strong>
+              <span>Estamos verificando se existe um Pix pendente para este pedido.</span>
+            </div>
+          </div>
+        ) : null}
+
+        {showPendingPixBanner ? (
+          <div className="catalog-payment-alert" role="status" aria-live="polite">
+            <div className="catalog-payment-alert__copy">
+              <span className="catalog-payment-alert__eyebrow">{pendingPixStatusCopy?.title || 'Pagamento pendente'}</span>
+              <strong>{pendingPixOrder?.id ? `Pedido #${pendingPixOrder.id}` : 'Pagamento pendente'}</strong>
+              <span>{pendingPixStatusCopy?.description || 'Seu Pix continua disponivel para pagamento.'}</span>
+            </div>
+            <div className="catalog-payment-alert__meta">
+              <span>Total</span>
+              <strong>{formatCurrency(pendingPixOrder?.payment?.amount || pendingPixOrder?.total || 0)}</strong>
+            </div>
+            {pixCopyFeedback ? <small>{pixCopyFeedback}</small> : null}
+            <div className="catalog-payment-alert__actions">
+              {pendingPixOrder?.payment?.status === PAYMENT_STATUS.PENDING && pendingPixOrder?.payment?.pixCopyPaste ? (
+                <Button type="button" variant="secondary" onClick={() => handleCopyPixCode(pendingPixOrder)}>
+                  Copiar Pix
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setCheckoutResult(pendingPixOrder);
+                  setIsCartOpen(true);
+                }}
+              >
+                {pendingPixOrder?.payment?.status === PAYMENT_STATUS.PENDING ? 'Continuar pagamento' : 'Ver pedido'}
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         <div className="catalog-toolbar">
           <label className="admin-field catalog-search-field">
@@ -1906,32 +2096,41 @@ export function BusinessCatalogSection({
               placeholder="Buscar produto, categoria ou descricao"
             />
           </label>
-          <div className="catalog-category-tabs" aria-label="Filtrar por categoria">
-            {categoryOptions.map((option) => {
-              const selected = activeCategory === option.value;
+          {hasCatalogProducts ? (
+            <div className="catalog-category-tabs" aria-label="Filtrar por categoria">
+              {categoryOptions.map((option) => {
+                const selected = activeCategory === option.value;
 
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={`catalog-category-tabs__button${selected ? ' is-active' : ''}`}
-                  aria-pressed={selected}
-                  onClick={() => setActiveCategory(option.value)}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`catalog-category-tabs__button${selected ? ' is-active' : ''}`}
+                    aria-pressed={selected}
+                    onClick={() => setActiveCategory(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
 
-        {groupedProducts.length ? (
+        {!hasCatalogProducts ? (
+          <div className="catalog-search-empty catalog-search-empty--published">
+            <strong>Nenhum produto cadastrado ainda</strong>
+            <p>Os produtos deste tenant aparecerao aqui assim que forem publicados.</p>
+          </div>
+        ) : hasFilteredProducts ? (
           <div className="catalog-groups">
             {groupedProducts.map((group) => (
               <section key={group.category} className="catalog-category-group">
                 <div className="catalog-category-group__header">
-                  <h3>{group.category}</h3>
-                  <span>{group.items.length} item(ns)</span>
+                  <div>
+                    <h3>{group.category}</h3>
+                    <span>{group.items.length} item(ns)</span>
+                  </div>
                 </div>
 
                 <div className="catalog-grid">
@@ -1943,6 +2142,7 @@ export function BusinessCatalogSection({
                     });
                     const productIsAvailable = product.isAvailable !== false;
                     const cartQuantity = Number(cart[product.id] || 0);
+                    const isFractional = isFractionalMeasurementUnit(product.measurementUnit);
                     const fractionalConfig = getFractionInputConfig(product.measurementUnit);
                     const fractionalInputValue = getFractionInputValue(product);
                     const fractionalPreviewQuantity = convertInputValueToCartQuantity(product, fractionalInputValue);
@@ -1953,64 +2153,80 @@ export function BusinessCatalogSection({
                     return (
                       <article
                         key={product.id}
-                        className={`catalog-card${productIsAvailable ? '' : ' catalog-card--unavailable'}`}
+                        className={`catalog-card catalog-product-card${productIsAvailable ? '' : ' catalog-card--unavailable'}`}
                       >
-                        <div className="catalog-card__media">
+                        <div className="catalog-product-card__media">
                           {imageUrl ? (
                             <img src={imageUrl} alt={product.name} width="720" height="720" loading="lazy" decoding="async" />
                           ) : (
-                            <div className="catalog-card__media-placeholder" aria-hidden="true">
+                            <div className="catalog-product-card__media-placeholder" aria-hidden="true">
                               {product.name.slice(0, 1).toUpperCase()}
                             </div>
                           )}
+                          <span className="catalog-product-card__measure">
+                            {getMeasurementUnitLabel(product.measurementUnit)}
+                          </span>
                           {!productIsAvailable ? (
-                            <span className="catalog-card__media-badge">Indisponivel</span>
+                            <span className="catalog-product-card__status">Indisponivel</span>
                           ) : null}
                         </div>
-                        <div className="catalog-card__content">
-                          <div className="catalog-card__eyebrow">
-                            <span className="admin-section-chip admin-section-chip--muted">{group.category}</span>
-                            {!productIsAvailable ? (
-                              <span className="catalog-card__availability-badge">Indisponivel no momento</span>
-                            ) : null}
-                          </div>
-                          <div className="catalog-card__header">
-                            <h3>{product.name}</h3>
+                        <div className="catalog-product-card__body">
+                          <div className="catalog-product-card__header">
+                            <div>
+                              <span className="catalog-product-card__category">{group.category}</span>
+                              <h3>{product.name}</h3>
+                            </div>
                             <strong>
                               {formatCurrency(product.price)} / {getMeasurementUnitLabel(product.measurementUnit)}
                             </strong>
                           </div>
                           {product.description ? (
-                            <p className="catalog-card__description">{product.description}</p>
+                            <p className="catalog-product-card__description">{product.description}</p>
                           ) : null}
-                          <div className="catalog-card__pricing">
-                            <span>
-                              {isFractionalMeasurementUnit(product.measurementUnit)
-                                ? `${buildMeasurementDisplayQuantity(fractionalPreviewQuantity, product.measurementUnit) || buildMeasurementDisplayQuantity(cartQuantity, product.measurementUnit) || getMeasurementUnitLabel(product.measurementUnit)} · ${formatCurrency(fractionalPreviewTotal || 0)}`
-                                : cartQuantity > 0
-                                ? `${cartQuantity} no carrinho`
-                                : 'Pronto para adicionar ao pedido'}
-                            </span>
+                          <div className="catalog-product-card__pricing">
+                            <span>Preco</span>
+                            <strong>{formatCurrency(product.price)}</strong>
                           </div>
-                          {modules.cart || modules.orders ? (
-                            <div className="catalog-card__actions">
+                          <div className="catalog-product-card__summary">
+                            {isFractional
+                              ? `${buildMeasurementDisplayQuantity(fractionalPreviewQuantity, product.measurementUnit) || buildMeasurementDisplayQuantity(cartQuantity, product.measurementUnit) || getMeasurementUnitLabel(product.measurementUnit)} · ${formatCurrency(fractionalPreviewTotal || 0)}`
+                              : cartQuantity > 0
+                              ? `${cartQuantity} no carrinho`
+                              : 'Pronto para adicionar ao pedido'}
+                          </div>
+                          {(modules.cart || modules.orders) ? (
+                            <div className="catalog-product-card__actions">
                               {!productIsAvailable ? (
                                 <Button type="button" disabled>
                                   Indisponivel
                                 </Button>
-                              ) : isFractionalMeasurementUnit(product.measurementUnit) ? (
-                                <div className="catalog-card__fractional">
-                                  <div className="catalog-card__fractional-controls">
+                              ) : isFractional ? (
+                                <div className="catalog-product-card__fractional">
+                                  {fractionalConfig.quickOptions?.length ? (
+                                    <div className="catalog-product-card__quick-options">
+                                      {fractionalConfig.quickOptions.map((option) => (
+                                        <button
+                                          key={option}
+                                          type="button"
+                                          className={`catalog-product-card__quick-option${String(fractionalInputValue) === String(option) ? ' is-active' : ''}`}
+                                          onClick={() => setFractionInput(product.id, String(option))}
+                                        >
+                                          {formatFractionQuickOptionLabel(product.measurementUnit, option)}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                  <div className="catalog-product-card__fractional-editor">
                                     <Button
                                       type="button"
                                       variant="secondary"
-                                      className="catalog-card__fractional-button"
+                                      className="catalog-product-card__fractional-button"
                                       aria-label={`Diminuir quantidade de ${product.name}`}
                                       onClick={() => adjustFractionInput(product, -1)}
                                     >
                                       -
                                     </Button>
-                                    <label className="catalog-card__fractional-input">
+                                    <label className="catalog-product-card__fractional-input">
                                       <span>{fractionalConfig.label}</span>
                                       <input
                                         type="number"
@@ -2025,14 +2241,14 @@ export function BusinessCatalogSection({
                                     <Button
                                       type="button"
                                       variant="secondary"
-                                      className="catalog-card__fractional-button"
+                                      className="catalog-product-card__fractional-button"
                                       aria-label={`Aumentar quantidade de ${product.name}`}
                                       onClick={() => adjustFractionInput(product, 1)}
                                     >
                                       +
                                     </Button>
                                   </div>
-                                  <div className="catalog-card__fractional-footer">
+                                  <div className="catalog-product-card__fractional-footer">
                                     <span>
                                       {fractionalPreviewQuantity
                                         ? `${buildMeasurementDisplayQuantity(fractionalPreviewQuantity, product.measurementUnit)} · ${formatCurrency(fractionalPreviewTotal)}`
@@ -2042,15 +2258,15 @@ export function BusinessCatalogSection({
                                       Adicionar
                                     </Button>
                                   </div>
-                                  <small className="catalog-card__cart-note">
+                                  <small className="catalog-product-card__note">
                                     {cartQuantity > 0
                                       ? `No carrinho: ${buildMeasurementDisplayQuantity(cartQuantity, product.measurementUnit)}`
                                       : 'O valor e calculado automaticamente conforme a quantidade escolhida.'}
                                   </small>
                                 </div>
                               ) : cartQuantity > 0 ? (
-                                <div className="catalog-card__unit-controls">
-                                  <div className="catalog-card__unit-stepper" aria-label={`Controles de quantidade para ${product.name}`}>
+                                <div className="catalog-product-card__unit-controls">
+                                  <div className="catalog-product-card__stepper" aria-label={`Controles de quantidade para ${product.name}`}>
                                     <Button
                                       type="button"
                                       variant="secondary"
@@ -2076,7 +2292,7 @@ export function BusinessCatalogSection({
                                       +
                                     </Button>
                                   </div>
-                                  <small className="catalog-card__cart-note">{cartQuantity} no carrinho</small>
+                                  <small className="catalog-product-card__note">{cartQuantity} no carrinho</small>
                                 </div>
                               ) : (
                                 <Button

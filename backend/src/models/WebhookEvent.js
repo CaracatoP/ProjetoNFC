@@ -19,6 +19,7 @@ const webhookEventSchema = new mongoose.Schema(
     processedAt: { type: Date, default: null },
     errorCode: { type: String, trim: true, default: '' },
     errorMessage: { type: String, trim: true, default: '' },
+    metadata: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
   },
   baseSchemaOptions,
 );

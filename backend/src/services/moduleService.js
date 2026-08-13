@@ -83,8 +83,10 @@ import {
   buildAsaasExternalReference,
   buildAsaasSplitRules,
   createAsaasPaymentCharge,
+  getAsaasPayment,
   getAsaasPixQrCode,
   mapAsaasPaymentStatus,
+  normalizeAsaasPixQrCodeImage,
 } from './asaasService.js';
 import { resolveEffectiveAsaasSplitSettings } from './adminFinanceService.js';
 import { resolveOrCreateAsaasPaymentCustomer } from './paymentCustomerService.js';
@@ -263,8 +265,101 @@ function buildPublicOrderCheckoutResponse(order, checkoutToken = '') {
     : serializedOrder;
 }
 
-function serializePublicOrderPaymentRecovery(order) {
+async function serializePublicOrderPaymentRecovery(order, business = null) {
   const serializedOrder = serializeOrderRecord(order);
+  let recoveredPayment = serializedOrder.payment;
+
+  if (
+    business &&
+    recoveredPayment?.provider === PAYMENT_PROVIDERS.ASAAS &&
+    recoveredPayment?.providerPaymentId
+  ) {
+    try {
+      const storedPaymentSettings = resolveBusinessPaymentSettings(business, { mode: 'storage' });
+      const financeSettings = await getPlatformFinanceSettings();
+      const asaasContext = resolveAsaasProviderContext({
+        business,
+        paymentSettings: storedPaymentSettings,
+        financeSettings,
+      });
+      const providerPaymentId = String(recoveredPayment.providerPaymentId || '').trim();
+      const providerPayment = await getAsaasPayment({
+        apiKey: asaasContext.apiKey,
+        paymentId: providerPaymentId,
+      });
+      const paymentPatch = buildAsaasWebhookPaymentPatch(
+        {
+          ...serializedOrder,
+          payment: recoveredPayment,
+        },
+        providerPayment,
+        'PUBLIC_PAYMENT_RECOVERY',
+        new Date(),
+      );
+
+      recoveredPayment = paymentPatch.payment;
+
+      if (
+        recoveredPayment?.method === PAYMENT_METHODS.PIX &&
+        recoveredPayment?.status === PAYMENT_STATUS.PENDING &&
+        providerPaymentId &&
+        (!recoveredPayment?.pixCopyPaste || !recoveredPayment?.pixQrCode)
+      ) {
+        try {
+          const pixQrCode = await getAsaasPixQrCode({
+            apiKey: asaasContext.apiKey,
+            paymentId: providerPaymentId,
+          });
+
+          logger.info(
+            {
+              businessId: String(business?._id || ''),
+              orderId: String(serializedOrder.id || ''),
+              providerPaymentId,
+              paymentProvider: PAYMENT_PROVIDERS.ASAAS,
+              hasEncodedImage: Boolean(pixQrCode.encodedImage),
+              hasPayload: Boolean(pixQrCode.payload),
+              encodedImageLength: pixQrCode.encodedImage ? pixQrCode.encodedImage.length : 0,
+            },
+            'Rehydrated Asaas Pix QR code during public payment recovery',
+          );
+
+          recoveredPayment = normalizeOrderPayment(
+            {
+              ...recoveredPayment,
+              pixCopyPaste: recoveredPayment.pixCopyPaste || pixQrCode.payload,
+              pixQrCode: recoveredPayment.pixQrCode || normalizeAsaasPixQrCodeImage(pixQrCode.encodedImage),
+            },
+            serializedOrder.total || recoveredPayment.amount || 0,
+          );
+        } catch (error) {
+          logger.warn(
+            {
+              businessId: String(business?._id || ''),
+              orderId: String(serializedOrder.id || ''),
+              providerPaymentId,
+              paymentProvider: PAYMENT_PROVIDERS.ASAAS,
+              code: error?.code,
+              statusCode: error?.statusCode,
+            },
+            'Failed to rehydrate Asaas Pix QR code during public payment recovery',
+          );
+        }
+      }
+    } catch (error) {
+      logger.warn(
+        {
+          businessId: String(business?._id || ''),
+          orderId: String(serializedOrder.id || ''),
+          providerPaymentId: String(recoveredPayment?.providerPaymentId || '').trim(),
+          paymentProvider: PAYMENT_PROVIDERS.ASAAS,
+          code: error?.code,
+          statusCode: error?.statusCode,
+        },
+        'Failed to refresh Asaas payment while recovering a public order',
+      );
+    }
+  }
 
   return {
     id: serializedOrder.id || '',
@@ -272,7 +367,7 @@ function serializePublicOrderPaymentRecovery(order) {
     status: serializedOrder.status || 'received',
     createdAt: serializedOrder.createdAt || null,
     updatedAt: serializedOrder.updatedAt || null,
-    payment: serializedOrder.payment,
+    payment: recoveredPayment,
   };
 }
 
@@ -1422,7 +1517,7 @@ export async function createPublicOrder(slug, payload) {
             {
               ...nextPayment,
               pixCopyPaste: pixQrCode.payload,
-              pixQrCode: pixQrCode.encodedImage,
+              pixQrCode: normalizeAsaasPixQrCodeImage(pixQrCode.encodedImage),
             },
             total,
           );
@@ -1548,7 +1643,7 @@ export async function getPublicOrderPaymentByCheckoutToken(slug, checkoutToken) 
     throw new AppError('Pagamento nao encontrado.', 404, 'public_order_payment_not_found');
   }
 
-  return serializePublicOrderPaymentRecovery(order);
+  return serializePublicOrderPaymentRecovery(order, business);
 }
 
 export async function listTenantOrders(businessId) {

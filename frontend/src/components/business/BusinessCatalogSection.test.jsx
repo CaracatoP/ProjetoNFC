@@ -252,12 +252,13 @@ describe('BusinessCatalogSection', () => {
     const finalizacaoCard = finalizacaoGroup?.parentElement?.querySelector('.catalog-card') || screen.getByText('Pomada modeladora').closest('.catalog-card');
     await user.click(within(finalizacaoCard).getByRole('button', { name: 'Adicionar' }));
     await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
+    await user.click(screen.getByRole('button', { name: 'Retirada' }));
+    await user.click(screen.getByRole('button', { name: 'Pagamento na retirada' }));
     await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
     expect(screen.getByText('Revise os campos destacados antes de continuar.')).toBeInTheDocument();
     expect(screen.getAllByText('Informe seu nome.').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Informe seu telefone.').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Escolha entrega ou retirada.').length).toBeGreaterThan(0);
     expect(screen.getByLabelText('Nome')).toHaveAttribute('aria-invalid', 'true');
     await waitFor(() => {
       expect(screen.getByLabelText('Nome')).toHaveFocus();
@@ -293,18 +294,19 @@ describe('BusinessCatalogSection', () => {
     await user.type(screen.getByLabelText('Nome'), 'Marina');
     await user.type(screen.getByLabelText('Telefone'), '5511987654321');
     await user.click(screen.getByRole('button', { name: 'Entrega' }));
+
+    expect(screen.getByRole('button', { name: /Finalizar pedido/i })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: /Pix/i }));
     await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
     expect(screen.getByText('Revise os campos destacados antes de continuar.')).toBeInTheDocument();
     expect(screen.getAllByText('Informe o endereco para entrega.').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Escolha uma forma de pagamento.').length).toBeGreaterThan(0);
     expect(screen.getByLabelText('Endereco')).toHaveAttribute('aria-invalid', 'true');
     expect(onSubmitOrder).not.toHaveBeenCalled();
 
     await user.type(screen.getByLabelText('Endereco'), 'Rua das Carnes, 123');
     expect(screen.queryByText('Informe o endereco para entrega.')).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /Pix/i }));
     await waitFor(() => {
       expect(screen.queryByText('Revise os campos destacados antes de continuar.')).not.toBeInTheDocument();
     });

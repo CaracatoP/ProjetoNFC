@@ -160,7 +160,29 @@ describe('Asaas webhook routes', () => {
       ],
     });
 
-    return { business, order };
+    const externalReference = `tenant:${business._id.toString()}:order:${order._id.toString()}`;
+
+    await Payment.create({
+      businessId: business._id,
+      orderId: order._id,
+      provider: 'asaas',
+      method: 'pix',
+      paymentArchitecture: 'centralized',
+      billingType: 'PIX',
+      status: 'pending',
+      providerStatus: 'PENDING',
+      providerPaymentId: 'pay_123',
+      providerCustomerId: 'cus_123',
+      externalReference,
+      amount: 79.9,
+      grossAmount: 79.9,
+      platformFeeAmount: 4,
+      tenantNetAmount: 75.9,
+      invoiceUrl: 'https://sandbox.asaas.com/i/pay_123',
+      providerUpdatedAt: new Date('2026-06-01T18:00:00.000Z'),
+    });
+
+    return { business, order, externalReference };
   }
 
   it('marks the tenant order as paid when Asaas confirms a paid payment', async () => {
@@ -521,6 +543,207 @@ describe('Asaas webhook routes', () => {
     expect(updatedOrder.payment.status).toBe('paid');
     expect(storedPayment.status).toBe('paid');
     expect(storedPayment.providerStatus).toBe('PENDING');
+  });
+
+  it('marks an existing Asaas order payment as cancelled when PAYMENT_DELETED arrives', async () => {
+    const { business, order } = await createAsaasOrderFixture();
+    const externalReference = `tenant:${business._id.toString()}:order:${order._id.toString()}`;
+
+    const response = await request(app)
+      .post('/api/webhooks/asaas')
+      .set('asaas-access-token', 'asaas-webhook-token')
+      .send({
+        id: 'evt_payment_deleted_existing_order',
+        event: 'PAYMENT_DELETED',
+        payment: {
+          id: 'pay_123',
+          externalReference,
+        },
+      });
+
+    expect(response.status).toBe(204);
+    expect(asaasServiceMock.getAsaasPayment).not.toHaveBeenCalled();
+
+    const updatedOrder = await Order.findById(order._id).lean();
+    expect(updatedOrder.payment).toEqual(
+      expect.objectContaining({
+        provider: 'asaas',
+        status: 'cancelled',
+        providerPaymentId: 'pay_123',
+      }),
+    );
+    expect(updatedOrder.paymentEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'payment_cancelled',
+          provider: 'asaas',
+          providerEvent: 'PAYMENT_DELETED',
+          providerPaymentId: 'pay_123',
+        }),
+      ]),
+    );
+
+    expect(await Payment.findOne({ provider: 'asaas', providerPaymentId: 'pay_123' }).lean()).toEqual(
+      expect.objectContaining({
+        businessId: business._id,
+        orderId: order._id,
+        status: 'cancelled',
+        providerStatus: 'CANCELLED',
+      }),
+    );
+    expect(await WebhookEvent.findOne({ provider: 'asaas', eventId: 'evt_payment_deleted_existing_order' }).lean()).toEqual(
+      expect.objectContaining({
+        status: 'processed',
+        eventType: 'PAYMENT_DELETED',
+        providerResourceId: 'pay_123',
+        resourceId: order._id.toString(),
+      }),
+    );
+  });
+
+  it('ignores PAYMENT_DELETED when no local Payment exists and does not create financial records', async () => {
+    const { order } = await createAsaasOrderFixture();
+    const externalReference = `tenant:${order.businessId.toString()}:order:${order._id.toString()}`;
+    await Payment.deleteMany({ provider: 'asaas', providerPaymentId: 'pay_123' });
+
+    const response = await request(app)
+      .post('/api/webhooks/asaas')
+      .set('asaas-access-token', 'asaas-webhook-token')
+      .send({
+        id: 'evt_payment_deleted_without_payment',
+        event: 'PAYMENT_DELETED',
+        payment: {
+          id: 'pay_123',
+          externalReference,
+        },
+      });
+
+    expect(response.status).toBe(204);
+    expect(asaasServiceMock.getAsaasPayment).not.toHaveBeenCalled();
+    expect(await Payment.countDocuments({ provider: 'asaas', providerPaymentId: 'pay_123' })).toBe(0);
+    expect(await TenantLedgerEntry.countDocuments({ businessId: order.businessId })).toBe(0);
+
+    const untouchedOrder = await Order.findById(order._id).lean();
+    expect(untouchedOrder.payment.status).toBe('pending');
+    expect(await WebhookEvent.findOne({ provider: 'asaas', eventId: 'evt_payment_deleted_without_payment' }).lean()).toEqual(
+      expect.objectContaining({
+        status: 'ignored',
+        errorCode: 'payment_not_found',
+        providerResourceId: 'pay_123',
+      }),
+    );
+  });
+
+  it('reconciles PAYMENT_DELETED on the local Payment when the Order no longer exists', async () => {
+    const { business, order } = await createAsaasOrderFixture();
+    const externalReference = `tenant:${business._id.toString()}:order:${order._id.toString()}`;
+    await Order.deleteOne({ _id: order._id });
+
+    const response = await request(app)
+      .post('/api/webhooks/asaas')
+      .set('asaas-access-token', 'asaas-webhook-token')
+      .send({
+        id: 'evt_payment_deleted_without_order',
+        event: 'PAYMENT_DELETED',
+        payment: {
+          id: 'pay_123',
+          externalReference,
+        },
+      });
+
+    expect(response.status).toBe(204);
+    expect(asaasServiceMock.getAsaasPayment).not.toHaveBeenCalled();
+
+    expect(await Payment.findOne({ provider: 'asaas', providerPaymentId: 'pay_123' }).lean()).toEqual(
+      expect.objectContaining({
+        businessId: business._id,
+        orderId: order._id,
+        status: 'cancelled',
+        providerStatus: 'DELETED',
+      }),
+    );
+    expect(await TenantLedgerEntry.countDocuments({ businessId: business._id })).toBe(0);
+    expect(await WebhookEvent.findOne({ provider: 'asaas', eventId: 'evt_payment_deleted_without_order' }).lean()).toEqual(
+      expect.objectContaining({
+        status: 'processed',
+        resourceType: 'payment',
+      }),
+    );
+  });
+
+  it('ignores authenticated orphan events with invalid externalReference idempotently', async () => {
+    const payload = {
+      id: 'evt_payment_invalid_external_reference',
+      event: 'PAYMENT_RECEIVED',
+      payment: {
+        id: 'pay_orphan_invalid_reference',
+        externalReference: 'legacy-sandbox-charge',
+      },
+    };
+
+    const firstResponse = await request(app)
+      .post('/api/webhooks/asaas')
+      .set('asaas-access-token', 'asaas-webhook-token')
+      .send(payload);
+    const secondResponse = await request(app)
+      .post('/api/webhooks/asaas')
+      .set('asaas-access-token', 'asaas-webhook-token')
+      .send(payload);
+
+    expect(firstResponse.status).toBe(204);
+    expect(secondResponse.status).toBe(204);
+    expect(asaasServiceMock.getAsaasPayment).not.toHaveBeenCalled();
+    expect(await WebhookEvent.countDocuments({ provider: 'asaas', eventId: 'evt_payment_invalid_external_reference' })).toBe(1);
+    expect(await WebhookEvent.findOne({ provider: 'asaas', eventId: 'evt_payment_invalid_external_reference' }).lean()).toEqual(
+      expect.objectContaining({
+        status: 'ignored',
+        errorCode: 'invalid_external_reference',
+      }),
+    );
+  });
+
+  it('updates Payment but does not create ledger entries when a received payment has no local Order', async () => {
+    const { business, order } = await createAsaasOrderFixture();
+    const externalReference = `tenant:${business._id.toString()}:order:${order._id.toString()}`;
+    await Order.deleteOne({ _id: order._id });
+
+    asaasServiceMock.getAsaasPayment.mockResolvedValue({
+      id: 'pay_123',
+      status: 'RECEIVED',
+      value: 79.9,
+      externalReference,
+      confirmedDate: '2026-06-01T18:10:00.000Z',
+    });
+
+    const response = await request(app)
+      .post('/api/webhooks/asaas')
+      .set('asaas-access-token', 'asaas-webhook-token')
+      .send({
+        id: 'evt_payment_received_without_order',
+        event: 'PAYMENT_RECEIVED',
+        payment: {
+          id: 'pay_123',
+          externalReference,
+        },
+      });
+
+    expect(response.status).toBe(204);
+    expect(asaasServiceMock.getAsaasPayment).toHaveBeenCalledTimes(1);
+    expect(await Payment.findOne({ provider: 'asaas', providerPaymentId: 'pay_123' }).lean()).toEqual(
+      expect.objectContaining({
+        businessId: business._id,
+        orderId: order._id,
+        status: 'paid',
+        providerStatus: 'RECEIVED',
+      }),
+    );
+    expect(await TenantLedgerEntry.countDocuments({ businessId: business._id })).toBe(0);
+    expect(await WebhookEvent.findOne({ provider: 'asaas', eventId: 'evt_payment_received_without_order' }).lean()).toEqual(
+      expect.objectContaining({
+        status: 'processed',
+        resourceType: 'payment',
+      }),
+    );
   });
 
   it('rejects cross-tenant updates when Asaas reports another tenant in externalReference', async () => {
