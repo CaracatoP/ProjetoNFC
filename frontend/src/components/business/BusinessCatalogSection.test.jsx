@@ -72,6 +72,35 @@ const asaasBusinessFixture = {
   },
 };
 
+const asaasCentralizedPublicFixture = {
+  ...businessFixture,
+  paymentSettings: {
+    enabled: true,
+    provider: 'asaas',
+    methods: {
+      pix: true,
+      creditCard: true,
+      debitCard: true,
+      cashOnPickup: true,
+      cashOnDelivery: true,
+    },
+    pix: {
+      key: 'pix@asaas.local',
+      merchantName: 'Barbearia Estilo Vivo',
+      merchantCity: 'Sao Paulo',
+    },
+    asaas: {
+      enabled: true,
+      connected: false,
+      hasApiKey: false,
+      walletId: '',
+      accountEmail: '',
+      accountName: '',
+      status: 'active',
+    },
+  },
+};
+
 const productsFixture = [
   {
     id: 'product-1',
@@ -576,6 +605,31 @@ describe('BusinessCatalogSection', () => {
     await user.click(screen.getByRole('button', { name: 'Pix' }));
 
     expect(screen.getByLabelText('CPF ou CNPJ')).toHaveValue('529.982.247-25');
+  });
+
+  it('renders the CPF/CNPJ field for centralized Asaas Pix even when the public payload does not expose a connected subaccount', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <BusinessCatalogSection
+        business={asaasCentralizedPublicFixture}
+        tenantSlug="barbearia-estilo-vivo"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={vi.fn()}
+      />,
+    );
+
+    const catalogCard = screen.getByText('Pomada modeladora').closest('.catalog-card');
+    await user.click(within(catalogCard).getByRole('button', { name: 'Adicionar' }));
+    await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
+    await user.click(screen.getByRole('button', { name: 'Retirada' }));
+    await user.click(screen.getByRole('button', { name: 'Pix' }));
+
+    expect(screen.getByLabelText('CPF ou CNPJ')).toBeInTheDocument();
+    expect(screen.getByText('Voce recebera o QR Code para pagamento.')).toBeInTheDocument();
+    expect(screen.getByText('Online')).toBeInTheDocument();
   });
 
   it('blocks submit when the Asaas Pix document is missing or invalid', async () => {

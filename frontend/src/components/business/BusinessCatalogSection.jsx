@@ -195,12 +195,19 @@ function isOnlineCheckoutMethod(method) {
   );
 }
 
+function usesHostedCheckoutProvider(method, paymentSettings = {}, provider) {
+  const normalizedSettings = normalizeBusinessPaymentSettings(paymentSettings);
+
+  return (
+    isOnlineCheckoutMethod(method) &&
+    normalizedSettings.provider === provider &&
+    isBusinessPaymentMethodEnabled(normalizedSettings, method)
+  );
+}
+
 function isAsaasPaymentMethod(method, paymentSettings = {}) {
   return (
-    paymentSettings?.provider === PAYMENT_PROVIDERS.ASAAS &&
-    paymentSettings?.asaas?.enabled &&
-    paymentSettings?.asaas?.connected &&
-    isOnlineCheckoutMethod(method)
+    usesHostedCheckoutProvider(method, paymentSettings, PAYMENT_PROVIDERS.ASAAS)
   );
 }
 
@@ -301,7 +308,7 @@ function isAsaasPixCheckoutResult(order) {
 function requiresCheckoutCustomerDocument(checkout, paymentSettings = {}) {
   return (
     checkout?.paymentMethod === PAYMENT_METHODS.PIX &&
-    isAsaasPaymentMethod(checkout?.paymentMethod, paymentSettings)
+    usesHostedCheckoutProvider(checkout?.paymentMethod, paymentSettings, PAYMENT_PROVIDERS.ASAAS)
   );
 }
 
