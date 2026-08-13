@@ -5,6 +5,9 @@ import { createAsaasClient } from '../integrations/asaas/asaas.client.js';
 import { getAsaasRuntimeConfig } from '../integrations/asaas/asaas.config.js';
 import { AsaasNotConfiguredError } from '../integrations/asaas/asaas.errors.js';
 
+const DATA_IMAGE_BASE64_PREFIX_PATTERN = /^data:image\/[a-z0-9.+-]+;base64,/i;
+const BASE64_IMAGE_CONTENT_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
+
 async function asaasRequest({ apiKey, method, path, body, operation }) {
   try {
     return await createAsaasClient({ apiKey }).request({
@@ -172,6 +175,26 @@ export async function getAsaasPayment({ apiKey, paymentId }) {
   });
 }
 
+export function normalizeAsaasPixQrCodeImage(encodedImage) {
+  const rawValue = String(encodedImage || '').trim();
+
+  if (!rawValue) {
+    return '';
+  }
+
+  if (DATA_IMAGE_BASE64_PREFIX_PATTERN.test(rawValue)) {
+    return rawValue;
+  }
+
+  const compactValue = rawValue.replace(/\s+/g, '');
+
+  if (BASE64_IMAGE_CONTENT_PATTERN.test(compactValue)) {
+    return `data:image/png;base64,${compactValue}`;
+  }
+
+  return rawValue;
+}
+
 export async function getAsaasPixQrCode({ apiKey, paymentId }) {
   const response = await asaasRequest({
     apiKey,
@@ -182,7 +205,7 @@ export async function getAsaasPixQrCode({ apiKey, paymentId }) {
 
   return {
     payload: String(response.payload || '').trim(),
-    encodedImage: String(response.encodedImage || '').trim(),
+    encodedImage: normalizeAsaasPixQrCodeImage(response.encodedImage),
   };
 }
 

@@ -1099,7 +1099,8 @@ describe('Public routes', () => {
     });
     asaasServiceMock.getAsaasPixQrCode.mockResolvedValue({
       payload: '000201010212',
-      encodedImage: 'data:image/png;base64,abc123',
+      encodedImage:
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z2QAAAABJRU5ErkJggg==',
     });
 
     const response = await request(app)
@@ -1137,7 +1138,8 @@ describe('Public routes', () => {
         providerCustomerId: 'cus_123',
         invoiceUrl: 'https://sandbox.asaas.com/i/pay_123',
         pixCopyPaste: '000201010212',
-        pixQrCode: 'data:image/png;base64,abc123',
+        pixQrCode:
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z2QAAAABJRU5ErkJggg==',
         platformFeeAmount: 7.5,
         tenantNetAmount: 142.4,
       }),
@@ -1184,14 +1186,31 @@ describe('Public routes', () => {
       (call) =>
         call[1] === 'Resolved public order payment provider' ||
         call[1] === 'Creating Asaas payment charge for public order' ||
-        call[1] === 'Asaas payment charge created for public order',
+        call[1] === 'Asaas payment charge created for public order' ||
+        call[1] === 'Retrieved Asaas Pix QR code for public order',
     );
     expect(checkoutLogCalls.length).toBeGreaterThan(0);
     checkoutLogCalls.forEach(([payload]) => {
       expect(payload.customerDocument).toBeUndefined();
       expect(payload.cpfCnpj).toBeUndefined();
       expect(payload.document).toBeUndefined();
+      expect(payload.pixCopyPaste).toBeUndefined();
+      expect(payload.payload).toBeUndefined();
+      expect(payload.encodedImage).toBeUndefined();
+      expect(payload.pixQrCode).toBeUndefined();
     });
+    expect(
+      loggerInfoSpy.mock.calls.find((call) => call[1] === 'Retrieved Asaas Pix QR code for public order')?.[0],
+    ).toEqual(
+      expect.objectContaining({
+        providerPaymentId: 'pay_123',
+        paymentProvider: 'asaas',
+        hasEncodedImage: true,
+        hasPayload: true,
+        encodedImageLength:
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z2QAAAABJRU5ErkJggg=='.length,
+      }),
+    );
     expect(mercadoPagoServiceMock.createMercadoPagoCheckoutPreference).not.toHaveBeenCalled();
     loggerInfoSpy.mockRestore();
   });

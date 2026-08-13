@@ -715,6 +715,13 @@ describe('BusinessCatalogSection', () => {
 
   it('renders the Asaas Pix QR image returned by the backend and explains that confirmation is automatic', async () => {
     const user = userEvent.setup();
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: writeTextMock,
+      },
+    });
     const onSubmitOrder = vi.fn().mockResolvedValue({
       id: 'order-asaas-pix-1',
       total: 39.9,
@@ -764,6 +771,10 @@ describe('BusinessCatalogSection', () => {
       'src',
       'data:image/png;base64,asaasqr123',
     );
+    await user.click(screen.getByRole('button', { name: /Copiar codigo Pix/i }));
+    await waitFor(() => {
+      expect(writeTextMock).toHaveBeenCalledWith('000201010212asaaspixpayload');
+    });
     expect(
       screen.getAllByText(
         /Assim que o pagamento for confirmado, o status do pedido sera atualizado automaticamente/i,

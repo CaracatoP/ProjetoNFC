@@ -1366,6 +1366,18 @@ export async function createPublicOrder(slug, payload) {
             apiKey: asaasContext.apiKey,
             paymentId: providerPaymentId,
           });
+          logger.info(
+            {
+              businessId: String(business._id || ''),
+              orderId: String(created._id || ''),
+              providerPaymentId,
+              paymentProvider: PAYMENT_PROVIDERS.ASAAS,
+              hasEncodedImage: Boolean(pixQrCode.encodedImage),
+              hasPayload: Boolean(pixQrCode.payload),
+              encodedImageLength: pixQrCode.encodedImage ? pixQrCode.encodedImage.length : 0,
+            },
+            'Retrieved Asaas Pix QR code for public order',
+          );
 
           nextPayment = normalizeOrderPayment(
             {

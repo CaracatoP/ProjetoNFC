@@ -10,6 +10,7 @@ let createAsaasCustomer;
 let listAsaasCustomers;
 let createAsaasPaymentCharge;
 let getAsaasPixQrCode;
+let normalizeAsaasPixQrCodeImage;
 let testAsaasConnection;
 
 function mockAsaasJsonResponse(payload, options = {}) {
@@ -38,6 +39,7 @@ describe('asaasService', () => {
       listAsaasCustomers,
       createAsaasPaymentCharge,
       getAsaasPixQrCode,
+      normalizeAsaasPixQrCodeImage,
       testAsaasConnection,
     } = await import('./asaasService.js'));
   });
@@ -293,7 +295,7 @@ describe('asaasService', () => {
     fetchMock.mockResolvedValue(
       mockAsaasJsonResponse({
         payload: '000201010212',
-        encodedImage: 'data:image/png;base64,abc123',
+        encodedImage: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z2QAAAABJRU5ErkJggg==',
       }),
     );
 
@@ -304,7 +306,8 @@ describe('asaasService', () => {
 
     expect(result).toEqual({
       payload: '000201010212',
-      encodedImage: 'data:image/png;base64,abc123',
+      encodedImage:
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z2QAAAABJRU5ErkJggg==',
     });
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api-sandbox.asaas.com/v3/payments/pay_123/pixQrCode',
@@ -316,6 +319,17 @@ describe('asaasService', () => {
         }),
       }),
     );
+  });
+
+  it('keeps an already normalized Asaas Pix QR image without duplicating the data URI prefix', () => {
+    expect(normalizeAsaasPixQrCodeImage('data:image/png;base64,abc123')).toBe(
+      'data:image/png;base64,abc123',
+    );
+  });
+
+  it('normalizes a raw base64 Asaas Pix QR image to a browser-safe data URI', () => {
+    expect(normalizeAsaasPixQrCodeImage('abc123==')).toBe('data:image/png;base64,abc123==');
+    expect(normalizeAsaasPixQrCodeImage('aGVs\n bG8=')).toBe('data:image/png;base64,aGVsbG8=');
   });
 
   it('tests the root Asaas connection without exposing the API key', async () => {
