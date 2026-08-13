@@ -1,4 +1,5 @@
 import { PaymentCustomer } from '../models/PaymentCustomer.js';
+import { normalizeCustomerDocument } from '../../../shared/utils/customerDocument.js';
 
 const CUSTOMER_CREATION_STALE_MS = 2 * 60 * 1000;
 
@@ -11,7 +12,7 @@ export function normalizePaymentCustomerEmail(value) {
 }
 
 export function normalizePaymentCustomerDocument(value) {
-  return String(value || '').replace(/\D/g, '');
+  return normalizeCustomerDocument(value);
 }
 
 export function resolvePaymentCustomerIdentity({

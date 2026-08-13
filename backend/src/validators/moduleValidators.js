@@ -7,6 +7,10 @@ import {
   PRODUCT_MEASUREMENT_UNIT_VALUES,
 } from '../../../shared/constants/index.js';
 import { normalizeLegacyPaymentMethodAlias } from '../../../shared/utils/businessPayment.js';
+import {
+  normalizeCustomerDocument,
+  validateCustomerDocument,
+} from '../../../shared/utils/customerDocument.js';
 import { requiresIntegerMeasurementQuantity } from '../../../shared/utils/productMeasurement.js';
 import { objectIdSchema, optionalObjectIdSchema } from './objectId.js';
 
@@ -152,12 +156,16 @@ export const orderBodySchema = z.preprocess(
     return {
       ...value,
       deliveryType: normalizedDeliveryType,
+      customerDocument: normalizeCustomerDocument(
+        value.customerDocument || value.document || value.cpfCnpj || value.customer?.document,
+      ),
       payment,
     };
   },
   z.object({
     customerName: z.string().min(2),
     customerPhone: z.string().min(8),
+    customerDocument: optionalString,
     items: z.array(orderItemBodySchema).min(1),
     deliveryType: optionalDeliveryTypeSchema,
     address: optionalString,
@@ -168,6 +176,18 @@ export const orderBodySchema = z.preprocess(
         provider: optionalPaymentProviderSchema,
       })
       .optional(),
+  }).superRefine((value, context) => {
+    const documentValidation = validateCustomerDocument(value.customerDocument || '', {
+      required: false,
+    });
+
+    if (!documentValidation.isValid && documentValidation.normalizedValue) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['customerDocument'],
+        message: documentValidation.message,
+      });
+    }
   }),
 );
 

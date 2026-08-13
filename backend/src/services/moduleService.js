@@ -60,6 +60,10 @@ import {
   normalizeProductMeasurement,
 } from '../../../shared/utils/productMeasurement.js';
 import {
+  normalizeCustomerDocument,
+  validateCustomerDocument,
+} from '../../../shared/utils/customerDocument.js';
+import {
   normalizeProductAvailability,
   normalizeProductInventory,
 } from '../../../shared/utils/productInventory.js';
@@ -577,6 +581,44 @@ function buildAsaasPaymentReferencePayload({
     receivedAt: normalizedPayment.receivedAt,
     providerUpdatedAt: occurredAt,
   };
+}
+
+function requiresAsaasCustomerDocument(payment = {}) {
+  return (
+    payment?.provider === PAYMENT_PROVIDERS.ASAAS &&
+    payment?.method === PAYMENT_METHODS.PIX
+  );
+}
+
+function resolveCheckoutCustomerDocument(payload = {}) {
+  return normalizeCustomerDocument(
+    payload.customerDocument || payload.document || payload.cpfCnpj || payload.customer?.document,
+  );
+}
+
+function assertValidCheckoutCustomerDocument(payload = {}) {
+  const validation = validateCustomerDocument(resolveCheckoutCustomerDocument(payload), {
+    required: true,
+  });
+
+  if (validation.isValid) {
+    return validation.normalizedValue;
+  }
+
+  throw new AppError(
+    validation.message,
+    400,
+    validation.errorCode === 'document_required'
+      ? 'order_customer_document_required'
+      : 'order_customer_document_invalid',
+    [
+      {
+        field: 'customerDocument',
+        message: validation.message,
+        type: validation.type || 'document',
+      },
+    ],
+  );
 }
 
 async function buildPublicOrderPaymentSnapshot(
@@ -1137,12 +1179,16 @@ export async function createPublicOrder(slug, payload) {
   const normalizedPayload = {
     ...payload,
     deliveryType,
+    customerDocument: resolveCheckoutCustomerDocument(payload),
     payment: {
       ...(payload?.payment || {}),
       method: paymentMethod,
     },
   };
   const payment = await buildPublicOrderPaymentSnapshot(business, normalizedPayload, total, receivedAt);
+  const customerDocument = requiresAsaasCustomerDocument(payment)
+    ? assertValidCheckoutCustomerDocument(normalizedPayload)
+    : normalizedPayload.customerDocument;
   logger.info(
     {
       businessId: String(business._id || ''),
@@ -1210,9 +1256,6 @@ export async function createPublicOrder(slug, payload) {
       const customerName = String(payload.customerName || '').trim();
       const customerPhone = String(payload.customerPhone || '').trim();
       const customerEmail = String(payload.customerEmail || payload.email || '').trim();
-      const customerDocument = String(
-        payload.customerDocument || payload.document || payload.cpfCnpj || '',
-      ).trim();
       const customer = await resolveOrCreateAsaasPaymentCustomer({
         businessId: business._id,
         apiKey: asaasContext.apiKey,

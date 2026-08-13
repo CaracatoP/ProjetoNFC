@@ -540,6 +540,125 @@ describe('BusinessCatalogSection', () => {
     });
   });
 
+  it('shows the CPF/CNPJ field only for Asaas Pix and preserves the value when the shopper switches payment methods', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <BusinessCatalogSection
+        business={asaasBusinessFixture}
+        tenantSlug="barbearia-estilo-vivo"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={vi.fn()}
+      />,
+    );
+
+    const catalogCard = screen.getByText('Pomada modeladora').closest('.catalog-card');
+    await user.click(within(catalogCard).getByRole('button', { name: 'Adicionar' }));
+    await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
+    await user.click(screen.getByRole('button', { name: 'Retirada' }));
+
+    expect(screen.queryByLabelText('CPF ou CNPJ')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Pix' }));
+
+    expect(screen.getByLabelText('CPF ou CNPJ')).toBeInTheDocument();
+    expect(screen.getByText('Necessario para gerar o pagamento pelo Asaas.')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('CPF ou CNPJ'), '52998224725');
+    expect(screen.getByLabelText('CPF ou CNPJ')).toHaveValue('529.982.247-25');
+
+    await user.click(screen.getByRole('button', { name: 'Pagamento na retirada' }));
+
+    expect(screen.queryByLabelText('CPF ou CNPJ')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Pix' }));
+
+    expect(screen.getByLabelText('CPF ou CNPJ')).toHaveValue('529.982.247-25');
+  });
+
+  it('blocks submit when the Asaas Pix document is missing or invalid', async () => {
+    const user = userEvent.setup();
+    const onSubmitOrder = vi.fn();
+
+    render(
+      <BusinessCatalogSection
+        business={asaasBusinessFixture}
+        tenantSlug="barbearia-estilo-vivo"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={onSubmitOrder}
+      />,
+    );
+
+    const catalogCard = screen.getByText('Pomada modeladora').closest('.catalog-card');
+    await user.click(within(catalogCard).getByRole('button', { name: 'Adicionar' }));
+    await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
+    await user.type(screen.getByLabelText('Nome'), 'Julia');
+    await user.type(screen.getByLabelText('Telefone'), '5511977776666');
+    await user.click(screen.getByRole('button', { name: 'Retirada' }));
+    await user.click(screen.getByRole('button', { name: 'Pix' }));
+    await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
+
+    expect(screen.getAllByText('Informe seu CPF ou CNPJ.').length).toBeGreaterThan(0);
+    expect(onSubmitOrder).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText('CPF ou CNPJ'), '11111111111');
+    await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
+
+    expect(screen.getAllByText('CPF invalido.').length).toBeGreaterThan(0);
+    expect(onSubmitOrder).not.toHaveBeenCalled();
+
+    await user.clear(screen.getByLabelText('CPF ou CNPJ'));
+    await user.type(screen.getByLabelText('CPF ou CNPJ'), '11111111111111');
+    await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
+
+    expect(screen.getAllByText('CNPJ invalido.').length).toBeGreaterThan(0);
+    expect(onSubmitOrder).not.toHaveBeenCalled();
+  });
+
+  it('stops requiring the document when the shopper switches from Asaas Pix to manual pickup payment', async () => {
+    const user = userEvent.setup();
+    const onSubmitOrder = vi.fn().mockResolvedValue(buildOrderSuccess());
+
+    render(
+      <BusinessCatalogSection
+        business={asaasBusinessFixture}
+        tenantSlug="barbearia-estilo-vivo"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={onSubmitOrder}
+      />,
+    );
+
+    const catalogCard = screen.getByText('Pomada modeladora').closest('.catalog-card');
+    await user.click(within(catalogCard).getByRole('button', { name: 'Adicionar' }));
+    await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
+    await user.type(screen.getByLabelText('Nome'), 'Julia');
+    await user.type(screen.getByLabelText('Telefone'), '5511977776666');
+    await user.click(screen.getByRole('button', { name: 'Retirada' }));
+    await user.click(screen.getByRole('button', { name: 'Pix' }));
+    await user.type(screen.getByLabelText('CPF ou CNPJ'), '11111111111');
+    await user.click(screen.getByRole('button', { name: 'Pagamento na retirada' }));
+    await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
+
+    await waitFor(() => {
+      expect(onSubmitOrder).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customerDocument: '',
+          payment: {
+            method: PAYMENT_METHODS.CASH_ON_PICKUP,
+          },
+        }),
+      );
+    });
+
+    expect(screen.queryByText('CPF invalido.')).not.toBeInTheDocument();
+  });
+
   it('renders the Asaas Pix QR image returned by the backend and explains that confirmation is automatic', async () => {
     const user = userEvent.setup();
     const onSubmitOrder = vi.fn().mockResolvedValue({
@@ -573,7 +692,19 @@ describe('BusinessCatalogSection', () => {
     await user.type(screen.getByLabelText('Telefone'), '5511977776666');
     await user.click(screen.getByRole('button', { name: 'Retirada' }));
     await user.click(screen.getByRole('button', { name: 'Pix' }));
+    await user.type(screen.getByLabelText('CPF ou CNPJ'), '52998224725');
     await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
+
+    await waitFor(() => {
+      expect(onSubmitOrder).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customerDocument: '52998224725',
+          payment: {
+            method: PAYMENT_METHODS.PIX,
+          },
+        }),
+      );
+    });
 
     expect(await screen.findByAltText('QR Code Pix do Asaas')).toHaveAttribute(
       'src',
@@ -609,6 +740,7 @@ describe('BusinessCatalogSection', () => {
     await user.type(screen.getByLabelText('Telefone'), '5511977776666');
     await user.click(screen.getByRole('button', { name: 'Retirada' }));
     await user.click(screen.getByRole('button', { name: /Pix/i }));
+    await user.type(screen.getByLabelText('CPF ou CNPJ'), '52998224725');
     await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
 
     expect(screen.getByRole('button', { name: 'Finalizando...' })).toBeDisabled();

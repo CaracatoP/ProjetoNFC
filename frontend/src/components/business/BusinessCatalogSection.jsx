@@ -22,6 +22,11 @@ import {
   normalizeProductAvailability,
   normalizeProductInventory,
 } from '@shared/utils/productInventory.js';
+import {
+  formatCustomerDocument,
+  normalizeCustomerDocument,
+  validateCustomerDocument,
+} from '@shared/utils/customerDocument.js';
 import { Button } from '@/components/common/Button.jsx';
 import { Card } from '@/components/common/Card.jsx';
 import { SectionHeader } from '@/components/common/SectionHeader.jsx';
@@ -69,6 +74,7 @@ function defaultCheckoutState() {
   return {
     customerName: '',
     customerPhone: '',
+    customerDocument: '',
     deliveryType: '',
     address: '',
     notes: '',
@@ -292,7 +298,19 @@ function isAsaasPixCheckoutResult(order) {
   return isPixCheckoutResult(order) && order?.payment?.provider === PAYMENT_PROVIDERS.ASAAS;
 }
 
-function buildCheckoutValidationErrors(checkout, cartItems, checkoutPaymentMethods) {
+function requiresCheckoutCustomerDocument(checkout, paymentSettings = {}) {
+  return (
+    checkout?.paymentMethod === PAYMENT_METHODS.PIX &&
+    isAsaasPaymentMethod(checkout?.paymentMethod, paymentSettings)
+  );
+}
+
+function buildCheckoutValidationErrors(
+  checkout,
+  cartItems,
+  checkoutPaymentMethods,
+  { requiresCustomerDocument = false } = {},
+) {
   const errors = {};
   const customerName = checkout.customerName.trim();
   const customerPhone = normalizePhoneDigits(checkout.customerPhone);
@@ -307,6 +325,16 @@ function buildCheckoutValidationErrors(checkout, cartItems, checkoutPaymentMetho
 
   if (customerPhone.length < 8) {
     errors.customerPhone = customerPhone ? 'Informe um telefone valido.' : 'Informe seu telefone.';
+  }
+
+  if (requiresCustomerDocument) {
+    const documentValidation = validateCustomerDocument(checkout.customerDocument, {
+      required: true,
+    });
+
+    if (!documentValidation.isValid) {
+      errors.customerDocument = documentValidation.message;
+    }
   }
 
   if (!checkout.deliveryType) {
@@ -326,6 +354,43 @@ function buildCheckoutValidationErrors(checkout, cartItems, checkoutPaymentMetho
   }
 
   return errors;
+}
+
+function buildCheckoutFieldErrorsFromRequestError(
+  error,
+  checkout,
+  { requiresCustomerDocument = false } = {},
+) {
+  if (!requiresCustomerDocument) {
+    return {};
+  }
+
+  if (
+    error?.code === 'order_customer_document_required' ||
+    error?.code === 'order_customer_document_invalid'
+  ) {
+    return {
+      customerDocument:
+        String(error?.message || '').trim() ||
+        validateCustomerDocument(checkout.customerDocument, { required: true }).message,
+    };
+  }
+
+  const errorDetails = Array.isArray(error?.details) ? error.details : [];
+  const documentFieldError = errorDetails.find((item) => {
+    const normalizedField = String(item?.field || item?.path || '').trim();
+    return normalizedField === 'customerDocument' || normalizedField === 'cpfCnpj';
+  });
+
+  if (!documentFieldError) {
+    return {};
+  }
+
+  return {
+    customerDocument:
+      String(documentFieldError.message || error?.message || '').trim() ||
+      validateCustomerDocument(checkout.customerDocument, { required: true }).message,
+  };
 }
 
 function redirectToCheckoutUrl(url) {
@@ -532,6 +597,10 @@ export function BusinessCatalogSection({
     () => getAvailablePaymentMethodsForDeliveryType(availablePaymentMethods, checkout.deliveryType),
     [availablePaymentMethods, checkout.deliveryType],
   );
+  const requiresCustomerDocument = useMemo(
+    () => requiresCheckoutCustomerDocument(checkout, paymentSettings),
+    [checkout, paymentSettings],
+  );
 
   useEffect(() => {
     setCart(readStoredCart(tenantSlug));
@@ -675,7 +744,9 @@ export function BusinessCatalogSection({
       return;
     }
 
-    const nextErrors = buildCheckoutValidationErrors(checkout, cartItems, checkoutPaymentMethods);
+    const nextErrors = buildCheckoutValidationErrors(checkout, cartItems, checkoutPaymentMethods, {
+      requiresCustomerDocument,
+    });
     setCheckoutErrors((current) => {
       const unresolvedErrors = Object.fromEntries(
         Object.entries(current).filter(([field]) => nextErrors[field]),
@@ -687,7 +758,7 @@ export function BusinessCatalogSection({
 
       return unresolvedErrors;
     });
-  }, [cartItems, checkout, checkoutErrors, checkoutPaymentMethods]);
+  }, [cartItems, checkout, checkoutErrors, checkoutPaymentMethods, requiresCustomerDocument]);
 
   if (!normalizedProducts.length) {
     return null;
@@ -789,7 +860,7 @@ export function BusinessCatalogSection({
   }
 
   function focusFirstCheckoutError(errors) {
-    const errorOrder = ['cart', 'customerName', 'customerPhone', 'deliveryType', 'address', 'paymentMethod'];
+    const errorOrder = ['cart', 'customerName', 'customerPhone', 'customerDocument', 'deliveryType', 'address', 'paymentMethod'];
     const firstErrorField = errorOrder.find((field) => errors[field]);
     const target = checkoutFieldRefs.current[firstErrorField] || checkoutBodyRef.current;
 
@@ -818,7 +889,9 @@ export function BusinessCatalogSection({
 
     logCheckoutEvent('checkout_submit_started', checkoutContext);
 
-    const validationErrors = buildCheckoutValidationErrors(checkout, cartItems, checkoutPaymentMethods);
+    const validationErrors = buildCheckoutValidationErrors(checkout, cartItems, checkoutPaymentMethods, {
+      requiresCustomerDocument,
+    });
 
     if (Object.keys(validationErrors).length) {
       setCheckoutErrors(validationErrors);
@@ -843,6 +916,9 @@ export function BusinessCatalogSection({
       const createdOrder = await onSubmitOrder?.({
         customerName,
         customerPhone,
+        customerDocument: requiresCustomerDocument
+          ? normalizeCustomerDocument(checkout.customerDocument)
+          : '',
         items: cartItems,
         deliveryType: checkout.deliveryType,
         address: checkout.deliveryType === 'delivery' ? checkout.address.trim() : '',
@@ -919,6 +995,17 @@ export function BusinessCatalogSection({
         redirectToCheckoutUrl(nextPayment.invoiceUrl);
       }
     } catch (error) {
+      const requestFieldErrors = buildCheckoutFieldErrorsFromRequestError(error, checkout, {
+        requiresCustomerDocument,
+      });
+
+      if (Object.keys(requestFieldErrors).length) {
+        setCheckoutErrors(requestFieldErrors);
+        setFeedback('Revise os campos destacados antes de continuar.');
+        focusFirstCheckoutError(requestFieldErrors);
+        return;
+      }
+
       const errorMessage = buildCheckoutErrorMessage(error);
       logCheckoutEvent('checkout_submit_failed', {
         ...checkoutContext,
@@ -1254,6 +1341,40 @@ export function BusinessCatalogSection({
                               />
                               {checkoutErrors.customerPhone ? <small id="checkout-customer-phone-error">{checkoutErrors.customerPhone}</small> : null}
                             </label>
+                            {requiresCustomerDocument ? (
+                              <label className={`admin-field${checkoutErrors.customerDocument ? ' admin-field--invalid' : ''}`}>
+                                <span>CPF ou CNPJ</span>
+                                <input
+                                  ref={(node) => {
+                                    checkoutFieldRefs.current.customerDocument = node;
+                                  }}
+                                  value={checkout.customerDocument}
+                                  onChange={(event) =>
+                                    setCheckout((current) => ({
+                                      ...current,
+                                      customerDocument: formatCustomerDocument(event.target.value),
+                                    }))
+                                  }
+                                  aria-label="CPF ou CNPJ"
+                                  placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                                  inputMode="numeric"
+                                  autoComplete="off"
+                                  aria-invalid={checkoutErrors.customerDocument ? 'true' : undefined}
+                                  aria-describedby={
+                                    checkoutErrors.customerDocument
+                                      ? 'checkout-customer-document-error'
+                                      : 'checkout-customer-document-help'
+                                  }
+                                />
+                                {checkoutErrors.customerDocument ? (
+                                  <small id="checkout-customer-document-error">{checkoutErrors.customerDocument}</small>
+                                ) : (
+                                  <small id="checkout-customer-document-help">
+                                    Necessario para gerar o pagamento pelo Asaas.
+                                  </small>
+                                )}
+                              </label>
+                            ) : null}
                           </div>
 
                           <div

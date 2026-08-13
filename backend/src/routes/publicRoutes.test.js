@@ -43,6 +43,7 @@ let PaymentCustomer;
 let SystemSetting;
 let subscribeToTenantUpdates;
 let env;
+let logger;
 let mongoServer;
 let adminToken;
 
@@ -72,6 +73,7 @@ describe('Public routes', () => {
     ({ SystemSetting } = await import('../models/SystemSetting.js'));
     ({ subscribeToTenantUpdates } = await import('../services/tenantRealtimeService.js'));
     ({ env } = await import('../config/env.js'));
+    ({ logger } = await import('../utils/logger.js'));
     ({ default: app } = await import('../app.js'));
 
     await connectDatabase();
@@ -1036,6 +1038,7 @@ describe('Public routes', () => {
 
   it('creates an Asaas Pix order in centralized mode using the global api key and no provider split payload', async () => {
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const loggerInfoSpy = vi.spyOn(logger, 'info');
     const product = await Product.create({
       businessId: business._id,
       name: 'Combo asaas pix',
@@ -1101,6 +1104,7 @@ describe('Public routes', () => {
       .send({
         customerName: 'Nina',
         customerPhone: '5511991112233',
+        customerDocument: '529.982.247-25',
         items: [
           {
             productId: product.id,
@@ -1136,6 +1140,13 @@ describe('Public routes', () => {
       }),
     );
     expect(asaasServiceMock.createAsaasCustomer).toHaveBeenCalledOnce();
+    expect(asaasServiceMock.createAsaasCustomer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customer: expect.objectContaining({
+          cpfCnpj: '52998224725',
+        }),
+      }),
+    );
     expect(asaasServiceMock.createAsaasPaymentCharge).toHaveBeenCalledOnce();
     expect(asaasServiceMock.getAsaasPixQrCode).toHaveBeenCalledOnce();
     expect(asaasServiceMock.createAsaasPaymentCharge).toHaveBeenCalledWith(
@@ -1159,7 +1170,98 @@ describe('Public routes', () => {
         tenantNetAmount: 142.4,
       }),
     );
+    expect(await PaymentCustomer.findOne({ businessId: business._id, provider: 'asaas' }).lean()).toEqual(
+      expect.objectContaining({
+        identityKind: 'document',
+        identityKey: 'document:52998224725',
+        document: '52998224725',
+      }),
+    );
+    const checkoutLogCalls = loggerInfoSpy.mock.calls.filter(
+      (call) =>
+        call[1] === 'Resolved public order payment provider' ||
+        call[1] === 'Creating Asaas payment charge for public order' ||
+        call[1] === 'Asaas payment charge created for public order',
+    );
+    expect(checkoutLogCalls.length).toBeGreaterThan(0);
+    checkoutLogCalls.forEach(([payload]) => {
+      expect(payload.customerDocument).toBeUndefined();
+      expect(payload.cpfCnpj).toBeUndefined();
+      expect(payload.document).toBeUndefined();
+    });
     expect(mercadoPagoServiceMock.createMercadoPagoCheckoutPreference).not.toHaveBeenCalled();
+    loggerInfoSpy.mockRestore();
+  });
+
+  it('rejects an Asaas Pix checkout without CPF or CNPJ before trying to create the provider customer', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Combo asaas pix sem documento',
+      description: 'Fluxo deve bloquear sem CPF ou CNPJ',
+      price: 45.9,
+      image: '',
+      category: 'Combos',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    await SystemSetting.create({
+      key: 'finance:asaas',
+      value: {
+        paymentArchitecture: 'centralized',
+        defaultPlatformFeePercent: 3,
+      },
+    });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'asaas',
+          asaas: {
+            enabled: true,
+            status: 'active',
+            document: '19131243000197',
+          },
+        },
+      },
+    );
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Cliente Sem Documento',
+        customerPhone: '5511988877665',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: product.price,
+          },
+        ],
+        deliveryType: 'pickup',
+        payment: {
+          method: 'pix',
+          provider: 'asaas',
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('order_customer_document_required');
+    expect(response.body.error.message).toBe('Informe seu CPF ou CNPJ.');
+    expect(asaasServiceMock.createAsaasCustomer).not.toHaveBeenCalled();
+    expect(asaasServiceMock.createAsaasPaymentCharge).not.toHaveBeenCalled();
+    expect(await PaymentCustomer.countDocuments({ businessId: business._id, provider: 'asaas' })).toBe(0);
   });
 
   it('prefers the configured Asaas Pix flow even when the tenant still has a legacy manual Pix key', async () => {
@@ -1231,6 +1333,7 @@ describe('Public routes', () => {
       .send({
         customerName: 'Bruna',
         customerPhone: '5511997776655',
+        customerDocument: '19.131.243/0001-97',
         items: [
           {
             productId: product.id,
@@ -1258,6 +1361,13 @@ describe('Public routes', () => {
       }),
     );
     expect(asaasServiceMock.createAsaasCustomer).toHaveBeenCalledOnce();
+    expect(asaasServiceMock.createAsaasCustomer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customer: expect.objectContaining({
+          cpfCnpj: '19131243000197',
+        }),
+      }),
+    );
     expect(asaasServiceMock.createAsaasPaymentCharge).toHaveBeenCalledOnce();
     expect(await Payment.findOne({ providerPaymentId: 'pay_legacy_123' }).lean()).toEqual(
       expect.objectContaining({
@@ -1330,6 +1440,7 @@ describe('Public routes', () => {
       .send({
         customerName: 'Bruna',
         customerPhone: '5511997776655',
+        customerDocument: '529.982.247-25',
         items: [
           {
             productId: product.id,
@@ -1423,6 +1534,7 @@ describe('Public routes', () => {
     const orderPayload = {
       customerName: 'Nina',
       customerPhone: '55 (11) 99111-2233',
+      customerDocument: '529.982.247-25',
       items: [
         {
           productId: product.id,
@@ -1464,6 +1576,7 @@ describe('Public routes', () => {
       }),
     );
     expect(await PaymentCustomer.countDocuments({ provider: 'asaas', providerCustomerId: 'cus_123' })).toBe(1);
+    expect(await PaymentCustomer.countDocuments({ provider: 'asaas', identityKey: 'document:52998224725' })).toBe(1);
   });
 
   it('protects Asaas customer creation from concurrent orders for the same tenant shopper', async () => {
@@ -1542,6 +1655,7 @@ describe('Public routes', () => {
       customerName: 'Nina Concorrente',
       customerPhone: '55 (11) 98888-7777',
       customerEmail: 'nina.concorrente@example.com',
+      customerDocument: '529.982.247-25',
       items: [
         {
           productId: product.id,
@@ -1568,6 +1682,7 @@ describe('Public routes', () => {
     expect(asaasServiceMock.createAsaasCustomer).toHaveBeenCalledWith(
       expect.objectContaining({
         customer: expect.objectContaining({
+          cpfCnpj: '52998224725',
           externalReference: expect.stringMatching(
             new RegExp(`^tenant:${business._id}:customer:`),
           ),
@@ -1590,7 +1705,7 @@ describe('Public routes', () => {
       await PaymentCustomer.countDocuments({
         businessId: business._id,
         provider: 'asaas',
-        identityKey: 'phone:5511988887777',
+        identityKey: 'document:52998224725',
       }),
     ).toBe(1);
     expect(await PaymentCustomer.countDocuments({ provider: 'asaas', providerCustomerId: 'cus_concurrent_123' })).toBe(1);

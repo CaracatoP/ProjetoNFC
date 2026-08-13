@@ -1,4 +1,5 @@
 import { PAYMENT_PROVIDERS } from '../../../shared/constants/index.js';
+import { normalizeCustomerDocument } from '../../../shared/utils/customerDocument.js';
 import {
   createAsaasCustomer,
   listAsaasCustomers,
@@ -160,7 +161,7 @@ function buildAsaasCustomerPayload({
   const normalizedName = String(name || '').trim();
   const normalizedPhone = String(phone || '').replace(/\D/g, '');
   const normalizedEmail = String(email || '').trim().toLowerCase();
-  const normalizedDocument = String(document || '').replace(/\D/g, '');
+  const normalizedDocument = normalizeCustomerDocument(document);
 
   return {
     name: normalizedName || 'Cliente TapLink',
