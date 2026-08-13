@@ -933,7 +933,7 @@ describe('DashboardHomePage', () => {
 
     expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
     expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Configuracoes/i }));
+    await user.click(screen.getByRole('button', { name: /Avancado/i }));
 
     expect(screen.getByText('Personalizacao Visual')).toBeInTheDocument();
 
@@ -981,7 +981,7 @@ describe('DashboardHomePage', () => {
 
     expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
     expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Configuracoes/i }));
+    await user.click(screen.getByRole('button', { name: /Avancado/i }));
 
     await user.click(screen.getByRole('button', { name: /Escuro premium/i }));
 
@@ -1245,6 +1245,39 @@ describe('DashboardHomePage', () => {
     });
   });
 
+  it('keeps tenant editor draft while navigating sections and toggling preview', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <DashboardHomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Identidade do tenant')).toBeInTheDocument();
+
+    const editorCard = screen.getByText('Identidade do tenant').closest('section');
+    const editorScope = within(editorCard);
+    const nameInput = editorScope.getByLabelText('Nome do comercio');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Tenant Ajustado');
+
+    expect(screen.getAllByText(/Alteracoes nao salvas/i).length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole('button', { name: /Ocultar preview/i }));
+    expect(screen.queryByTitle('Preview Barbearia Estilo Vivo')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Aparencia/i }));
+    expect(await screen.findByText('Logo, banner e uploads')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Geral/i }));
+    const updatedEditorCard = await screen.findByText('Identidade do tenant');
+    expect(within(updatedEditorCard.closest('section')).getByDisplayValue('Tenant Ajustado')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Mostrar preview/i }));
+    expect(await screen.findByTitle('Preview Barbearia Estilo Vivo')).toBeInTheDocument();
+  });
+
   it('lets the admin update manual payment status and edit tenant payment settings in the workspace', async () => {
     const user = userEvent.setup();
     const editorWithOrders = {
@@ -1290,10 +1323,10 @@ describe('DashboardHomePage', () => {
     );
 
     expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
-    expect(await screen.findByText('Fluxo do editor')).toBeInTheDocument();
+    expect(await screen.findByText('Secoes do tenant')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Pagamentos/i }));
-    expect(await screen.findByRole('heading', { name: 'Pagamentos' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Checkout/i }));
+    expect(await screen.findByRole('heading', { name: 'Checkout e pagamentos' })).toBeInTheDocument();
     await user.clear(screen.getByLabelText(/Chave PIX/i));
     await user.type(screen.getByLabelText(/Chave PIX/i), 'financeiro@taplink.local');
     await user.click(screen.getByRole('button', { name: /Salvar alteracoes/i }));

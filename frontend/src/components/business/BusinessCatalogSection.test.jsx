@@ -508,6 +508,52 @@ describe('BusinessCatalogSection', () => {
     });
   });
 
+  it('renders the Asaas Pix QR image returned by the backend and explains that confirmation is automatic', async () => {
+    const user = userEvent.setup();
+    const onSubmitOrder = vi.fn().mockResolvedValue({
+      id: 'order-asaas-pix-1',
+      total: 39.9,
+      payment: {
+        method: PAYMENT_METHODS.PIX,
+        status: PAYMENT_STATUS.PENDING,
+        provider: 'asaas',
+        amount: 39.9,
+        pixCopyPaste: '000201010212asaaspixpayload',
+        pixQrCode: 'data:image/png;base64,asaasqr123',
+      },
+    });
+
+    render(
+      <BusinessCatalogSection
+        business={asaasBusinessFixture}
+        tenantSlug="barbearia-estilo-vivo"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={onSubmitOrder}
+      />,
+    );
+
+    const catalogCard = screen.getByText('Pomada modeladora').closest('.catalog-card');
+    await user.click(within(catalogCard).getByRole('button', { name: 'Adicionar' }));
+    await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
+    await user.type(screen.getByLabelText('Nome'), 'Julia');
+    await user.type(screen.getByLabelText('Telefone'), '5511977776666');
+    await user.click(screen.getByRole('button', { name: 'Retirada' }));
+    await user.click(screen.getByRole('button', { name: 'Pix' }));
+    await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
+
+    expect(await screen.findByAltText('QR Code Pix do Asaas')).toHaveAttribute(
+      'src',
+      'data:image/png;base64,asaasqr123',
+    );
+    expect(
+      screen.getAllByText(
+        /Assim que o pagamento for confirmado, o status do pedido sera atualizado automaticamente/i,
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
   it('shows Asaas online payment cards and redirects hosted card checkout to the invoice URL', async () => {
     const user = userEvent.setup();
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);

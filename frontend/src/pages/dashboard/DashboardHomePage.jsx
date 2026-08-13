@@ -342,6 +342,7 @@ function AdminSidebar({
                   key={view.id}
                   type="button"
                   className={`client-panel-sidebar__nav-button${activeView === view.id ? ' is-active' : ''}`}
+                  aria-label={`Abrir ${view.label}`}
                   onClick={() => onViewChange(view.id)}
                 >
                   <span className="client-panel-sidebar__nav-icon">
@@ -418,6 +419,7 @@ function AdminMobileNav({ navigationGroups, activeView, onViewChange }) {
           key={`mobile-${view.id}`}
           type="button"
           className={`client-panel-mobile-nav__button${activeView === view.id ? ' is-active' : ''}`}
+          aria-label={`Abrir ${view.label}`}
           aria-selected={activeView === view.id}
           onClick={() => onViewChange(view.id)}
         >
@@ -612,6 +614,7 @@ export function DashboardHomePage() {
   const [previewRefreshKey, setPreviewRefreshKey] = useState(() => Date.now());
   const [previewToken, setPreviewToken] = useState('');
   const [activeView, setActiveView] = useState('workspace');
+  const [workspacePreviewOpen, setWorkspacePreviewOpen] = useState(true);
   const debouncedTenantSearch = useDebouncedValue(tenantSearchInput, 300);
 
   const refreshPreview = useCallback(
@@ -1179,7 +1182,7 @@ export function DashboardHomePage() {
               </div>
 
               <div className="admin-editor-column">
-                <div className="admin-editor-layout">
+                <div className={`admin-editor-layout${workspacePreviewOpen ? '' : ' admin-editor-layout--preview-hidden'}`}>
                   <div className="admin-editor-pane">
                     {loadingEditor ? (
                       <Card className="admin-panel-card">
@@ -1198,20 +1201,24 @@ export function DashboardHomePage() {
                         onUpload={handleUpload}
                         onDuplicate={handleDuplicate}
                         onCopyPublicLink={handleCopyPublicLink}
+                        previewVisible={workspacePreviewOpen}
+                        onTogglePreview={() => setWorkspacePreviewOpen((current) => !current)}
                         moduleActions={moduleActions}
                         moduleBusyKey={moduleBusyKey}
                       />
                     )}
                   </div>
 
-                  <TenantPreviewPanel
-                    previewUrl={previewUrl}
-                    publicUrl={selectedSummary?.publicUrl || ''}
-                    businessName={selectedSummary?.name || ''}
-                    status={selectedSummary?.status || ''}
-                    previewKey={previewRefreshKey}
-                    onRefresh={refreshPreview}
-                  />
+                  {workspacePreviewOpen ? (
+                    <TenantPreviewPanel
+                      previewUrl={previewUrl}
+                      publicUrl={selectedSummary?.publicUrl || ''}
+                      businessName={selectedSummary?.name || ''}
+                      status={selectedSummary?.status || ''}
+                      previewKey={previewRefreshKey}
+                      onRefresh={refreshPreview}
+                    />
+                  ) : null}
                 </div>
               </div>
             </div>

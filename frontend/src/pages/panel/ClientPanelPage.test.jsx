@@ -15,6 +15,7 @@ vi.mock('@/services/clientPanelService.js', () => ({
   fetchClientPanelBusiness: vi.fn(),
   updateClientPanelBusinessBasics: vi.fn(),
   fetchClientPanelAnalytics: vi.fn(),
+  fetchClientPanelFinance: vi.fn(),
   fetchClientPanelProducts: vi.fn(),
   fetchClientPanelOrders: vi.fn(),
   fetchClientPanelAppointmentRequests: vi.fn(),
@@ -254,6 +255,24 @@ const analyticsFixture = {
   uniqueVisitors: 6,
 };
 
+const financeFixture = {
+  summary: {
+    pendingBalance: 39.9,
+    availableBalance: 0,
+    totalReceived: 0,
+    platformFees: 0,
+    refunds: 0,
+    totalPaidOut: 0,
+    balanceDue: 0,
+    settledNet: 0,
+  },
+  payout: {
+    next: null,
+    last: null,
+  },
+  history: [],
+};
+
 function buildOwnerAuth(overrides = {}) {
   return {
     token: 'client-token',
@@ -318,6 +337,7 @@ describe('ClientPanelPage', () => {
     clientPanelService.fetchClientPanelAppointmentServices.mockResolvedValue([]);
     clientPanelService.fetchClientPanelProfessionals.mockResolvedValue([]);
     clientPanelService.fetchClientPanelAnalytics.mockResolvedValue(analyticsFixture);
+    clientPanelService.fetchClientPanelFinance.mockResolvedValue(financeFixture);
 
     tenantRealtimeService.subscribeToTenantUpdates.mockImplementation((_target, callbacks = {}) => {
       realtimeCallbacks = callbacks;
@@ -685,6 +705,118 @@ describe('ClientPanelPage', () => {
 
     view.unmount();
     expect(realtimeCleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes orders and finance after payment_updated events without requiring manual reload', async () => {
+    const user = userEvent.setup();
+    useAuth.mockReturnValue(buildOwnerAuth());
+
+    const pendingOrders = [
+      {
+        ...ordersFixture[0],
+        payment: {
+          ...ordersFixture[0].payment,
+          provider: 'asaas',
+          status: 'pending',
+          amount: 79.8,
+        },
+      },
+    ];
+    const paidOrders = [
+      {
+        ...ordersFixture[0],
+        payment: {
+          ...ordersFixture[0].payment,
+          provider: 'asaas',
+          status: 'paid',
+          amount: 79.8,
+          confirmedAt: '2026-08-10T08:35:00.000Z',
+        },
+      },
+    ];
+    const pendingFinance = {
+      ...financeFixture,
+      summary: {
+        pendingBalance: 79.8,
+        availableBalance: 0,
+        totalReceived: 0,
+        platformFees: 0,
+        refunds: 0,
+        totalPaidOut: 0,
+        balanceDue: 0,
+        settledNet: 0,
+      },
+      history: [],
+    };
+    const paidFinance = {
+      ...financeFixture,
+      summary: {
+        pendingBalance: 0,
+        availableBalance: 77.41,
+        totalReceived: 79.8,
+        platformFees: 2.39,
+        refunds: 0,
+        totalPaidOut: 0,
+        balanceDue: 77.41,
+        settledNet: 77.41,
+      },
+      history: [
+        {
+          id: 'ledger-1',
+          orderId: 'order-1',
+          typeLabel: 'Venda recebida',
+          amount: 79.8,
+          netAmount: 77.41,
+        },
+      ],
+    };
+
+    clientPanelService.fetchClientPanelOrders.mockReset();
+    clientPanelService.fetchClientPanelOrders
+      .mockResolvedValueOnce(pendingOrders)
+      .mockResolvedValueOnce(paidOrders);
+    clientPanelService.fetchClientPanelFinance.mockReset();
+    clientPanelService.fetchClientPanelFinance
+      .mockResolvedValueOnce(pendingFinance)
+      .mockResolvedValueOnce(paidFinance);
+
+    render(
+      <MemoryRouter>
+        <ClientPanelPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Visao geral' })).toBeInTheDocument();
+
+    await user.click(getSidebarNavButton('Pedidos'));
+    const pendingOrderCard = (await screen.findByText('Carlos')).closest('.admin-order-card');
+    expect(pendingOrderCard).toBeInTheDocument();
+    expect(within(pendingOrderCard).getByText('Pendente')).toBeInTheDocument();
+
+    await user.click(getSidebarNavButton('Financeiro'));
+    expect(await screen.findByText('Historico financeiro')).toBeInTheDocument();
+    expect(screen.getByText('R$ 79,80')).toBeInTheDocument();
+
+    await act(async () => {
+      await realtimeCallbacks.onTenantUpdated?.({
+        businessId: 'business-1',
+        kind: 'payment_updated',
+        emittedAt: new Date('2026-08-10T10:40:00.000Z').toISOString(),
+      });
+    });
+
+    await waitFor(() => {
+      expect(clientPanelService.fetchClientPanelOrders).toHaveBeenCalledTimes(2);
+      expect(clientPanelService.fetchClientPanelFinance).toHaveBeenCalledTimes(2);
+    });
+
+    expect((await screen.findAllByText('R$ 77,41')).length).toBeGreaterThan(0);
+    expect(screen.getByText('Venda recebida')).toBeInTheDocument();
+
+    await user.click(getSidebarNavButton('Pedidos'));
+    const paidOrderCard = (await screen.findByText('Carlos')).closest('.admin-order-card');
+    expect(paidOrderCard).toBeInTheDocument();
+    expect(within(paidOrderCard).getByText('Pago')).toBeInTheDocument();
   });
 
   it('renders safe fallback labels for unknown analytics tokens in the dedicated analytics view', async () => {

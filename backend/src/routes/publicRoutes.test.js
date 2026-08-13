@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import { AppError } from '../utils/appError.js';
 
 const mercadoPagoServiceMock = vi.hoisted(() => ({
   createMercadoPagoCheckoutPreference: vi.fn(),
@@ -1159,6 +1160,199 @@ describe('Public routes', () => {
       }),
     );
     expect(mercadoPagoServiceMock.createMercadoPagoCheckoutPreference).not.toHaveBeenCalled();
+  });
+
+  it('prefers the configured Asaas Pix flow even when the tenant still has a legacy manual Pix key', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Combo asaas pix legado',
+      description: 'Pix online com chave manual legada ainda cadastrada',
+      price: 15.67,
+      image: '',
+      category: 'Combos',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    await SystemSetting.create({
+      key: 'finance:asaas',
+      value: {
+        paymentArchitecture: 'centralized',
+        defaultPlatformFeePercent: 3,
+      },
+    });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        contact: {
+          ...(business.contact?.toObject?.() || business.contact || {}),
+          pix: {
+            keyType: 'email',
+            key: 'pix-legado@tenant.local',
+            receiverName: 'Casa do Preto',
+          },
+        },
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'asaas',
+          asaas: {
+            enabled: true,
+            status: 'active',
+          },
+        },
+      },
+    );
+
+    asaasServiceMock.createAsaasCustomer.mockResolvedValue({
+      id: 'cus_legacy_123',
+      name: 'Bruna',
+    });
+    asaasServiceMock.createAsaasPaymentCharge.mockResolvedValue({
+      id: 'pay_legacy_123',
+      status: 'PENDING',
+      invoiceUrl: 'https://sandbox.asaas.com/i/pay_legacy_123',
+    });
+    asaasServiceMock.getAsaasPixQrCode.mockResolvedValue({
+      payload: '000201010212asaaslegacy',
+      encodedImage: 'data:image/png;base64,legacy123',
+    });
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Bruna',
+        customerPhone: '5511997776655',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: 15.67,
+            itemTotal: 15.67,
+          },
+        ],
+        deliveryType: 'pickup',
+        payment: {
+          method: 'pix',
+        },
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.payment).toEqual(
+      expect.objectContaining({
+        method: 'pix',
+        provider: 'asaas',
+        paymentArchitecture: 'centralized',
+        providerPaymentId: 'pay_legacy_123',
+        pixCopyPaste: '000201010212asaaslegacy',
+        pixQrCode: 'data:image/png;base64,legacy123',
+      }),
+    );
+    expect(asaasServiceMock.createAsaasCustomer).toHaveBeenCalledOnce();
+    expect(asaasServiceMock.createAsaasPaymentCharge).toHaveBeenCalledOnce();
+    expect(await Payment.findOne({ providerPaymentId: 'pay_legacy_123' }).lean()).toEqual(
+      expect.objectContaining({
+        provider: 'asaas',
+        status: 'pending',
+      }),
+    );
+  });
+
+  it('returns a controlled error when Asaas Pix creation fails and does not fall back to manual Pix', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Combo asaas pix indisponivel',
+      description: 'Falha controlada do provider',
+      price: 25,
+      image: '',
+      category: 'Combos',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    await SystemSetting.create({
+      key: 'finance:asaas',
+      value: {
+        paymentArchitecture: 'centralized',
+        defaultPlatformFeePercent: 3,
+      },
+    });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        contact: {
+          ...(business.contact?.toObject?.() || business.contact || {}),
+          pix: {
+            keyType: 'email',
+            key: 'pix-legado@tenant.local',
+            receiverName: 'Casa do Preto',
+          },
+        },
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: true,
+            debitCard: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'asaas',
+          asaas: {
+            enabled: true,
+            status: 'active',
+          },
+        },
+      },
+    );
+
+    asaasServiceMock.createAsaasCustomer.mockResolvedValue({
+      id: 'cus_failure_123',
+      name: 'Bruna',
+    });
+    asaasServiceMock.createAsaasPaymentCharge.mockRejectedValue(
+      new AppError('Asaas indisponivel no momento.', 502, 'asaas_unavailable'),
+    );
+
+    const response = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Bruna',
+        customerPhone: '5511997776655',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: 25,
+            itemTotal: 25,
+          },
+        ],
+        deliveryType: 'pickup',
+        payment: {
+          method: 'pix',
+        },
+      });
+
+    expect(response.status).toBe(502);
+    expect(response.body.error.code).toBe('asaas_unavailable');
+    expect(response.body.error.message).toBe('Asaas indisponivel no momento.');
+    expect(response.body.data).toBeUndefined();
+    expect(asaasServiceMock.createAsaasCustomer).toHaveBeenCalledOnce();
+    expect(asaasServiceMock.createAsaasPaymentCharge).toHaveBeenCalledOnce();
+    expect(asaasServiceMock.getAsaasPixQrCode).not.toHaveBeenCalled();
+    expect(await Payment.countDocuments({ provider: 'manual', method: 'pix', amount: 25 })).toBe(0);
   });
 
   it('reuses an existing Asaas customer reference for repeat orders from the same tenant shopper', async () => {

@@ -2796,13 +2796,6 @@ img {
   justify-content: flex-end;
 }
 
-.dashboard-shell .admin-panel-card--controls {
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--theme-secondary) 18%, transparent), transparent 34%),
-    radial-gradient(circle at bottom left, color-mix(in srgb, var(--theme-primary) 12%, transparent), transparent 36%),
-    linear-gradient(180deg, rgba(19, 16, 31, 0.98), rgba(12, 10, 21, 0.98));
-}
-
 .dashboard-shell .admin-card-stack {
   display: grid;
   gap: 1rem;
@@ -5755,6 +5748,19 @@ img {
 .catalog-checkout__pix-qr svg {
   width: min(100%, 196px);
   height: auto;
+}
+
+.catalog-checkout__pix-qr img {
+  width: min(100%, 196px);
+  height: auto;
+  display: block;
+}
+
+.catalog-checkout__pix-qr-fallback {
+  display: grid;
+  gap: 0.4rem;
+  text-align: center;
+  color: #1f2937;
 }
 
 .catalog-checkout__pix-copy {

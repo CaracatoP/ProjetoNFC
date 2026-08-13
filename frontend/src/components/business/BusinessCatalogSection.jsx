@@ -231,10 +231,15 @@ function getPaymentMethodTag(method, paymentSettings = {}) {
   return 'Disponivel';
 }
 
-function getPaymentSuccessMessage(method) {
+function getPaymentSuccessMessage(payment = {}) {
+  const method = payment?.method;
+  const provider = payment?.provider;
+
   switch (method) {
     case PAYMENT_METHODS.PIX:
-      return 'Pedido enviado com sucesso. Apos o pagamento, o estabelecimento confirmara seu pedido.';
+      return provider === PAYMENT_PROVIDERS.ASAAS
+        ? 'Pagamento Pix aguardando confirmacao. Assim que o pagamento for confirmado, o status do pedido sera atualizado automaticamente.'
+        : 'Pedido enviado com sucesso. Apos o pagamento, o estabelecimento confirmara seu pedido.';
     case PAYMENT_METHODS.CASH_ON_DELIVERY:
       return 'Pedido enviado com sucesso. O pagamento sera feito na entrega.';
     case PAYMENT_METHODS.CASH_ON_PICKUP:
@@ -245,6 +250,10 @@ function getPaymentSuccessMessage(method) {
 
 function isPixCheckoutResult(order) {
   return order?.payment?.method === PAYMENT_METHODS.PIX && Boolean(order?.payment?.pixCopyPaste);
+}
+
+function isAsaasPixCheckoutResult(order) {
+  return isPixCheckoutResult(order) && order?.payment?.provider === PAYMENT_PROVIDERS.ASAAS;
 }
 
 function buildCheckoutValidationErrors(checkout, cartItems, checkoutPaymentMethods) {
@@ -605,6 +614,7 @@ export function BusinessCatalogSection({
     [cartItems],
   );
   const isShowingCheckoutSuccess = Boolean(checkoutResult && !cartItems.length);
+  const isAsaasPixSuccess = isAsaasPixCheckoutResult(checkoutResult);
   const showPendingPixBanner = Boolean(!isCartOpen && isPixCheckoutResult(pendingPixOrder));
 
   useEffect(() => {
@@ -933,7 +943,7 @@ export function BusinessCatalogSection({
                             <span className="catalog-checkout__success-pill">Pedido enviado com sucesso</span>
                             <div className="catalog-checkout__success-copy">
                               <strong>Pedido enviado com sucesso</strong>
-                              <p>{getPaymentSuccessMessage(checkoutResult?.payment?.method)}</p>
+                              <p>{getPaymentSuccessMessage(checkoutResult?.payment)}</p>
                             </div>
                             <div className="catalog-checkout__success-meta">
                               <div className="catalog-checkout__success-meta-card">
@@ -961,8 +971,24 @@ export function BusinessCatalogSection({
                           {isPixCheckoutResult(checkoutResult) ? (
                             <div className="catalog-checkout__pix-success-card">
                               <div className="catalog-checkout__pix-qr-wrap">
-                                <div className="catalog-checkout__pix-qr" aria-hidden="true">
-                                  <QRCode value={checkoutResult.payment.pixCopyPaste} size={196} />
+                                <div className="catalog-checkout__pix-qr">
+                                  {isAsaasPixSuccess ? (
+                                    checkoutResult?.payment?.pixQrCode ? (
+                                      <img
+                                        src={checkoutResult.payment.pixQrCode}
+                                        alt="QR Code Pix do Asaas"
+                                      />
+                                    ) : (
+                                      <div className="catalog-checkout__pix-qr-fallback">
+                                        <strong>QR Code indisponivel</strong>
+                                        <span>Use o codigo Pix abaixo para concluir o pagamento.</span>
+                                      </div>
+                                    )
+                                  ) : (
+                                    <div aria-hidden="true">
+                                      <QRCode value={checkoutResult.payment.pixCopyPaste} size={196} />
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -976,7 +1002,11 @@ export function BusinessCatalogSection({
                                   <textarea readOnly rows="4" value={checkoutResult.payment.pixCopyPaste} />
                                 </label>
                                 {pixCopyFeedback ? <p className="catalog-checkout__pix-feedback">{pixCopyFeedback}</p> : null}
-                                <p className="admin-muted-copy">Apos o pagamento, o estabelecimento confirmara seu pedido.</p>
+                                <p className="admin-muted-copy">
+                                  {isAsaasPixSuccess
+                                    ? 'Assim que o pagamento for confirmado, o status do pedido sera atualizado automaticamente.'
+                                    : 'Apos o pagamento, o estabelecimento confirmara seu pedido.'}
+                                </p>
                               </div>
                             </div>
                           ) : null}

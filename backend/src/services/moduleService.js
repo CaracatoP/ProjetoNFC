@@ -1,4 +1,5 @@
 import { AppError } from '../utils/appError.js';
+import { logger } from '../utils/logger.js';
 import { findBusinessById, findBusinessBySlugStrict } from '../repositories/businessRepository.js';
 import {
   createAppointmentRequestRecord,
@@ -282,6 +283,7 @@ function resolveRequestedPaymentMethod(payload, paymentSettings) {
 function resolveRequestedPaymentProvider(payload, method, paymentSettings) {
   const requestedProvider = String(payload?.payment?.provider || '').trim().toLowerCase();
   const declaredHostedProvider = getDeclaredHostedCheckoutProvider(paymentSettings);
+  const configuredProvider = paymentSettings?.provider || PAYMENT_PROVIDERS.MANUAL;
 
   if ([PAYMENT_METHODS.CASH_ON_PICKUP, PAYMENT_METHODS.CASH_ON_DELIVERY].includes(method)) {
     return PAYMENT_PROVIDERS.MANUAL;
@@ -302,15 +304,15 @@ function resolveRequestedPaymentProvider(payload, method, paymentSettings) {
     return PAYMENT_PROVIDERS.MANUAL;
   }
 
-  const manualPixAvailable = Boolean(paymentSettings?.methods?.pix && paymentSettings?.pix?.key);
+  const manualPixAvailable = Boolean(
+    configuredProvider === PAYMENT_PROVIDERS.MANUAL &&
+      paymentSettings?.methods?.pix &&
+      paymentSettings?.pix?.key,
+  );
   const hostedPixAvailable = Boolean(paymentSettings?.methods?.pix && declaredHostedProvider);
 
-  if (
-    requestedProvider &&
-    [PAYMENT_PROVIDERS.ASAAS, PAYMENT_PROVIDERS.MERCADO_PAGO].includes(requestedProvider) &&
-    hostedPixAvailable
-  ) {
-    return requestedProvider;
+  if (hostedPixAvailable) {
+    return declaredHostedProvider;
   }
 
   if (requestedProvider === PAYMENT_PROVIDERS.MANUAL && manualPixAvailable) {
@@ -1141,6 +1143,16 @@ export async function createPublicOrder(slug, payload) {
     },
   };
   const payment = await buildPublicOrderPaymentSnapshot(business, normalizedPayload, total, receivedAt);
+  logger.info(
+    {
+      businessId: String(business._id || ''),
+      slug: business.slug || '',
+      paymentMethod: payment.method,
+      provider: payment.provider,
+      paymentArchitecture: payment.paymentArchitecture || 'manual',
+    },
+    'Resolved public order payment provider',
+  );
   const created = await createOrderRecord({
     ...normalizedPayload,
     businessId: business._id,
@@ -1235,6 +1247,17 @@ export async function createPublicOrder(slug, payload) {
       } = feeBreakdown;
       const billingType = resolveAsaasBillingType(payment.method);
       const externalReference = buildAsaasExternalReference(business._id, created._id);
+      logger.info(
+        {
+          businessId: String(business._id || ''),
+          orderId: String(created._id || ''),
+          paymentMethod: payment.method,
+          billingType,
+          paymentArchitecture: asaasContext.paymentArchitecture,
+          usesCentralizedAccount: asaasContext.usesCentralizedAccount,
+        },
+        'Creating Asaas payment charge for public order',
+      );
       const charge = await createAsaasPaymentCharge({
         apiKey: asaasContext.apiKey,
         charge: {
@@ -1247,6 +1270,17 @@ export async function createPublicOrder(slug, payload) {
           ...(!centralizedMode && split.length ? { split } : {}),
         },
       });
+      logger.info(
+        {
+          businessId: String(business._id || ''),
+          orderId: String(created._id || ''),
+          providerPaymentId: String(charge.id || '').trim(),
+          externalReference,
+          paymentMethod: payment.method,
+          paymentArchitecture: asaasContext.paymentArchitecture,
+        },
+        'Asaas payment charge created for public order',
+      );
 
       let nextPayment = normalizeOrderPayment(
         {
@@ -1322,6 +1356,18 @@ export async function createPublicOrder(slug, payload) {
         occurredAt: new Date(),
       });
     } catch (error) {
+      logger.warn(
+        {
+          businessId: String(business._id || ''),
+          orderId: String(created._id || ''),
+          paymentMethod: payment.method,
+          provider: payment.provider,
+          paymentArchitecture: payment.paymentArchitecture,
+          code: error?.code,
+          statusCode: error?.statusCode,
+        },
+        'Failed to create Asaas public checkout charge',
+      );
       await updateOrderRecordByBusinessId(business._id, created._id, {
         payment: normalizeOrderPayment(
           {

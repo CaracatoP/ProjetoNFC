@@ -72,6 +72,8 @@
 
 .dashboard-shell {
   max-width: min(1880px, calc(100vw - 1rem));
+  min-width: 0;
+  overflow-x: clip;
   padding-inline: clamp(0.5rem, 1.5vw, 1.25rem);
   padding-top: 0.5rem;
 }
@@ -79,6 +81,7 @@
 .dashboard-shell__content {
   display: grid;
   gap: 1rem;
+  min-width: 0;
 }
 
 .app-shell__topbar {
@@ -1457,22 +1460,6 @@
   align-self: start;
 }
 
-.dashboard-shell .admin-dashboard-hero {
-  padding: 1rem;
-}
-
-.dashboard-shell .admin-dashboard-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 1rem;
-  align-items: start;
-}
-
-.dashboard-shell .admin-dashboard-header__actions {
-  justify-content: flex-end;
-}
-
-.dashboard-shell .admin-dashboard-header__stats,
 .dashboard-shell .admin-mini-stats {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
@@ -1491,16 +1478,6 @@
   color: var(--backoffice-text-muted);
   font-size: 0.82rem;
   font-weight: 700;
-}
-
-.dashboard-shell .admin-dashboard-switcher--tabs {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  padding: 0.35rem;
-  border: 1px solid var(--backoffice-border);
-  border-radius: 12px;
-  background: var(--backoffice-surface);
 }
 
 .dashboard-shell .modal-backdrop {
@@ -1530,10 +1507,6 @@
   border: 1px solid var(--backoffice-border);
   background: var(--backoffice-surface-soft);
   color: var(--backoffice-text);
-}
-
-.dashboard-shell .admin-dashboard-switcher--tabs .button {
-  min-width: 112px;
 }
 
 .dashboard-shell .admin-workspace,
@@ -1654,7 +1627,185 @@
 }
 
 .dashboard-shell.admin-modern-shell .admin-editor-layout {
-  grid-template-columns: minmax(0, 1.35fr) minmax(330px, 0.65fr);
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  align-items: start;
+}
+
+.dashboard-shell.admin-modern-shell .admin-editor-layout--preview-hidden {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.dashboard-shell .admin-tenant-editor {
+  gap: 1rem;
+}
+
+.dashboard-shell .admin-tenant-editor__toolbar {
+  padding: 0.95rem;
+}
+
+.dashboard-shell .admin-tenant-editor-toolbar {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.dashboard-shell .admin-tenant-editor__body {
+  display: grid;
+  grid-template-columns: 238px minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.dashboard-shell .admin-tenant-editor__nav-card {
+  position: sticky;
+  top: clamp(0.5rem, 1vw, 1rem);
+  padding: 0.85rem;
+}
+
+.dashboard-shell .admin-tenant-editor__content {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.dashboard-shell .admin-editor-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--backoffice-border);
+  border-radius: 14px;
+  background: var(--backoffice-surface-muted);
+}
+
+.dashboard-shell .admin-editor-section-heading > div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.dashboard-shell .admin-editor-section-heading h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  color: var(--backoffice-text);
+}
+
+.dashboard-shell .admin-editor-section-heading p {
+  margin: 0;
+  color: var(--backoffice-text-muted);
+}
+
+.dashboard-shell .admin-editor-grid--section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.dashboard-shell .admin-tenant-editor__content .admin-form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 360px));
+}
+
+.dashboard-shell .admin-tenant-editor__content .admin-panel-card--span-2,
+.dashboard-shell .admin-tenant-editor__content .admin-field:has(textarea),
+.dashboard-shell .admin-tenant-editor__content .admin-inline-note,
+.dashboard-shell .admin-tenant-editor__content .admin-domain-preview-grid,
+.dashboard-shell .admin-tenant-editor__content .admin-form-block,
+.dashboard-shell .admin-tenant-editor__content .admin-sections-list {
+  max-width: 100%;
+}
+
+.dashboard-shell .admin-editor-section-nav .admin-panel-card__header {
+  display: grid;
+  gap: 0.65rem;
+  padding-bottom: 0.75rem;
+}
+
+.dashboard-shell .admin-editor-section-nav .admin-panel-card__header h2 {
+  font-size: 1rem;
+}
+
+.dashboard-shell .admin-editor-section-nav .admin-panel-card__header p {
+  font-size: 0.82rem;
+}
+
+.dashboard-shell .admin-editor-section-nav__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.dashboard-shell .admin-stepper--side {
+  grid-auto-flow: row;
+  grid-auto-columns: auto;
+  gap: 0.45rem;
+  overflow: visible;
+  padding-bottom: 0;
+}
+
+.dashboard-shell .admin-stepper--side .admin-stepper__item {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  min-height: 52px;
+  padding: 0.65rem;
+  text-align: left;
+}
+
+.dashboard-shell .admin-stepper--side .admin-stepper__index {
+  width: 28px;
+  height: 28px;
+}
+
+.dashboard-shell .admin-stepper--side .admin-stepper__copy {
+  gap: 0.1rem;
+}
+
+.dashboard-shell .admin-stepper--side .admin-stepper__copy small {
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.dashboard-shell .admin-editor-section-nav .admin-stepper-footer {
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+  padding-top: 0.2rem;
+}
+
+.dashboard-shell .admin-editor-section-nav .admin-inline-note--step {
+  min-height: 0;
+  padding: 0.75rem;
+}
+
+.dashboard-shell .admin-editor-section-nav .admin-stepper-footer .admin-inline-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.dashboard-shell .admin-editor-section-nav .admin-stepper-footer .button {
+  min-height: 36px;
+  padding: 0.55rem 0.65rem;
+}
+
+.dashboard-shell .admin-section-chip--warning,
+.dashboard-shell .admin-meta-pill--warning {
+  border-color: rgba(203, 153, 73, 0.28);
+  background: var(--backoffice-warning-soft);
+  color: var(--backoffice-warning);
+}
+
+.dashboard-shell.admin-modern-shell .admin-preview-panel {
+  position: sticky;
+  top: clamp(0.5rem, 1vw, 1rem);
+}
+
+.dashboard-shell.admin-modern-shell .admin-preview-panel__frame {
+  min-height: clamp(560px, 70vh, 760px);
+  max-height: calc(100vh - 230px);
+}
+
+.dashboard-shell.admin-modern-shell .admin-preview-panel__frame iframe {
+  min-height: inherit;
+  height: 100%;
 }
 
 .dashboard-shell .admin-clients-layout--modern {
@@ -1754,6 +1905,21 @@
   color: var(--backoffice-text);
 }
 
+@media (max-width: 1366px) {
+  .dashboard-shell.admin-modern-shell .admin-editor-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-shell.admin-modern-shell .admin-preview-panel {
+    position: static;
+  }
+
+  .dashboard-shell.admin-modern-shell .admin-preview-panel__frame {
+    min-height: 560px;
+    max-height: none;
+  }
+}
+
 @media (max-width: 1180px) {
   .dashboard-shell .client-panel-kpi-grid,
   .dashboard-shell .admin-stock-summary-grid {
@@ -1777,14 +1943,32 @@
 
 @media (max-width: 920px) {
   .dashboard-shell .admin-modern-layout,
-  .dashboard-shell .admin-clients-layout--modern {
+  .dashboard-shell .admin-clients-layout--modern,
+  .dashboard-shell .admin-tenant-editor__body {
     grid-template-columns: 1fr;
   }
 
   .dashboard-shell .admin-modern-sidebar,
-  .dashboard-shell .admin-clients-sidebar--master {
+  .dashboard-shell .admin-clients-sidebar--master,
+  .dashboard-shell .admin-tenant-editor__nav-card {
     position: static;
     max-height: none;
+  }
+
+  .dashboard-shell .admin-stepper--side {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(170px, 1fr);
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+    scrollbar-width: none;
+  }
+
+  .dashboard-shell .admin-stepper--side::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dashboard-shell .admin-stepper--side .admin-stepper__item {
+    grid-template-columns: 28px minmax(0, 1fr);
   }
 
   .dashboard-shell .admin-modern-sidebar {
@@ -1849,7 +2033,6 @@
   }
 
   .dashboard-shell .client-panel-page-header,
-  .dashboard-shell .admin-dashboard-header,
   .dashboard-shell .client-settings-hours__header,
   .dashboard-shell .client-panel-section-heading,
   .dashboard-shell .admin-order-payment__meta,
@@ -1876,6 +2059,14 @@
   .dashboard-shell .admin-toolbar__group .button,
   .dashboard-shell .admin-inline-actions .button {
     width: 100%;
+  }
+
+  .dashboard-shell .admin-editor-section-heading {
+    display: grid;
+  }
+
+  .dashboard-shell .admin-editor-section-nav .admin-stepper-footer .admin-inline-actions {
+    grid-template-columns: 1fr;
   }
 
   .dashboard-shell .client-panel-kpi-grid,
@@ -1908,12 +2099,8 @@
     grid-template-columns: 1fr;
   }
 
-  .dashboard-shell .admin-dashboard-switcher--tabs {
-    display: grid;
-    width: 100%;
-  }
-
-  .dashboard-shell .admin-dashboard-switcher--tabs .button {
-    width: 100%;
+  .dashboard-shell.admin-modern-shell .admin-preview-panel__frame,
+  .dashboard-shell.admin-modern-shell .admin-preview-panel__frame iframe {
+    min-height: 520px;
   }
 }

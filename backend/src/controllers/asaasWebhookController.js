@@ -12,6 +12,7 @@ import { getAsaasPayment, parseAsaasExternalReference } from '../services/asaasS
 import { syncAsaasOrderPaymentWebhook } from '../services/moduleService.js';
 import { getPlatformFinanceSettings, resolveAsaasProviderContext } from '../services/platformFinanceService.js';
 import { AppError } from '../utils/appError.js';
+import { logger } from '../utils/logger.js';
 
 function getWebhookHeaderValue(value) {
   if (Array.isArray(value)) {
@@ -103,6 +104,17 @@ export async function asaasWebhookController(req, res, next) {
     }
 
     const { businessId, orderId } = parsedIncomingReference;
+    logger.info(
+      {
+        provider: PAYMENT_PROVIDERS.ASAAS,
+        providerEventId,
+        providerEvent,
+        providerPaymentId,
+        businessId,
+        orderId,
+      },
+      'Received Asaas webhook event',
+    );
     const [business, order] = await Promise.all([
       findBusinessById(businessId),
       findOrderById(orderId),
@@ -138,9 +150,31 @@ export async function asaasWebhookController(req, res, next) {
       resourceId: orderId,
       providerResourceId: providerPaymentId,
     });
+    logger.info(
+      {
+        provider: PAYMENT_PROVIDERS.ASAAS,
+        providerEventId,
+        providerEvent,
+        providerPaymentId,
+        businessId,
+        orderId,
+      },
+      'Processed Asaas webhook event',
+    );
 
     return res.status(204).end();
   } catch (error) {
+    logger.warn(
+      {
+        provider: PAYMENT_PROVIDERS.ASAAS,
+        providerEventId: String(req.body?.id || '').trim(),
+        providerEvent: String(req.body?.event || '').trim(),
+        providerPaymentId: String(req.body?.payment?.id || '').trim(),
+        code: error?.code,
+        statusCode: error?.statusCode,
+      },
+      'Failed to process Asaas webhook event',
+    );
     if (webhookEventRecord?._id) {
       await markWebhookEventFailed(webhookEventRecord._id, error).catch(() => {});
     }

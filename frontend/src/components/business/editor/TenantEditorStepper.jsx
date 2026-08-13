@@ -1,23 +1,37 @@
 import { Button } from '@/components/common/Button.jsx';
 import { SectionEyebrow } from './TenantEditorPrimitives.jsx';
 
-export function TenantEditorStepper({ steps, activeStep, activeStepIndex, localError, onStepChange }) {
+export function TenantEditorStepper({
+  steps,
+  activeStep,
+  activeStepIndex,
+  localError,
+  onStepChange,
+  variant = 'default',
+  hasUnsavedChanges = false,
+}) {
   const currentStep = steps[activeStepIndex];
+  const isSideVariant = variant === 'side';
 
   return (
-    <div className="admin-card-stack admin-card-stack--airy">
+    <div className={`admin-card-stack admin-card-stack--airy${isSideVariant ? ' admin-editor-section-nav' : ''}`}>
       <div className="admin-panel-card__header">
         <div>
-          <SectionEyebrow>Fluxo</SectionEyebrow>
-          <h2>Fluxo do editor</h2>
-          <p>Navegue por etapas para ajustar o tenant com mais foco e menos densidade visual.</p>
+          <SectionEyebrow>{isSideVariant ? 'Editor' : 'Fluxo'}</SectionEyebrow>
+          <h2>{isSideVariant ? 'Secoes do tenant' : 'Fluxo do editor'}</h2>
+          <p>{isSideVariant ? 'Abra apenas o contexto que precisa editar agora.' : 'Navegue por etapas para ajustar o tenant com mais foco e menos densidade visual.'}</p>
         </div>
-        <span className="admin-section-chip admin-section-chip--accent">
-          Etapa {activeStepIndex + 1} de {steps.length}
-        </span>
+        <div className="admin-editor-section-nav__badges">
+          <span className="admin-section-chip admin-section-chip--accent">
+            {activeStepIndex + 1}/{steps.length}
+          </span>
+          {hasUnsavedChanges ? (
+            <span className="admin-section-chip admin-section-chip--warning">Alteracoes nao salvas</span>
+          ) : null}
+        </div>
       </div>
 
-      <div className="admin-stepper admin-stepper--dashboard">
+      <div className={`admin-stepper admin-stepper--dashboard${isSideVariant ? ' admin-stepper--side' : ''}`}>
         {steps.map((step, index) => (
           <button
             key={step.id}

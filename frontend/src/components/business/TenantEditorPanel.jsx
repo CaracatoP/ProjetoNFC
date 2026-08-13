@@ -76,23 +76,34 @@ export function TenantEditorPanel({
   onToggleStatus,
   onDuplicate,
   onCopyPublicLink,
+  previewVisible = true,
+  onTogglePreview,
   moduleActions,
   moduleBusyKey,
 }) {
-  const [draft, setDraft] = useState(buildEditorDraft(editor));
+  const persistedDraft = useMemo(() => buildEditorDraft(editor), [editor]);
+  const [draft, setDraft] = useState(persistedDraft);
   const [uploadingField, setUploadingField] = useState('');
   const [activeStep, setActiveStep] = useState('basic');
   const [localError, setLocalError] = useState('');
 
   useEffect(() => {
-    setDraft(buildEditorDraft(editor));
+    setDraft(persistedDraft);
     setActiveStep('basic');
     setLocalError('');
-  }, [editor]);
+  }, [persistedDraft]);
 
   const validationErrors = useMemo(() => (draft ? buildValidationErrors(draft) : {}), [draft]);
   const hasBlockingErrors = Object.keys(validationErrors).length > 0;
   const activeStepIndex = EDITOR_STEPS.findIndex((step) => step.id === activeStep);
+  const activeStepConfig = EDITOR_STEPS[activeStepIndex] || EDITOR_STEPS[0];
+  const hasUnsavedChanges = useMemo(() => {
+    if (!draft || !persistedDraft) {
+      return false;
+    }
+
+    return JSON.stringify(draft) !== JSON.stringify(persistedDraft);
+  }, [draft, persistedDraft]);
 
   useEffect(() => {
     if (!hasBlockingErrors && localError === 'Corrija os campos destacados antes de salvar.') {
@@ -192,8 +203,8 @@ export function TenantEditorPanel({
   };
 
   return (
-    <div className="admin-editor-stack">
-      <Card className="admin-panel-card admin-panel-card--hero">
+    <div className="admin-editor-stack admin-tenant-editor">
+      <Card className="admin-panel-card admin-panel-card--hero admin-tenant-editor__toolbar">
         <TenantEditorHeader
           business={draft.business}
           nfcTag={draft.nfcTag}
@@ -203,25 +214,42 @@ export function TenantEditorPanel({
           deleting={deleting}
           duplicating={duplicating}
           togglingStatus={togglingStatus}
+          activeSectionLabel={activeStepConfig?.label}
+          hasUnsavedChanges={hasUnsavedChanges}
+          previewVisible={previewVisible}
           onCopyPublicLink={onCopyPublicLink}
           onDuplicate={onDuplicate}
           onToggleStatus={onToggleStatus}
           onDelete={onDelete}
           onSave={handleSave}
+          onTogglePreview={onTogglePreview}
         />
       </Card>
 
-      <Card className="admin-panel-card admin-panel-card--controls">
-        <TenantEditorStepper
-          steps={EDITOR_STEPS}
-          activeStep={activeStep}
-          activeStepIndex={activeStepIndex}
-          localError={localError}
-          onStepChange={setActiveStep}
-        />
-      </Card>
+      <div className="admin-tenant-editor__body">
+        <Card className="admin-panel-card admin-tenant-editor__nav-card">
+          <TenantEditorStepper
+            steps={EDITOR_STEPS}
+            activeStep={activeStep}
+            activeStepIndex={activeStepIndex}
+            localError={localError}
+            onStepChange={setActiveStep}
+            variant="side"
+            hasUnsavedChanges={hasUnsavedChanges}
+          />
+        </Card>
 
-      <div className="admin-editor-grid">
+        <div className="admin-tenant-editor__content">
+          <div className="admin-editor-section-heading">
+            <div>
+              <SectionEyebrow>Secao ativa</SectionEyebrow>
+              <h2>{activeStepConfig?.label || 'Editor'}</h2>
+              <p>{activeStepConfig?.description}</p>
+            </div>
+            {hasUnsavedChanges ? <span className="admin-section-chip admin-section-chip--warning">Alteracoes nao salvas</span> : null}
+          </div>
+
+      <div className="admin-editor-grid admin-editor-grid--section">
         {activeStep === 'basic' ? (
           <>
         <Card id="tenant-identity" className="admin-panel-card admin-panel-card--span-2">
@@ -694,8 +722,8 @@ export function TenantEditorPanel({
           <div className="admin-panel-card__header">
             <div>
               <SectionEyebrow>Operacao</SectionEyebrow>
-              <h2>Pagamentos</h2>
-              <p>Configure o PIX do site principal e o Wi-Fi usado no atalho rapido.</p>
+              <h2>Checkout e pagamentos</h2>
+              <p>Pix, metodos exibidos no carrinho e Wi-Fi do atalho rapido.</p>
             </div>
           </div>
 
@@ -1318,8 +1346,8 @@ export function TenantEditorPanel({
           <div className="admin-panel-card__header">
             <div>
               <SectionEyebrow>Configuracoes</SectionEyebrow>
-              <h2>SEO, tema e secoes</h2>
-              <p>Controle visibilidade, mensagem institucional, cores e detalhes avancados do tenant.</p>
+              <h2>Avancado, SEO e secoes</h2>
+              <p>Visibilidade, SEO, tema e historico do tenant.</p>
             </div>
           </div>
 
@@ -1559,6 +1587,8 @@ export function TenantEditorPanel({
 
           </>
         ) : null}
+      </div>
+        </div>
       </div>
     </div>
   );

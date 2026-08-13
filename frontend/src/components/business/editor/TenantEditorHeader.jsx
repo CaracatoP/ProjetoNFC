@@ -10,14 +10,18 @@ export function TenantEditorHeader({
   deleting,
   duplicating,
   togglingStatus,
+  activeSectionLabel,
+  hasUnsavedChanges,
+  previewVisible,
   onCopyPublicLink,
   onDuplicate,
   onToggleStatus,
   onDelete,
   onSave,
+  onTogglePreview,
 }) {
   return (
-    <div className="admin-editor-header admin-editor-header--hero">
+    <div className="admin-editor-header admin-editor-header--hero admin-tenant-editor-toolbar">
       <div className="admin-editor-hero-main">
         <SectionEyebrow>Tenant em edicao</SectionEyebrow>
         <h2>{business.name}</h2>
@@ -25,12 +29,19 @@ export function TenantEditorHeader({
         <div className="admin-editor-meta admin-editor-meta--hero">
           <span className="admin-meta-pill">Status: {business.status}</span>
           <span className="admin-meta-pill">Tag: {nfcTag?.code || 'Sem codigo NFC'}</span>
+          {activeSectionLabel ? <span className="admin-meta-pill">Secao: {activeSectionLabel}</span> : null}
+          {hasUnsavedChanges ? <span className="admin-meta-pill admin-meta-pill--warning">Alteracoes nao salvas</span> : null}
         </div>
       </div>
 
       <div className="admin-editor-hero-actions">
         <div className="admin-toolbar admin-toolbar--editor">
           <div className="admin-toolbar__group admin-toolbar__group--utility">
+            {onTogglePreview ? (
+              <Button variant="secondary" onClick={onTogglePreview}>
+                {previewVisible ? 'Ocultar preview' : 'Mostrar preview'}
+              </Button>
+            ) : null}
             <Button variant="secondary" onClick={onCopyPublicLink} disabled={!publicUrl}>
               Copiar link
             </Button>

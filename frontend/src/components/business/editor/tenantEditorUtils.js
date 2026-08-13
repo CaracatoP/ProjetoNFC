@@ -420,13 +420,13 @@ const ANALYTICS_EVENT_LABELS = {
 };
 
 export const EDITOR_STEPS = [
-  { id: 'basic', label: 'Identidade', description: 'Dados do tenant, contato, dominio e horarios.' },
-  { id: 'visual', label: 'Visual', description: 'Logo, banner, favicon e midia principal.' },
-  { id: 'content', label: 'Conteudo', description: 'Servicos, galeria e texto principal.' },
-  { id: 'modules', label: 'Modulos', description: 'Segmento da empresa, modulos ativos e operacao do tenant.' },
+  { id: 'basic', label: 'Geral', description: 'Identidade, dominio, contato e horarios.' },
+  { id: 'visual', label: 'Aparencia', description: 'Logo, banner, favicon e midia principal.' },
+  { id: 'content', label: 'Site', description: 'Servicos, galeria e texto institucional.' },
+  { id: 'modules', label: 'Modulos', description: 'Segmento, modulos ativos e operacao do tenant.' },
   { id: 'links', label: 'Links', description: 'Acessos rapidos e atalhos publicos.' },
-  { id: 'payments', label: 'Pagamentos', description: 'PIX e Wi-Fi usados nas acoes do site.' },
-  { id: 'settings', label: 'Configuracoes', description: 'SEO, tema, secoes e historico de alteracoes.' },
+  { id: 'payments', label: 'Checkout', description: 'Pagamento, Pix, retirada, entrega e Wi-Fi.' },
+  { id: 'settings', label: 'Avancado', description: 'SEO, tema, secoes e historico.' },
 ];
 
 const customDomainPattern = /^(?!:\/\/)(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
