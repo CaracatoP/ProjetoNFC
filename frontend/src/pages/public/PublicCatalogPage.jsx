@@ -165,7 +165,7 @@ export function PublicCatalogPage() {
 
   async function handleOrder(payload) {
     if (!site?.business?.slug) {
-      return;
+      throw new Error('Nao foi possivel identificar este tenant para concluir o pedido.');
     }
 
     return createPublicOrder(site.business.slug, payload);

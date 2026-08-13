@@ -108,13 +108,43 @@ const productsFixture = [
   },
 ];
 
+function createDeferred() {
+  let resolve;
+  let reject;
+
+  const promise = new Promise((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+
+  return { promise, resolve, reject };
+}
+
+function buildOrderSuccess(overrides = {}) {
+  const { payment: paymentOverrides = {}, ...restOverrides } = overrides;
+
+  return {
+    id: 'order-test-1',
+    status: 'received',
+    total: 39.9,
+    ...restOverrides,
+    payment: {
+      method: PAYMENT_METHODS.CASH_ON_PICKUP,
+      status: PAYMENT_STATUS.MANUAL,
+      provider: 'manual',
+      amount: 39.9,
+      ...paymentOverrides,
+    },
+  };
+}
+
 describe('BusinessCatalogSection', () => {
   beforeEach(() => {
     window.localStorage.clear();
   });
 
   it('groups products by category, restores the cart from localStorage, and clears it after a successful order', async () => {
-    const onSubmitOrder = vi.fn().mockResolvedValue({ status: 'received' });
+    const onSubmitOrder = vi.fn().mockResolvedValue(buildOrderSuccess({ total: 79.8, payment: { amount: 79.8 } }));
     const user = userEvent.setup();
 
     window.localStorage.setItem('taplink:cart:barbearia-estilo-vivo', JSON.stringify({ 'product-1': 2 }));
@@ -168,12 +198,14 @@ describe('BusinessCatalogSection', () => {
       );
     });
 
-    expect(window.localStorage.getItem('taplink:cart:barbearia-estilo-vivo')).toBeNull();
+    await waitFor(() => {
+      expect(window.localStorage.getItem('taplink:cart:barbearia-estilo-vivo')).toBeNull();
+    });
     expect(screen.getByRole('button', { name: /Abrir carrinho/i })).toBeInTheDocument();
   });
 
   it('requires customer name and phone before submitting and lets the shopper remove items from the cart panel', async () => {
-    const onSubmitOrder = vi.fn().mockResolvedValue({ status: 'received' });
+    const onSubmitOrder = vi.fn().mockResolvedValue(buildOrderSuccess());
     const user = userEvent.setup();
 
     render(
@@ -212,7 +244,7 @@ describe('BusinessCatalogSection', () => {
   });
 
   it('shows visual checkout errors for missing payment and delivery address without submitting', async () => {
-    const onSubmitOrder = vi.fn().mockResolvedValue({ status: 'received' });
+    const onSubmitOrder = vi.fn().mockResolvedValue(buildOrderSuccess());
     const user = userEvent.setup();
 
     render(
@@ -250,7 +282,7 @@ describe('BusinessCatalogSection', () => {
   });
 
   it('shows a specific visual error for an invalid phone and keeps the request blocked', async () => {
-    const onSubmitOrder = vi.fn().mockResolvedValue({ status: 'received' });
+    const onSubmitOrder = vi.fn().mockResolvedValue(buildOrderSuccess({ payment: { method: PAYMENT_METHODS.PIX, status: PAYMENT_STATUS.PENDING, amount: 39.9, pixCopyPaste: '000201010212' } }));
     const user = userEvent.setup();
 
     render(
@@ -316,7 +348,7 @@ describe('BusinessCatalogSection', () => {
   });
 
   it('supports fractional kg products and submits proportional totals in the cart panel', async () => {
-    const onSubmitOrder = vi.fn().mockResolvedValue({ status: 'received' });
+    const onSubmitOrder = vi.fn().mockResolvedValue(buildOrderSuccess({ total: 23.96, payment: { amount: 23.96 } }));
     const user = userEvent.setup();
 
     render(
@@ -552,6 +584,42 @@ describe('BusinessCatalogSection', () => {
         /Assim que o pagamento for confirmado, o status do pedido sera atualizado automaticamente/i,
       ).length,
     ).toBeGreaterThan(0);
+  });
+
+  it('shows a loading state during submit and recovers with visible feedback when the request fails', async () => {
+    const user = userEvent.setup();
+    const deferred = createDeferred();
+    const onSubmitOrder = vi.fn().mockReturnValue(deferred.promise);
+
+    render(
+      <BusinessCatalogSection
+        business={asaasBusinessFixture}
+        tenantSlug="barbearia-estilo-vivo"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={onSubmitOrder}
+      />,
+    );
+
+    const catalogCard = screen.getByText('Pomada modeladora').closest('.catalog-card');
+    await user.click(within(catalogCard).getByRole('button', { name: 'Adicionar' }));
+    await user.click(screen.getByRole('button', { name: /Abrir carrinho/i }));
+    await user.type(screen.getByLabelText('Nome'), 'Julia');
+    await user.type(screen.getByLabelText('Telefone'), '5511977776666');
+    await user.click(screen.getByRole('button', { name: 'Retirada' }));
+    await user.click(screen.getByRole('button', { name: /Pix/i }));
+    await user.click(screen.getByRole('button', { name: /Finalizar pedido/i }));
+
+    expect(screen.getByRole('button', { name: 'Finalizando...' })).toBeDisabled();
+
+    deferred.reject(new Error('Nao foi possivel gerar o pagamento Pix neste momento.'));
+
+    expect(
+      (await screen.findAllByText('Nao foi possivel gerar o pagamento Pix neste momento.')).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /Finalizar pedido/i })).toBeEnabled();
+    expect(onSubmitOrder).toHaveBeenCalledOnce();
   });
 
   it('shows Asaas online payment cards and redirects hosted card checkout to the invoice URL', async () => {

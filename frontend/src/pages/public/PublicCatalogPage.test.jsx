@@ -95,7 +95,17 @@ describe('PublicCatalogPage', () => {
   beforeEach(() => {
     publicSiteService.getPublicSiteBySlug.mockReset();
     publicSiteService.createPublicOrder?.mockReset();
-    publicSiteService.createPublicOrder?.mockResolvedValue({ status: 'received' });
+    publicSiteService.createPublicOrder?.mockResolvedValue({
+      id: 'order-public-catalog-1',
+      status: 'received',
+      total: 59.9,
+      payment: {
+        method: 'cash_on_pickup',
+        status: 'manual',
+        provider: 'manual',
+        amount: 59.9,
+      },
+    });
     publicSiteService.invalidatePublicSiteCache?.mockReset();
     analyticsService.trackEvent.mockReset();
     tenantRealtimeService.subscribeToTenantUpdates.mockReset();

@@ -178,6 +178,7 @@ export async function createPublicOrder(slug, payload) {
   const response = await apiRequest(`${appConfig.apiBaseUrl}/public/site/${slug}/orders`, {
     method: 'POST',
     body: JSON.stringify(payload),
+    timeoutMs: appConfig.apiTimeoutMs,
   });
 
   return response.data;

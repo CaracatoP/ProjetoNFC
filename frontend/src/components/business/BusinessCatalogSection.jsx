@@ -29,6 +29,42 @@ import { formatCurrency, resolveMediaUrl } from '@/utils/formatters.js';
 
 const CART_STORAGE_PREFIX = 'taplink:cart:';
 
+function logCheckoutEvent(eventName, context = {}) {
+  if (!import.meta.env.DEV || import.meta.env.MODE === 'test' || typeof console === 'undefined') {
+    return;
+  }
+
+  const sanitizedContext = Object.fromEntries(
+    Object.entries(context).filter(([, value]) => value !== undefined && value !== ''),
+  );
+
+  console.info(`[checkout] ${eventName}`, sanitizedContext);
+}
+
+function buildCheckoutErrorMessage(error) {
+  if (error?.code === 'timeout_error') {
+    return 'A solicitacao demorou mais que o esperado. Tente novamente em instantes.';
+  }
+
+  if (error?.code === 'network_error') {
+    return 'Nao foi possivel conectar com a API para concluir o pedido.';
+  }
+
+  if (error?.code === 'asaas_unavailable') {
+    return 'Nao foi possivel gerar o pagamento Pix neste momento.';
+  }
+
+  if (typeof error?.message === 'string' && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  return 'Nao foi possivel criar o pedido.';
+}
+
+function isValidCheckoutResponse(order) {
+  return Boolean(order?.id && order?.payment?.method && order?.payment?.status);
+}
+
 function defaultCheckoutState() {
   return {
     customerName: '',
@@ -772,21 +808,38 @@ export function BusinessCatalogSection({
 
     const customerName = checkout.customerName.trim();
     const customerPhone = normalizePhoneDigits(checkout.customerPhone);
+    const checkoutContext = {
+      tenantSlug,
+      deliveryType: checkout.deliveryType || 'unset',
+      paymentMethod: checkout.paymentMethod || 'unset',
+      itemCount: cartItems.length,
+      total: Number(cartTotal.toFixed(2)),
+    };
+
+    logCheckoutEvent('checkout_submit_started', checkoutContext);
 
     const validationErrors = buildCheckoutValidationErrors(checkout, cartItems, checkoutPaymentMethods);
 
     if (Object.keys(validationErrors).length) {
       setCheckoutErrors(validationErrors);
       setFeedback('');
+      logCheckoutEvent('checkout_submit_failed', {
+        ...checkoutContext,
+        stage: 'validation',
+        code: 'validation_error',
+        invalidFields: Object.keys(validationErrors),
+      });
       focusFirstCheckoutError(validationErrors);
       return;
     }
 
+    logCheckoutEvent('checkout_validation_passed', checkoutContext);
     setSubmitting(true);
     setFeedback('');
     setCheckoutErrors({});
 
     try {
+      logCheckoutEvent('order_request_started', checkoutContext);
       const createdOrder = await onSubmitOrder?.({
         customerName,
         customerPhone,
@@ -798,6 +851,11 @@ export function BusinessCatalogSection({
           method: checkout.paymentMethod,
         },
       });
+
+      if (!isValidCheckoutResponse(createdOrder)) {
+        throw new Error('Nao foi possivel concluir o checkout com seguranca.');
+      }
+
       onTrackAction?.({
         eventType: 'cta_click',
         targetType: 'order_submit',
@@ -805,6 +863,39 @@ export function BusinessCatalogSection({
         sectionType: 'catalog',
       });
       const nextPayment = createdOrder?.payment || {};
+      logCheckoutEvent('order_response_received', {
+        ...checkoutContext,
+        orderId: createdOrder.id,
+        provider: nextPayment.provider || 'manual',
+        paymentStatus: nextPayment.status || 'unknown',
+        billingType: nextPayment.method || 'unknown',
+      });
+
+      if (nextPayment.provider) {
+        logCheckoutEvent('payment_provider_resolved', {
+          ...checkoutContext,
+          orderId: createdOrder.id,
+          provider: nextPayment.provider,
+        });
+      }
+
+      if (nextPayment.provider === PAYMENT_PROVIDERS.ASAAS) {
+        logCheckoutEvent('asaas_payment_created', {
+          ...checkoutContext,
+          orderId: createdOrder.id,
+          providerPaymentId: nextPayment.providerPaymentId || 'pending',
+        });
+      }
+
+      if (nextPayment.method === PAYMENT_METHODS.PIX && nextPayment.pixCopyPaste) {
+        logCheckoutEvent('pix_qr_received', {
+          ...checkoutContext,
+          orderId: createdOrder.id,
+          provider: nextPayment.provider || 'manual',
+          hasQrCode: Boolean(nextPayment.pixQrCode),
+        });
+      }
+
       const shouldRedirectToHostedCheckout =
         nextPayment.provider === PAYMENT_PROVIDERS.ASAAS &&
         (nextPayment.method === PAYMENT_METHODS.CREDIT_CARD ||
@@ -818,12 +909,25 @@ export function BusinessCatalogSection({
       persistStoredCart(tenantSlug, {});
       setFeedback('');
       setIsCartOpen(true);
+      logCheckoutEvent('checkout_success', {
+        ...checkoutContext,
+        orderId: createdOrder.id,
+        provider: nextPayment.provider || 'manual',
+      });
 
       if (shouldRedirectToHostedCheckout) {
         redirectToCheckoutUrl(nextPayment.invoiceUrl);
       }
     } catch (error) {
-      setFeedback(error?.message || 'Nao foi possivel enviar o pedido agora.');
+      const errorMessage = buildCheckoutErrorMessage(error);
+      logCheckoutEvent('checkout_submit_failed', {
+        ...checkoutContext,
+        stage: 'request',
+        status: error?.status,
+        code: error?.code || 'api_error',
+        message: errorMessage,
+      });
+      setFeedback(errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -1319,15 +1423,24 @@ export function BusinessCatalogSection({
                           )}
                         </div>
                       ) : (
-                        <>
+                        <div className="catalog-cart-panel__footer-main">
+                          {feedback ? (
+                            <p
+                              className="site-inline-feedback catalog-checkout__footer-feedback"
+                              role="alert"
+                              aria-live="polite"
+                            >
+                              {feedback}
+                            </p>
+                          ) : null}
                           <div className="catalog-cart-panel__total">
                             <span>Total do pedido</span>
                             <strong>{formatCurrency(cartTotal)}</strong>
                           </div>
                           <Button type="submit" disabled={submitting} className="catalog-cart-panel__submit">
-                          {submitting ? 'Enviando...' : 'Finalizar pedido'}
+                            {submitting ? 'Finalizando...' : 'Finalizar pedido'}
                           </Button>
-                        </>
+                        </div>
                       )}
                     </div>
                   </form>
