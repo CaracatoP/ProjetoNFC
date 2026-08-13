@@ -82,6 +82,7 @@ describe('Public routes', () => {
     await Payment.deleteMany({});
     await PaymentCustomer.deleteMany({});
     await SystemSetting.deleteMany({});
+    env.asaasApiKey = 'SUA_API_KEY_SANDBOX';
     mercadoPagoServiceMock.createMercadoPagoCheckoutPreference.mockReset();
     asaasServiceMock.createAsaasCustomer.mockReset();
     asaasServiceMock.listAsaasCustomers.mockReset();
@@ -962,7 +963,7 @@ describe('Public routes', () => {
     expect(response.body.error.code).toBe('payment_method_unavailable');
   });
 
-  it('rejects online checkout when the tenant selects Asaas without a valid Asaas connection', async () => {
+  it('rejects online checkout when the tenant selects Asaas but the platform Asaas connection is unavailable', async () => {
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
     const product = await Product.create({
       businessId: business._id,
@@ -999,32 +1000,40 @@ describe('Public routes', () => {
       },
     );
 
-    const response = await request(app)
-      .post('/api/public/site/barbearia-estilo-vivo/orders')
-      .send({
-        customerName: 'Bianca',
-        customerPhone: '5511988877665',
-        items: [
-          {
-            productId: product.id,
-            name: product.name,
-            quantity: 1,
-            unitPrice: product.price,
-          },
-        ],
-        deliveryType: 'pickup',
-        payment: {
-          method: 'credit_card',
-          provider: 'asaas',
-        },
-      });
+    const previousApiKey = env.asaasApiKey;
+    env.asaasApiKey = '';
 
-    expect(response.status).toBe(400);
-    expect(response.body.error.code).toBe('payment_provider_unavailable');
-    expect(mercadoPagoServiceMock.createMercadoPagoCheckoutPreference).not.toHaveBeenCalled();
+    try {
+      const response = await request(app)
+        .post('/api/public/site/barbearia-estilo-vivo/orders')
+        .send({
+          customerName: 'Bianca',
+          customerPhone: '5511988877665',
+          items: [
+            {
+              productId: product.id,
+              name: product.name,
+              quantity: 1,
+              unitPrice: product.price,
+            },
+          ],
+          deliveryType: 'pickup',
+          payment: {
+            method: 'credit_card',
+            provider: 'asaas',
+          },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('payment_provider_unavailable');
+      expect(mercadoPagoServiceMock.createMercadoPagoCheckoutPreference).not.toHaveBeenCalled();
+      expect(asaasServiceMock.createAsaasCustomer).not.toHaveBeenCalled();
+    } finally {
+      env.asaasApiKey = previousApiKey;
+    }
   });
 
-  it('creates an Asaas Pix order and persists the provider payment fields returned by the charge flow', async () => {
+  it('creates an Asaas Pix order in centralized mode using the global api key and no provider split payload', async () => {
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
     const product = await Product.create({
       businessId: business._id,
@@ -1039,6 +1048,7 @@ describe('Public routes', () => {
     await SystemSetting.create({
       key: 'finance:asaas',
       value: {
+        paymentArchitecture: 'centralized',
         platformWalletId: 'wallet_platform_global',
         defaultPlatformFeePercent: 5,
       },
@@ -1059,11 +1069,6 @@ describe('Public routes', () => {
           provider: 'asaas',
           asaas: {
             enabled: true,
-            subaccountId: 'subacc_123',
-            walletId: 'wallet_sub',
-            apiKeyEncrypted: 'encrypted-sub-key',
-            accountEmail: 'seller@example.com',
-            accountName: 'Casa do Preto',
             status: 'active',
           },
           split: {
@@ -1119,6 +1124,7 @@ describe('Public routes', () => {
         provider: 'asaas',
         status: 'pending',
         amount: 149.9,
+        paymentArchitecture: 'centralized',
         providerPaymentId: 'pay_123',
         providerCustomerId: 'cus_123',
         invoiceUrl: 'https://sandbox.asaas.com/i/pay_123',
@@ -1133,9 +1139,23 @@ describe('Public routes', () => {
     expect(asaasServiceMock.getAsaasPixQrCode).toHaveBeenCalledOnce();
     expect(asaasServiceMock.createAsaasPaymentCharge).toHaveBeenCalledWith(
       expect.objectContaining({
+        apiKey: 'SUA_API_KEY_SANDBOX',
         charge: expect.objectContaining({
-          split: [{ walletId: 'wallet_platform_global', percentualValue: 5 }],
+          billingType: 'PIX',
+          value: 149.9,
+          externalReference: `tenant:${business._id.toString()}:order:${response.body.data.id}`,
         }),
+      }),
+    );
+    expect(asaasServiceMock.createAsaasPaymentCharge.mock.calls[0][0].charge.split).toBeUndefined();
+    expect(await Payment.findOne({ provider: 'asaas', providerPaymentId: 'pay_123' }).lean()).toEqual(
+      expect.objectContaining({
+        businessId: business._id,
+        status: 'pending',
+        paymentArchitecture: 'centralized',
+        grossAmount: 149.9,
+        platformFeeAmount: 7.5,
+        tenantNetAmount: 142.4,
       }),
     );
     expect(mercadoPagoServiceMock.createMercadoPagoCheckoutPreference).not.toHaveBeenCalled();

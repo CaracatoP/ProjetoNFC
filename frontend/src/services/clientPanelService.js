@@ -45,6 +45,14 @@ export async function fetchClientPanelAnalytics(token) {
   return response.data;
 }
 
+export async function fetchClientPanelFinance(token) {
+  const response = await apiRequest(`${appConfig.apiBaseUrl}/panel/finance`, {
+    headers: buildSessionAuthHeaders(token),
+  });
+
+  return response.data;
+}
+
 export async function fetchClientPanelProducts(token) {
   const response = await apiRequest(`${appConfig.apiBaseUrl}/panel/products`, {
     headers: buildSessionAuthHeaders(token),

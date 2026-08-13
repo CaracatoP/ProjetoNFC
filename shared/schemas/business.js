@@ -3,7 +3,9 @@ import {
   BUSINESS_MODULE_KEY_VALUES,
   BUSINESS_SEGMENT_VALUES,
   BUSINESS_STATUS_VALUES,
+  DEFAULT_PAYMENT_ARCHITECTURE,
   DEFAULT_PAYMENT_PROVIDER,
+  PAYMENT_ARCHITECTURE_VALUES,
   PAYMENT_PROVIDER_VALUES,
 } from '../constants/index.js';
 import { normalizeBusinessContact, normalizeBusinessWifi } from '../utils/businessContact.js';
@@ -59,6 +61,7 @@ export const businessPaymentSettingsSchema = z.preprocess(
   (value) => normalizeBusinessPaymentSettings(value),
   z.object({
     enabled: z.boolean().default(true),
+    paymentArchitecture: z.enum(PAYMENT_ARCHITECTURE_VALUES).default(DEFAULT_PAYMENT_ARCHITECTURE),
     methods: z
       .object({
         pix: z.boolean().default(false),
@@ -93,6 +96,17 @@ export const businessPaymentSettingsSchema = z.preprocess(
         walletId: z.string().default(''),
         accountEmail: z.string().default(''),
         accountName: z.string().default(''),
+        companyType: z.string().default(''),
+        incomeValue: z.number().default(0),
+        document: z.string().default(''),
+        phone: z.string().default(''),
+        mobilePhone: z.string().default(''),
+        site: z.string().default(''),
+        address: z.string().default(''),
+        addressNumber: z.string().default(''),
+        complement: z.string().default(''),
+        province: z.string().default(''),
+        postalCode: z.string().default(''),
         status: z.string().default('not_connected'),
         connectedAt: z.date().nullable().optional(),
         connected: z.boolean().default(false),

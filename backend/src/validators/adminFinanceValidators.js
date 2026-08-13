@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { PAYMENT_PROVIDER_VALUES } from '../../../shared/constants/index.js';
+import {
+  PAYMENT_ARCHITECTURE_VALUES,
+  PAYMENT_PROVIDER_VALUES,
+} from '../../../shared/constants/index.js';
 import { objectIdSchema } from './objectId.js';
 
 const optionalString = z.string().optional().or(z.literal(''));
@@ -22,6 +25,7 @@ export const adminFinanceBusinessParamsSchema = z.object({
 });
 
 export const adminFinanceSettingsBodySchema = z.object({
+  paymentArchitecture: z.enum(PAYMENT_ARCHITECTURE_VALUES).optional(),
   platformWalletId: optionalString,
   defaultPlatformFeePercent: optionalNumber,
 });

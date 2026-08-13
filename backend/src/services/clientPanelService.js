@@ -68,6 +68,7 @@ import {
   calculateActionRate,
   humanizeAnalyticsToken,
 } from '../utils/adminAnalytics.js';
+import { getTenantFinanceOverview } from './tenantFinanceService.js';
 
 function isPlainObject(value) {
   return Object.prototype.toString.call(value) === '[object Object]';
@@ -658,4 +659,16 @@ export async function getClientPanelAnalytics(sessionUser) {
   const scope = resolveAnalyticsScope(sessionUser, context.accessContext);
   const analyticsSummary = await getBusinessAnalyticsSummary(context.businessId);
   return buildAnalyticsPayload(analyticsSummary, scope);
+}
+
+export async function getClientPanelFinance(sessionUser) {
+  const context = await resolveClientPanelContext(sessionUser);
+  assertBillingAllowsPanelAccess(sessionUser, context.accessContext);
+  assertCapability(
+    canViewOrders(sessionUser, context.accessContext),
+    'Seu acesso atual nao permite visualizar o financeiro do tenant.',
+    'panel_finance_forbidden',
+  );
+
+  return getTenantFinanceOverview(context.businessId);
 }

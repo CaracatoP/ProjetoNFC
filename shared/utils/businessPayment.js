@@ -1,7 +1,9 @@
 import {
+  DEFAULT_PAYMENT_ARCHITECTURE,
   DEFAULT_PAYMENT_METHOD,
   DEFAULT_PAYMENT_PROVIDER,
   DEFAULT_PAYMENT_STATUS,
+  PAYMENT_ARCHITECTURE_VALUES,
   PAYMENT_METHODS,
   PAYMENT_METHOD_VALUES,
   PAYMENT_PROVIDERS,
@@ -188,6 +190,11 @@ function normalizeBusinessPaymentSplit(input = {}, options = {}) {
   };
 }
 
+export function normalizePaymentArchitecture(value, fallback = DEFAULT_PAYMENT_ARCHITECTURE) {
+  const normalized = normalizeStringValue(value).toLowerCase();
+  return PAYMENT_ARCHITECTURE_VALUES.includes(normalized) ? normalized : fallback;
+}
+
 export function normalizePaymentMethod(value, fallback = DEFAULT_PAYMENT_METHOD) {
   const normalized = normalizeStringValue(value).toLowerCase();
   return PAYMENT_METHOD_VALUES.includes(normalized) ? normalized : fallback;
@@ -292,11 +299,15 @@ export function normalizeBusinessPaymentSettings(input = {}, fallbackPix = {}, o
   const pix = normalizeBusinessPaymentPix(settings.pix, fallbackPix);
   const methods = normalizeBusinessPaymentMethods(settings.methods, fallbackPix);
   const provider = normalizePaymentProvider(settings.provider, DEFAULT_PAYMENT_PROVIDER);
+  const paymentArchitecture = normalizePaymentArchitecture(
+    options.paymentArchitecture ?? settings.paymentArchitecture,
+  );
   const enabledFallback =
     methods.pix || methods.cashOnPickup || methods.cashOnDelivery || methods.creditCard || methods.debitCard;
 
   return {
     enabled: normalizeBooleanValue(settings.enabled, enabledFallback),
+    paymentArchitecture,
     methods,
     pix,
     provider,
@@ -360,18 +371,26 @@ export function resolveDefaultPaymentMethod(settings) {
 export function normalizeOrderPayment(input = {}, fallbackAmount = 0) {
   const payment = isPlainObject(input) ? input : {};
   const amount = Number(payment.amount ?? fallbackAmount ?? 0);
+  const grossAmount = Number(payment.grossAmount ?? amount);
   const platformFeeAmount = Number(payment.platformFeeAmount ?? 0);
   const tenantNetAmount = Number(payment.tenantNetAmount ?? Math.max(0, amount - platformFeeAmount));
   const paidAt = payment.paidAt ? new Date(payment.paidAt) : null;
+  const confirmedAt = payment.confirmedAt ? new Date(payment.confirmedAt) : null;
+  const receivedAt = payment.receivedAt ? new Date(payment.receivedAt) : null;
   const updatedAt = payment.updatedAt ? new Date(payment.updatedAt) : null;
+  const providerUpdatedAt = payment.providerUpdatedAt ? new Date(payment.providerUpdatedAt) : null;
+  const refundedAmount = Number(payment.refundedAmount ?? 0);
 
   return {
     method: normalizePaymentMethod(payment.method, DEFAULT_PAYMENT_METHOD),
     status: normalizePaymentStatus(payment.status, DEFAULT_PAYMENT_STATUS),
     provider: normalizePaymentProvider(payment.provider, DEFAULT_PAYMENT_PROVIDER),
+    paymentArchitecture: normalizePaymentArchitecture(payment.paymentArchitecture),
     amount: Number.isFinite(amount) ? Number(amount.toFixed(2)) : 0,
+    grossAmount: Number.isFinite(grossAmount) ? Number(grossAmount.toFixed(2)) : 0,
     platformFeeAmount: Number.isFinite(platformFeeAmount) ? Number(platformFeeAmount.toFixed(2)) : 0,
     tenantNetAmount: Number.isFinite(tenantNetAmount) ? Number(tenantNetAmount.toFixed(2)) : 0,
+    refundedAmount: Number.isFinite(refundedAmount) ? Number(refundedAmount.toFixed(2)) : 0,
     pixCopyPaste: normalizeStringValue(payment.pixCopyPaste),
     pixQrCodeUrl: normalizeStringValue(payment.pixQrCodeUrl),
     pixQrCode: normalizeStringValue(payment.pixQrCode),
@@ -382,6 +401,10 @@ export function normalizeOrderPayment(input = {}, fallbackAmount = 0) {
     invoiceUrl: normalizeStringValue(payment.invoiceUrl),
     bankSlipUrl: normalizeStringValue(payment.bankSlipUrl),
     paidAt: paidAt && !Number.isNaN(paidAt.getTime()) ? paidAt : null,
+    confirmedAt: confirmedAt && !Number.isNaN(confirmedAt.getTime()) ? confirmedAt : null,
+    receivedAt: receivedAt && !Number.isNaN(receivedAt.getTime()) ? receivedAt : null,
+    providerUpdatedAt:
+      providerUpdatedAt && !Number.isNaN(providerUpdatedAt.getTime()) ? providerUpdatedAt : null,
     updatedAt: updatedAt && !Number.isNaN(updatedAt.getTime()) ? updatedAt : null,
   };
 }

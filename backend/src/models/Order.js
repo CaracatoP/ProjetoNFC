@@ -1,8 +1,10 @@
 import mongoose from 'mongoose';
 import {
   DEFAULT_PRODUCT_MEASUREMENT_UNIT,
+  DEFAULT_PAYMENT_ARCHITECTURE,
   DEFAULT_PAYMENT_PROVIDER,
   DEFAULT_PAYMENT_STATUS,
+  PAYMENT_ARCHITECTURE_VALUES,
   PAYMENT_METHOD_VALUES,
   PAYMENT_PROVIDER_VALUES,
   PAYMENT_STATUS_VALUES,
@@ -83,6 +85,12 @@ const orderPaymentSchema = new mongoose.Schema(
       default: 'cash_on_pickup',
       trim: true,
     },
+    paymentArchitecture: {
+      type: String,
+      enum: PAYMENT_ARCHITECTURE_VALUES,
+      default: DEFAULT_PAYMENT_ARCHITECTURE,
+      trim: true,
+    },
     status: {
       type: String,
       enum: PAYMENT_STATUS_VALUES,
@@ -96,8 +104,10 @@ const orderPaymentSchema = new mongoose.Schema(
       trim: true,
     },
     amount: { type: Number, required: true, min: 0, default: 0 },
+    grossAmount: { type: Number, min: 0, default: 0 },
     platformFeeAmount: { type: Number, min: 0, default: 0 },
     tenantNetAmount: { type: Number, min: 0, default: 0 },
+    refundedAmount: { type: Number, min: 0, default: 0 },
     pixCopyPaste: { type: String, trim: true, default: '' },
     pixQrCodeUrl: { type: String, trim: true, default: '' },
     pixQrCode: { type: String, trim: true, default: '' },
@@ -108,6 +118,9 @@ const orderPaymentSchema = new mongoose.Schema(
     invoiceUrl: { type: String, trim: true, default: '' },
     bankSlipUrl: { type: String, trim: true, default: '' },
     paidAt: { type: Date, default: null },
+    confirmedAt: { type: Date, default: null },
+    receivedAt: { type: Date, default: null },
+    providerUpdatedAt: { type: Date, default: null },
     updatedAt: { type: Date, default: null },
   },
   {

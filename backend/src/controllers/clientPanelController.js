@@ -10,6 +10,7 @@ import {
   deleteClientPanelProfessional,
   getClientPanelAnalytics,
   getClientPanelBusiness,
+  getClientPanelFinance,
   listClientPanelAppointmentRequests,
   listClientPanelAppointmentServices,
   listClientPanelOrders,
@@ -246,6 +247,14 @@ export async function updateClientPanelAppointmentRequestStatusController(req, r
 export async function getClientPanelAnalyticsController(req, res, next) {
   try {
     return successResponse(res, await getClientPanelAnalytics(req.sessionUser));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function getClientPanelFinanceController(req, res, next) {
+  try {
+    return successResponse(res, await getClientPanelFinance(req.sessionUser));
   } catch (error) {
     return next(error);
   }

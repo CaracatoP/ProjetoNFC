@@ -48,7 +48,7 @@ export function AppShell({
 
   return (
     <div className={['app-shell', shellClassName].filter(Boolean).join(' ')}>
-      {headerVariant === 'topbar' ? (
+      {headerVariant === 'none' ? null : headerVariant === 'topbar' ? (
         <header className={['app-shell__topbar', heroClassName].filter(Boolean).join(' ')}>
           <div className="app-shell__brand">
             <img src={taplinkMarkUrl} alt="TapLink" className="app-shell__brand-mark" />

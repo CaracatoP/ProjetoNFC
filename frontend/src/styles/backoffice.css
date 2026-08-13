@@ -1554,6 +1554,206 @@
   gap: 0.55rem;
 }
 
+.dashboard-shell.admin-modern-shell {
+  width: 100%;
+  max-width: none;
+  min-height: 100vh;
+  margin: 0;
+  padding: clamp(0.5rem, 1vw, 1rem);
+}
+
+.dashboard-shell .admin-modern-layout {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+  width: 100%;
+}
+
+.dashboard-shell .admin-modern-workspace {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.dashboard-shell .admin-modern-sidebar {
+  top: clamp(0.5rem, 1vw, 1rem);
+  max-height: calc(100vh - clamp(1rem, 2vw, 2rem));
+}
+
+.dashboard-shell .admin-modern-sidebar .client-panel-sidebar__brand > div > span {
+  font-size: 0.85rem;
+}
+
+.dashboard-shell .admin-modern-sidebar .client-panel-sidebar__brand > div > span::after {
+  content: none;
+}
+
+.dashboard-shell .admin-modern-sidebar__tenant small {
+  color: var(--client-panel-sidebar-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.dashboard-shell .admin-modern-sidebar__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.dashboard-shell .admin-modern-sidebar__stats span {
+  padding: 0.5rem;
+  border: 1px solid var(--backoffice-sidebar-border);
+  border-radius: 9px;
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--client-panel-sidebar-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.dashboard-shell .admin-modern-page-header {
+  padding-top: 0.1rem;
+}
+
+.dashboard-shell .admin-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.dashboard-shell .admin-operations-dashboard {
+  display: grid;
+  gap: 1rem;
+}
+
+.dashboard-shell .admin-operations-dashboard__kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-shell .admin-operations-dashboard__grid {
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.55fr);
+}
+
+.dashboard-shell .admin-tenant-attention-list,
+.dashboard-shell .admin-operations-dashboard__events {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.dashboard-shell .admin-tenant-attention-row {
+  grid-template-columns: minmax(74px, 0.55fr) minmax(160px, 1.3fr) minmax(150px, 1fr) minmax(90px, 0.7fr) auto;
+}
+
+.dashboard-shell.admin-modern-shell .admin-workspace,
+.dashboard-shell.admin-modern-shell .admin-workspace--redesigned {
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+}
+
+.dashboard-shell.admin-modern-shell .admin-editor-layout {
+  grid-template-columns: minmax(0, 1.35fr) minmax(330px, 0.65fr);
+}
+
+.dashboard-shell .admin-clients-layout--modern {
+  grid-template-columns: minmax(340px, 430px) minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.dashboard-shell .admin-clients-master-card,
+.dashboard-shell .admin-clients-detail-card {
+  padding: 1rem;
+}
+
+.dashboard-shell .admin-clients-sidebar--master {
+  position: sticky;
+  top: clamp(0.5rem, 1vw, 1rem);
+  max-height: calc(100vh - clamp(1rem, 2vw, 2rem));
+  overflow: auto;
+}
+
+.dashboard-shell .admin-clients-detail {
+  min-width: 0;
+}
+
+.dashboard-shell .admin-detail-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 1rem 0;
+  padding: 0.35rem;
+  border: 1px solid var(--backoffice-border);
+  border-radius: 12px;
+  background: var(--backoffice-surface-muted);
+}
+
+.dashboard-shell .admin-detail-tabs__button {
+  min-height: 36px;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--backoffice-text-muted);
+  font-weight: 700;
+}
+
+.dashboard-shell .admin-detail-tabs__button:hover,
+.dashboard-shell .admin-detail-tabs__button.is-active {
+  border-color: rgba(79, 125, 243, 0.28);
+  background: var(--backoffice-primary-soft);
+  color: var(--backoffice-text);
+}
+
+.dashboard-shell .admin-inline-actions--end {
+  justify-content: flex-end;
+}
+
+.dashboard-shell .admin-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: flex-end;
+  padding: clamp(0.5rem, 1vw, 1rem);
+  background: var(--backoffice-overlay);
+}
+
+.dashboard-shell .admin-drawer {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  width: min(620px, 100%);
+  height: 100%;
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid var(--backoffice-border);
+  border-radius: 16px;
+  background: var(--backoffice-surface);
+  box-shadow: 0 22px 48px rgba(3, 7, 13, 0.34);
+}
+
+.dashboard-shell .admin-drawer__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--backoffice-border);
+}
+
+.dashboard-shell .admin-drawer__header > div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.dashboard-shell .admin-drawer__header h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  color: var(--backoffice-text);
+}
+
 @media (max-width: 1180px) {
   .dashboard-shell .client-panel-kpi-grid,
   .dashboard-shell .admin-stock-summary-grid {
@@ -1561,8 +1761,11 @@
   }
 
   .dashboard-shell .client-panel-overview-grid,
+  .dashboard-shell .admin-operations-dashboard__grid,
   .dashboard-shell .admin-workspace,
   .dashboard-shell .admin-workspace--redesigned,
+  .dashboard-shell.admin-modern-shell .admin-workspace,
+  .dashboard-shell.admin-modern-shell .admin-workspace--redesigned,
   .dashboard-shell .admin-editor-layout {
     grid-template-columns: 1fr;
   }
@@ -1573,6 +1776,21 @@
 }
 
 @media (max-width: 920px) {
+  .dashboard-shell .admin-modern-layout,
+  .dashboard-shell .admin-clients-layout--modern {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-shell .admin-modern-sidebar,
+  .dashboard-shell .admin-clients-sidebar--master {
+    position: static;
+    max-height: none;
+  }
+
+  .dashboard-shell .admin-modern-sidebar {
+    display: none;
+  }
+
   .app-shell__topbar {
     align-items: flex-start;
     flex-direction: column;
@@ -1661,6 +1879,7 @@
   }
 
   .dashboard-shell .client-panel-kpi-grid,
+  .dashboard-shell .admin-operations-dashboard__kpis,
   .dashboard-shell .client-panel-mini-metrics,
   .dashboard-shell .admin-stock-summary-grid,
   .dashboard-shell .admin-product-form__grid--compact,
@@ -1672,6 +1891,10 @@
 
   .dashboard-shell .client-panel-order-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-shell .admin-tenant-attention-row {
+    grid-template-columns: 1fr;
   }
 
   .dashboard-shell .client-panel-order-row__name {

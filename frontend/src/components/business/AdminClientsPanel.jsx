@@ -30,6 +30,12 @@ const CLIENT_ROLE_OPTIONS = [
 ];
 
 const PLAN_OPTIONS = [PLAN_TYPES.STARTER, PLAN_TYPES.PRO, PLAN_TYPES.PREMIUM, PLAN_TYPES.ENTERPRISE];
+const CLIENT_DETAIL_TABS = [
+  { id: 'general', label: 'Geral' },
+  { id: 'access', label: 'Acesso' },
+  { id: 'finance', label: 'Financeiro' },
+  { id: 'security', label: 'Seguranca' },
+];
 
 function normalizeText(value) {
   return String(value || '').trim();
@@ -136,6 +142,8 @@ export function AdminClientsPanel({
   const [createForm, setCreateForm] = useState(() => createInitialCreateForm(businesses[0]?.id || ''));
   const [editForm, setEditForm] = useState(() => createEditForm(null));
   const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
+  const [activeDetailTab, setActiveDetailTab] = useState('general');
 
   const businessOptions = useMemo(
     () =>
@@ -229,6 +237,9 @@ export function AdminClientsPanel({
       if (options.resetCreateForm) {
         setCreateForm(createInitialCreateForm(businessOptions[0]?.id || ''));
       }
+      if (options.closeCreateDrawer) {
+        setCreateDrawerOpen(false);
+      }
       if (options.resetPassword) {
         setResetPasswordValue('');
       }
@@ -257,7 +268,7 @@ export function AdminClientsPanel({
           active: Boolean(createForm.active),
         }),
       'Cliente criado com sucesso.',
-      { resetCreateForm: true },
+      { resetCreateForm: true, closeCreateDrawer: true },
     );
   }
 
@@ -342,6 +353,67 @@ export function AdminClientsPanel({
     );
   }
 
+  const createClientForm = (
+    <form
+      className="admin-card-stack admin-card-stack--airy"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void handleCreateClient();
+      }}
+    >
+      {!businessOptions.length ? (
+        <EmptyState title="Nenhum tenant disponivel" description="Crie um tenant primeiro para vincular o cliente a um negocio." />
+      ) : (
+        <>
+          <div className="admin-form-grid">
+            <AdminField label="Nome">
+              <input value={createForm.name} onChange={(event) => setCreateForm((current) => ({ ...current, name: event.target.value }))} />
+            </AdminField>
+            <AdminField label="E-mail">
+              <input type="email" value={createForm.email} onChange={(event) => setCreateForm((current) => ({ ...current, email: event.target.value }))} />
+            </AdminField>
+            <AdminField label="Senha inicial">
+              <input type="password" value={createForm.password} onChange={(event) => setCreateForm((current) => ({ ...current, password: event.target.value }))} />
+            </AdminField>
+            <AdminField label="Tenant vinculado">
+              <select value={createForm.businessId} onChange={(event) => setCreateForm((current) => ({ ...current, businessId: event.target.value }))}>
+                {businessOptions.map((business) => (
+                  <option key={business.id} value={business.id}>
+                    {business.name}
+                  </option>
+                ))}
+              </select>
+            </AdminField>
+            <AdminField label="Nivel">
+              <select value={String(createForm.roleLevel)} onChange={(event) => setCreateForm((current) => ({ ...current, roleLevel: Number(event.target.value) }))}>
+                {CLIENT_ROLE_OPTIONS.map((level) => (
+                  <option key={level} value={String(level)}>
+                    {ROLE_LEVEL_LABELS[level]}
+                  </option>
+                ))}
+              </select>
+            </AdminField>
+            <AdminField label="Status operacional">
+              <select value={createForm.active ? 'active' : 'disabled'} onChange={(event) => setCreateForm((current) => ({ ...current, active: event.target.value === 'active' }))}>
+                <option value="active">Ativo</option>
+                <option value="disabled">Bloqueado</option>
+              </select>
+            </AdminField>
+          </div>
+
+          <div className="admin-inline-actions admin-inline-actions--end">
+            <Button variant="secondary" onClick={() => setCreateDrawerOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={saving || !businessOptions.length}>
+              {saving ? 'Criando acesso...' : 'Criar cliente'}
+            </Button>
+          </div>
+        </>
+      )}
+    </form>
+  );
+
   if (loading && !clients.length) {
     return <EmptyState title="Carregando clientes" description="Buscando usuarios vinculados aos tenants, planos e status financeiros atuais." />;
   }
@@ -351,18 +423,23 @@ export function AdminClientsPanel({
       {message ? <p className="admin-status-banner admin-status-banner--success">{message}</p> : null}
       {error ? <p className="admin-status-banner admin-status-banner--error">{error}</p> : null}
 
-      <div className="admin-clients-layout">
-        <div className="admin-clients-sidebar">
-          <Card className="admin-panel-card">
+      <div className="admin-clients-layout admin-clients-layout--modern">
+        <div className="admin-clients-sidebar admin-clients-sidebar--master">
+          <Card className="admin-panel-card admin-clients-master-card">
             <div className="admin-panel-card__header">
               <div>
                 <SectionEyebrow>Clientes</SectionEyebrow>
                 <h2>Base comercial</h2>
-                <p>Crie acessos dos tenants, filtre por status e acompanhe quem ja esta pronto para operar.</p>
+                <p>Busque, filtre e selecione um acesso para operar no detalhe.</p>
               </div>
-              <Button variant="secondary" disabled={loading} onClick={() => loadClients()}>
-                {loading ? 'Atualizando...' : 'Atualizar lista'}
-              </Button>
+              <div className="admin-inline-actions">
+                <Button disabled={!businessOptions.length} onClick={() => setCreateDrawerOpen(true)}>
+                  Novo cliente
+                </Button>
+                <Button variant="secondary" disabled={loading} onClick={() => loadClients()}>
+                  {loading ? 'Atualizando...' : 'Atualizar'}
+                </Button>
+              </div>
             </div>
 
             <div className="admin-card-stack">
@@ -418,173 +495,164 @@ export function AdminClientsPanel({
               )}
             </div>
           </Card>
-
-          <Card className="admin-panel-card">
-            <div className="admin-panel-card__header">
-              <div>
-                <SectionEyebrow>Novo acesso</SectionEyebrow>
-                <h2>Cadastrar cliente</h2>
-                <p>Niveis 0 e 1 conseguem criar usuarios dos niveis 2 a 5 e vincular o acesso ao tenant correto.</p>
-              </div>
-            </div>
-
-            {!businessOptions.length ? (
-              <EmptyState title="Nenhum tenant disponivel" description="Crie um tenant primeiro para vincular o cliente a um negocio." />
-            ) : (
-              <div className="admin-card-stack">
-                <div className="admin-form-grid">
-                  <AdminField label="Nome">
-                    <input value={createForm.name} onChange={(event) => setCreateForm((current) => ({ ...current, name: event.target.value }))} />
-                  </AdminField>
-                  <AdminField label="E-mail">
-                    <input type="email" value={createForm.email} onChange={(event) => setCreateForm((current) => ({ ...current, email: event.target.value }))} />
-                  </AdminField>
-                  <AdminField label="Senha inicial">
-                    <input type="password" value={createForm.password} onChange={(event) => setCreateForm((current) => ({ ...current, password: event.target.value }))} />
-                  </AdminField>
-                  <AdminField label="Tenant vinculado">
-                    <select value={createForm.businessId} onChange={(event) => setCreateForm((current) => ({ ...current, businessId: event.target.value }))}>
-                      {businessOptions.map((business) => (
-                        <option key={business.id} value={business.id}>
-                          {business.name}
-                        </option>
-                      ))}
-                    </select>
-                  </AdminField>
-                  <AdminField label="Nivel">
-                    <select value={String(createForm.roleLevel)} onChange={(event) => setCreateForm((current) => ({ ...current, roleLevel: Number(event.target.value) }))}>
-                      {CLIENT_ROLE_OPTIONS.map((level) => (
-                        <option key={level} value={String(level)}>
-                          {ROLE_LEVEL_LABELS[level]}
-                        </option>
-                      ))}
-                    </select>
-                  </AdminField>
-                  <AdminField label="Status operacional">
-                    <select value={createForm.active ? 'active' : 'disabled'} onChange={(event) => setCreateForm((current) => ({ ...current, active: event.target.value === 'active' }))}>
-                      <option value="active">Ativo</option>
-                      <option value="disabled">Bloqueado</option>
-                    </select>
-                  </AdminField>
-                </div>
-
-                <Button disabled={saving || !businessOptions.length} onClick={handleCreateClient}>
-                  {saving ? 'Criando acesso...' : 'Criar cliente'}
-                </Button>
-              </div>
-            )}
-          </Card>
         </div>
 
-        <div className="admin-editor-column">
+        <div className="admin-editor-column admin-clients-detail">
           {selectedClient ? (
-            <div className="admin-card-stack admin-card-stack--airy">
-              <Card className="admin-panel-card">
-                <div className="admin-panel-card__header">
-                  <div>
-                    <SectionEyebrow>Perfil do cliente</SectionEyebrow>
-                    <h2>{selectedClient.user?.displayName || 'Cliente selecionado'}</h2>
-                    <p>Edite dados operacionais, tenant vinculado e nivel de acesso sem tocar no login interno do sistema.</p>
-                  </div>
-                  <div className="admin-module-badges">
-                    <Badge tone="accent">{ROLE_LEVEL_LABELS[selectedClient.user?.roleLevel] || `Nivel ${selectedClient.user?.roleLevel}`}</Badge>
-                    <Badge>{selectedClient.subscription?.plan?.name || selectedClient.subscription?.plan?.code || 'Sem plano'}</Badge>
-                    <Badge tone={selectedClient.access?.billingStatus === 'overdue' ? 'warning' : 'muted'}>
-                      {BILLING_ACCESS_LABELS[selectedClient.access?.billingStatus] || selectedClient.access?.billingStatus || 'Pago'}
-                    </Badge>
-                  </div>
+            <Card className="admin-panel-card admin-clients-detail-card">
+              <div className="admin-panel-card__header">
+                <div>
+                  <SectionEyebrow>Cliente selecionado</SectionEyebrow>
+                  <h2>{selectedClient.user?.displayName || 'Cliente selecionado'}</h2>
+                  <p>{selectedClient.user?.email || 'Sem e-mail'} · {selectedClient.business?.name || 'Sem tenant vinculado'}</p>
                 </div>
-
-                <div className="admin-client-summary-grid">
-                  <div className="admin-mini-stat-card">
-                    <span>Tenant vinculado</span>
-                    <strong>{selectedClient.business?.name || 'Sem tenant'}</strong>
-                    <small>{selectedClient.business?.slug ? `/site/${selectedClient.business.slug}` : 'Sem slug publico'}</small>
-                  </div>
-                  <div className="admin-mini-stat-card">
-                    <span>Status operacional</span>
-                    <strong>{selectedClient.user?.status === 'disabled' ? 'Bloqueado' : 'Ativo'}</strong>
-                    <small>Controle manual do acesso ao painel.</small>
-                  </div>
+                <div className="admin-module-badges">
+                  <Badge tone="accent">{ROLE_LEVEL_LABELS[selectedClient.user?.roleLevel] || `Nivel ${selectedClient.user?.roleLevel}`}</Badge>
+                  <Badge>{selectedClient.subscription?.plan?.name || selectedClient.subscription?.plan?.code || 'Sem plano'}</Badge>
+                  <Badge tone={selectedClient.access?.billingStatus === 'overdue' ? 'warning' : 'muted'}>
+                    {BILLING_ACCESS_LABELS[selectedClient.access?.billingStatus] || selectedClient.access?.billingStatus || 'Pago'}
+                  </Badge>
                 </div>
+              </div>
 
-                <div className="admin-form-grid">
-                  <AdminField label="Nome">
-                    <input value={editForm.name} onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))} />
-                  </AdminField>
-                  <AdminField label="E-mail">
-                    <input type="email" value={editForm.email} onChange={(event) => setEditForm((current) => ({ ...current, email: event.target.value }))} />
-                  </AdminField>
-                  <AdminField label="Tenant vinculado">
-                    <select value={editForm.businessId} onChange={(event) => setEditForm((current) => ({ ...current, businessId: event.target.value }))}>
-                      {businessOptions.map((business) => (
-                        <option key={business.id} value={business.id}>
-                          {business.name}
-                        </option>
-                      ))}
-                    </select>
-                  </AdminField>
-                  <AdminField label="Nivel">
-                    <select value={String(editForm.roleLevel)} onChange={(event) => setEditForm((current) => ({ ...current, roleLevel: Number(event.target.value) }))}>
-                      {CLIENT_ROLE_OPTIONS.map((level) => (
-                        <option key={level} value={String(level)}>
-                          {ROLE_LEVEL_LABELS[level]}
-                        </option>
-                      ))}
-                    </select>
-                  </AdminField>
-                  <AdminField label="Status operacional">
-                    <select value={editForm.active ? 'active' : 'disabled'} onChange={(event) => setEditForm((current) => ({ ...current, active: event.target.value === 'active' }))}>
-                      <option value="active">Ativo</option>
-                      <option value="disabled">Bloqueado</option>
-                    </select>
-                  </AdminField>
+              <div className="admin-detail-tabs" role="tablist" aria-label="Secoes do cliente">
+                {CLIENT_DETAIL_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    className={`admin-detail-tabs__button${activeDetailTab === tab.id ? ' is-active' : ''}`}
+                    aria-selected={activeDetailTab === tab.id}
+                    onClick={() => setActiveDetailTab(tab.id)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {activeDetailTab === 'general' ? (
+                <div className="admin-card-stack admin-card-stack--airy">
+                  <div className="admin-client-summary-grid">
+                    <div className="admin-mini-stat-card">
+                      <span>Tenant vinculado</span>
+                      <strong>{selectedClient.business?.name || 'Sem tenant'}</strong>
+                      <small>{selectedClient.business?.slug ? `/site/${selectedClient.business.slug}` : 'Sem slug publico'}</small>
+                    </div>
+                    <div className="admin-mini-stat-card">
+                      <span>Status operacional</span>
+                      <strong>{selectedClient.user?.status === 'disabled' ? 'Bloqueado' : 'Ativo'}</strong>
+                      <small>Controle manual do acesso ao painel.</small>
+                    </div>
+                  </div>
+
+                  <Card className="admin-subpanel">
+                    <div className="admin-panel-card__header">
+                      <div>
+                        <SectionEyebrow>Perfil do cliente</SectionEyebrow>
+                        <h2>Dados principais</h2>
+                        <p>Edite dados operacionais e o tenant vinculado sem misturar seguranca e cobranca.</p>
+                      </div>
+                    </div>
+
+                    <div className="admin-form-grid">
+                      <AdminField label="Nome">
+                        <input value={editForm.name} onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))} />
+                      </AdminField>
+                      <AdminField label="E-mail">
+                        <input type="email" value={editForm.email} onChange={(event) => setEditForm((current) => ({ ...current, email: event.target.value }))} />
+                      </AdminField>
+                      <AdminField label="Tenant vinculado">
+                        <select value={editForm.businessId} onChange={(event) => setEditForm((current) => ({ ...current, businessId: event.target.value }))}>
+                          {businessOptions.map((business) => (
+                            <option key={business.id} value={business.id}>
+                              {business.name}
+                            </option>
+                          ))}
+                        </select>
+                      </AdminField>
+                    </div>
+
+                    <div className="admin-inline-actions">
+                      <Button disabled={saving} onClick={handleSaveClient}>
+                        {saving ? 'Salvando...' : 'Salvar cliente'}
+                      </Button>
+                      {selectedClient.business?.id ? (
+                        <Button
+                          variant="secondary"
+                          onClick={() => onOpenBusiness?.(selectedClient.business.id)}
+                        >
+                          Abrir tenant no workspace
+                        </Button>
+                      ) : null}
+                    </div>
+                  </Card>
                 </div>
+              ) : null}
 
-                <div className="admin-inline-actions">
-                  <Button disabled={saving} onClick={handleSaveClient}>
-                    {saving ? 'Salvando...' : 'Salvar cliente'}
-                  </Button>
-                  <Button variant="secondary" disabled={saving} onClick={handleUpdateRoleLevel}>
-                    Atualizar nivel
-                  </Button>
-                  <Button variant="secondary" disabled={saving} onClick={handleToggleBlock}>
-                    {selectedClient.user?.status === 'disabled' ? 'Desbloquear acesso' : 'Bloquear acesso'}
-                  </Button>
-                  {selectedClient.business?.id ? (
-                    <Button
-                      variant="secondary"
-                      onClick={() => onOpenBusiness?.(selectedClient.business.id)}
-                    >
-                      Abrir tenant no workspace
+              {activeDetailTab === 'access' ? (
+                <Card className="admin-subpanel">
+                  <div className="admin-panel-card__header">
+                    <div>
+                      <SectionEyebrow>Acesso</SectionEyebrow>
+                      <h2>Nivel e bloqueio</h2>
+                      <p>Controle nivel operacional e bloqueio sem tocar em cobranca.</p>
+                    </div>
+                  </div>
+
+                  <div className="admin-form-grid">
+                    <AdminField label="Nivel">
+                      <select value={String(editForm.roleLevel)} onChange={(event) => setEditForm((current) => ({ ...current, roleLevel: Number(event.target.value) }))}>
+                        {CLIENT_ROLE_OPTIONS.map((level) => (
+                          <option key={level} value={String(level)}>
+                            {ROLE_LEVEL_LABELS[level]}
+                          </option>
+                        ))}
+                      </select>
+                    </AdminField>
+                    <AdminField label="Status operacional">
+                      <select value={editForm.active ? 'active' : 'disabled'} onChange={(event) => setEditForm((current) => ({ ...current, active: event.target.value === 'active' }))}>
+                        <option value="active">Ativo</option>
+                        <option value="disabled">Bloqueado</option>
+                      </select>
+                    </AdminField>
+                  </div>
+
+                  <div className="admin-inline-actions">
+                    <Button disabled={saving} onClick={handleUpdateRoleLevel}>
+                      Atualizar nivel
                     </Button>
-                  ) : null}
-                </div>
-              </Card>
-
-              <Card className="admin-panel-card">
-                <div className="admin-panel-card__header">
-                  <div>
-                    <SectionEyebrow>Seguranca</SectionEyebrow>
-                    <h2>Reset de senha</h2>
-                    <p>Niveis 0 e 1 conseguem redefinir a senha de usuarios dos niveis 2 a 5 sem mexer no proprio login interno.</p>
+                    <Button variant="secondary" disabled={saving} onClick={handleToggleBlock}>
+                      {selectedClient.user?.status === 'disabled' ? 'Desbloquear acesso' : 'Bloquear acesso'}
+                    </Button>
                   </div>
-                </div>
+                </Card>
+              ) : null}
 
-                <div className="admin-form-grid">
-                  <AdminField label="Nova senha">
-                    <input type="password" value={resetPasswordValue} onChange={(event) => setResetPasswordValue(event.target.value)} placeholder="Minimo de 8 caracteres" />
-                  </AdminField>
-                </div>
+              {activeDetailTab === 'security' ? (
+                <Card className="admin-subpanel">
+                  <div className="admin-panel-card__header">
+                    <div>
+                      <SectionEyebrow>Seguranca</SectionEyebrow>
+                      <h2>Reset de senha</h2>
+                      <p>Niveis 0 e 1 conseguem redefinir a senha de usuarios dos niveis 2 a 5 sem mexer no proprio login interno.</p>
+                    </div>
+                  </div>
 
-                <div className="admin-inline-actions">
-                  <Button disabled={saving} onClick={handleResetPassword}>
-                    {saving ? 'Atualizando...' : 'Resetar senha'}
-                  </Button>
-                </div>
-              </Card>
+                  <div className="admin-form-grid">
+                    <AdminField label="Nova senha">
+                      <input type="password" value={resetPasswordValue} onChange={(event) => setResetPasswordValue(event.target.value)} placeholder="Minimo de 8 caracteres" />
+                    </AdminField>
+                  </div>
 
-              <Card className="admin-panel-card">
+                  <div className="admin-inline-actions">
+                    <Button disabled={saving} onClick={handleResetPassword}>
+                      {saving ? 'Atualizando...' : 'Resetar senha'}
+                    </Button>
+                  </div>
+                </Card>
+              ) : null}
+
+              {activeDetailTab === 'finance' ? (
+                <Card className="admin-subpanel">
                 <div className="admin-panel-card__header">
                   <div>
                     <SectionEyebrow>Plano e cobranca</SectionEyebrow>
@@ -635,12 +703,37 @@ export function AdminClientsPanel({
                   </Button>
                 </div>
               </Card>
-            </div>
+              ) : null}
+            </Card>
           ) : (
             <EmptyState title="Selecione um cliente" description="Escolha um acesso na lista lateral para editar nivel, tenant vinculado, plano ou seguranca." />
           )}
         </div>
       </div>
+
+      {createDrawerOpen ? (
+        <div className="admin-drawer-backdrop" role="presentation" onClick={() => setCreateDrawerOpen(false)}>
+          <aside
+            className="admin-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-create-client-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="admin-drawer__header">
+              <div>
+                <SectionEyebrow>Novo acesso</SectionEyebrow>
+                <h2 id="admin-create-client-title">Cadastrar cliente</h2>
+                <p>Niveis 0 e 1 conseguem criar usuarios dos niveis 2 a 5 e vincular o acesso ao tenant correto.</p>
+              </div>
+              <button type="button" className="icon-button" onClick={() => setCreateDrawerOpen(false)} aria-label="Fechar cadastro de cliente">
+                x
+              </button>
+            </div>
+            {createClientForm}
+          </aside>
+        </div>
+      ) : null}
     </div>
   );
 }

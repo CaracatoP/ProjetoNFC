@@ -10,6 +10,7 @@ import {
   deleteClientPanelProduct,
   deleteClientPanelProfessional,
   fetchClientPanelAnalytics,
+  fetchClientPanelFinance,
   fetchClientPanelAppointmentRequests,
   fetchClientPanelAppointmentServices,
   fetchClientPanelBusiness,
@@ -51,6 +52,13 @@ const SUMMARY_REFRESH_EVENT_KINDS = new Set([
   TENANT_REALTIME_KINDS.APPOINTMENT_SERVICE_CREATED,
   TENANT_REALTIME_KINDS.APPOINTMENT_SERVICE_UPDATED,
   TENANT_REALTIME_KINDS.APPOINTMENT_SERVICE_DELETED,
+]);
+
+const FINANCE_REFRESH_EVENT_KINDS = new Set([
+  TENANT_REALTIME_KINDS.ORDER_CREATED,
+  TENANT_REALTIME_KINDS.ORDER_STATUS_UPDATED,
+  TENANT_REALTIME_KINDS.ORDER_PAYMENT_UPDATED,
+  TENANT_REALTIME_KINDS.ORDER_ARCHIVED,
 ]);
 
 const DOMAIN_FETCHERS = Object.freeze({
@@ -198,9 +206,12 @@ export function useClientPanelWorkspace({
   const [editor, setEditor] = useState(null);
   const [draft, setDraft] = useState(null);
   const [analytics, setAnalytics] = useState(null);
+  const [finance, setFinance] = useState(null);
   const [loading, setLoading] = useState(true);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [financeLoading, setFinanceLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState('');
+  const [financeError, setFinanceError] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [moduleBusyKey, setModuleBusyKey] = useState('');
@@ -212,6 +223,7 @@ export function useClientPanelWorkspace({
   const domainStateRef = useRef(createInitialDomainState());
   const domainInFlightRef = useRef(new Map());
   const analyticsInFlightRef = useRef(null);
+  const financeInFlightRef = useRef(null);
 
   const updateComposedEditor = useCallback((nextBootstrap, nextDomains, options = {}) => {
     const previousEditor = editorRef.current;
@@ -341,6 +353,41 @@ export function useClientPanelWorkspace({
       return requestPromise;
     }
 
+    if (viewId === 'finance') {
+      if (!token || !access?.capabilities?.canViewOrders) {
+        setFinance(null);
+        return null;
+      }
+
+      if (!options.force && finance) {
+        return finance;
+      }
+
+      if (!options.force && financeInFlightRef.current) {
+        return financeInFlightRef.current;
+      }
+
+      setFinanceLoading(true);
+      setFinanceError('');
+
+      const requestPromise = fetchClientPanelFinance(token)
+        .then((nextFinance) => {
+          setFinance(nextFinance);
+          return nextFinance;
+        })
+        .catch((financeLoadError) => {
+          setFinanceError(getErrorMessage(financeLoadError));
+          throw financeLoadError;
+        })
+        .finally(() => {
+          financeInFlightRef.current = null;
+          setFinanceLoading(false);
+        });
+
+      financeInFlightRef.current = requestPromise;
+      return requestPromise;
+    }
+
     const domainKeys = VIEW_DOMAIN_KEYS[viewId] || [];
 
     if (!domainKeys.length) {
@@ -348,7 +395,7 @@ export function useClientPanelWorkspace({
     }
 
     return Promise.all(domainKeys.map((domainKey) => loadDomain(domainKey, options)));
-  }, [access?.capabilities?.canViewAnalytics, analytics, loadDomain, token]);
+  }, [access?.capabilities?.canViewAnalytics, access?.capabilities?.canViewOrders, analytics, finance, loadDomain, token]);
 
   const refreshSummaryAndDomains = useCallback(async (domainKeys = []) => {
     const requests = [loadBootstrap()];
@@ -580,6 +627,11 @@ export function useClientPanelWorkspace({
               } else {
                 setAnalytics(null);
               }
+              if (nextSession?.access?.capabilities?.canViewOrders && finance) {
+                await ensureViewData('finance', { force: true });
+              } else {
+                setFinance(null);
+              }
               return;
             }
 
@@ -594,6 +646,10 @@ export function useClientPanelWorkspace({
                 .filter((domainKey) => domainStateRef.current[domainKey]?.status === 'ready')
                 .map((domainKey) => loadDomain(domainKey, { force: true })),
             );
+
+            if (finance && FINANCE_REFRESH_EVENT_KINDS.has(event.kind)) {
+              await ensureViewData('finance', { force: true });
+            }
 
             if (event.kind === TENANT_REALTIME_KINDS.TENANT_UPDATED) {
               setMessage('Dados do tenant sincronizados automaticamente.');
@@ -611,16 +667,19 @@ export function useClientPanelWorkspace({
       active = false;
       unsubscribe?.();
     };
-  }, [analytics, editor?.business?.id, editor?.business?.slug, ensureViewData, isSuspendedClientAccess, loadBootstrap, loadDomain, refreshSession, token]);
+  }, [analytics, editor?.business?.id, editor?.business?.slug, ensureViewData, finance, isSuspendedClientAccess, loadBootstrap, loadDomain, refreshSession, token]);
 
   return {
     editor,
     draft,
     setDraft,
     analytics,
+    finance,
     loading,
     analyticsLoading,
+    financeLoading,
     analyticsError,
+    financeError,
     message,
     error,
     moduleBusyKey,

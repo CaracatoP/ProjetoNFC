@@ -115,15 +115,29 @@ describe('Admin finance routes', () => {
     return loginResponse.body.data.token;
   }
 
-  it('allows level 0 to read platform asaas settings safely', async () => {
-    await SystemSetting.create({
-      key: 'finance:asaas',
-      value: {
-        platformWalletId: 'wallet_platform_123',
-        defaultPlatformFeePercent: 5,
-        asaasApiKey: 'should-not-leak',
-        webhookAuthToken: 'should-not-leak',
+  async function savePlatformFinanceSettings(value = {}) {
+    await SystemSetting.findOneAndUpdate(
+      { key: 'finance:asaas' },
+      {
+        key: 'finance:asaas',
+        value: {
+          paymentArchitecture: 'centralized',
+          ...value,
+        },
       },
+      {
+        upsert: true,
+        new: true,
+      },
+    );
+  }
+
+  it('allows level 0 to read platform asaas settings safely', async () => {
+    await savePlatformFinanceSettings({
+      platformWalletId: 'wallet_platform_123',
+      defaultPlatformFeePercent: 5,
+      asaasApiKey: 'should-not-leak',
+      webhookAuthToken: 'should-not-leak',
     });
 
     const response = await request(app)
@@ -131,17 +145,21 @@ describe('Admin finance routes', () => {
       .set('Authorization', `Bearer ${superAdminToken}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.data).toEqual({
-      environment: 'sandbox',
-      rootApiKeyConfigured: true,
-      platformWalletId: 'wallet_platform_123',
-      defaultPlatformFeePercent: 5,
-      webhookUrl: 'http://localhost:4000/api/webhooks/asaas',
-      integrationStatus: 'configured',
-      summary: {
-        platformReady: true,
-      },
-    });
+    expect(response.body.data).toEqual(
+      expect.objectContaining({
+        paymentArchitecture: 'centralized',
+        environment: 'sandbox',
+        rootApiKeyConfigured: true,
+        platformWalletId: 'wallet_platform_123',
+        defaultPlatformFeePercent: 5,
+        webhookUrl: 'http://localhost:4000/api/webhooks/asaas',
+        integrationStatus: 'configured',
+        summary: expect.objectContaining({
+          platformReady: true,
+          processingLabel: 'Conta Asaas centralizada',
+        }),
+      }),
+    );
     expect(response.body.data.asaasApiKey).toBeUndefined();
     expect(response.body.data.asaasWebhookAuthToken).toBeUndefined();
   });
@@ -186,23 +204,29 @@ describe('Admin finance routes', () => {
       });
 
     expect(response.status).toBe(200);
-    expect(response.body.data).toEqual({
-      environment: 'sandbox',
-      rootApiKeyConfigured: true,
-      platformWalletId: 'wallet_platform_999',
-      defaultPlatformFeePercent: 10,
-      webhookUrl: 'http://localhost:4000/api/webhooks/asaas',
-      integrationStatus: 'configured',
-      summary: {
-        platformReady: true,
-      },
-    });
+    expect(response.body.data).toEqual(
+      expect.objectContaining({
+        paymentArchitecture: 'centralized',
+        environment: 'sandbox',
+        rootApiKeyConfigured: true,
+        platformWalletId: 'wallet_platform_999',
+        defaultPlatformFeePercent: 10,
+        webhookUrl: 'http://localhost:4000/api/webhooks/asaas',
+        integrationStatus: 'configured',
+        summary: expect.objectContaining({
+          platformReady: true,
+          processingLabel: 'Conta Asaas centralizada',
+        }),
+      }),
+    );
 
     const persistedSettings = await SystemSetting.findOne({ key: 'finance:asaas' }).lean();
 
     expect(persistedSettings.value).toEqual({
+      paymentArchitecture: 'centralized',
       platformWalletId: 'wallet_platform_999',
       defaultPlatformFeePercent: 10,
+      refundFeePolicy: 'keep_platform_fee',
     });
     expect(persistedSettings.value.asaasApiKey).toBeUndefined();
   });
@@ -245,12 +269,10 @@ describe('Admin finance routes', () => {
   it('returns tenant finance settings safely without leaking the subaccount api key', async () => {
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
 
-    await SystemSetting.create({
-      key: 'finance:asaas',
-      value: {
-        platformWalletId: 'wallet_platform_123',
-        defaultPlatformFeePercent: 5,
-      },
+    await savePlatformFinanceSettings({
+      paymentArchitecture: 'subaccount',
+      platformWalletId: 'wallet_platform_123',
+      defaultPlatformFeePercent: 5,
     });
     await Business.updateOne(
       { _id: business._id },
@@ -292,12 +314,14 @@ describe('Admin finance routes', () => {
       expect.objectContaining({
         businessId: business._id.toString(),
         provider: 'asaas',
+        paymentArchitecture: 'subaccount',
         integrationStatus: 'configured',
         tenantFinancialStatus: 'active',
         usesGlobalFee: true,
         effectivePlatformFeePercent: 5,
         canEnableSplit: true,
         canEnableCheckout: true,
+        usesCentralizedProcessing: false,
         warnings: [],
         splitPreview: {
           globalPercent: 5,
@@ -315,6 +339,7 @@ describe('Admin finance routes', () => {
           tenantFinancialLabel: 'Ativo',
           splitLabel: 'Ativo',
           checkoutLabel: 'Ativo',
+          processingLabel: 'Subconta Asaas do tenant',
         },
         asaas: expect.objectContaining({
           enabled: true,
@@ -341,12 +366,10 @@ describe('Admin finance routes', () => {
   it('updates tenant finance settings with encrypted api key and tenant split override', async () => {
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
 
-    await SystemSetting.create({
-      key: 'finance:asaas',
-      value: {
-        platformWalletId: 'wallet_platform_999',
-        defaultPlatformFeePercent: 5,
-      },
+    await savePlatformFinanceSettings({
+      paymentArchitecture: 'subaccount',
+      platformWalletId: 'wallet_platform_999',
+      defaultPlatformFeePercent: 5,
     });
 
     const response = await request(app)
@@ -382,10 +405,12 @@ describe('Admin finance routes', () => {
       expect.objectContaining({
         enabled: true,
         provider: 'asaas',
+        paymentArchitecture: 'subaccount',
         usesGlobalFee: false,
         effectivePlatformFeePercent: 7.5,
         canEnableSplit: true,
         canEnableCheckout: true,
+        usesCentralizedProcessing: false,
         warnings: [],
         splitPreview: {
           globalPercent: 5,
@@ -425,6 +450,12 @@ describe('Admin finance routes', () => {
   it('blocks split when the platform wallet is missing', async () => {
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
 
+    await savePlatformFinanceSettings({
+      paymentArchitecture: 'subaccount',
+      platformWalletId: '',
+      defaultPlatformFeePercent: 5,
+    });
+
     const response = await request(app)
       .patch(`/api/admin/finance/businesses/${business._id.toString()}`)
       .set('Authorization', `Bearer ${superAdminToken}`)
@@ -451,12 +482,10 @@ describe('Admin finance routes', () => {
   it('blocks split when the tenant wallet is missing', async () => {
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
 
-    await SystemSetting.create({
-      key: 'finance:asaas',
-      value: {
-        platformWalletId: 'wallet_platform_999',
-        defaultPlatformFeePercent: 5,
-      },
+    await savePlatformFinanceSettings({
+      paymentArchitecture: 'subaccount',
+      platformWalletId: 'wallet_platform_999',
+      defaultPlatformFeePercent: 5,
     });
 
     const response = await request(app)
@@ -505,12 +534,10 @@ describe('Admin finance routes', () => {
   it('blocks checkout when asaas is enabled without a valid active subaccount', async () => {
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
 
-    await SystemSetting.create({
-      key: 'finance:asaas',
-      value: {
-        platformWalletId: 'wallet_platform_999',
-        defaultPlatformFeePercent: 5,
-      },
+    await savePlatformFinanceSettings({
+      paymentArchitecture: 'subaccount',
+      platformWalletId: 'wallet_platform_999',
+      defaultPlatformFeePercent: 5,
     });
 
     const response = await request(app)
@@ -540,12 +567,10 @@ describe('Admin finance routes', () => {
   it('creates an Asaas subaccount for the tenant and stores the returned api key encrypted', async () => {
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
 
-    await SystemSetting.create({
-      key: 'finance:asaas',
-      value: {
-        platformWalletId: 'wallet_platform_777',
-        defaultPlatformFeePercent: 6,
-      },
+    await savePlatformFinanceSettings({
+      paymentArchitecture: 'subaccount',
+      platformWalletId: 'wallet_platform_777',
+      defaultPlatformFeePercent: 6,
     });
     asaasServiceMock.createAsaasSubaccount.mockResolvedValue({
       id: 'subacc_created',
@@ -632,6 +657,12 @@ describe('Admin finance routes', () => {
   it('validates required subaccount contact data before calling the Asaas API', async () => {
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
 
+    await savePlatformFinanceSettings({
+      paymentArchitecture: 'subaccount',
+      platformWalletId: 'wallet_platform_777',
+      defaultPlatformFeePercent: 6,
+    });
+
     const response = await request(app)
       .post(`/api/admin/finance/businesses/${business._id.toString()}/asaas/subaccount`)
       .set('Authorization', `Bearer ${superAdminToken}`)
@@ -663,6 +694,12 @@ describe('Admin finance routes', () => {
 
   it('requires a valid Asaas companyType before provisioning a subaccount', async () => {
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+
+    await savePlatformFinanceSettings({
+      paymentArchitecture: 'subaccount',
+      platformWalletId: 'wallet_platform_777',
+      defaultPlatformFeePercent: 6,
+    });
 
     const missingCompanyTypeResponse = await request(app)
       .post(`/api/admin/finance/businesses/${business._id.toString()}/asaas/subaccount`)
@@ -712,6 +749,12 @@ describe('Admin finance routes', () => {
   it('blocks CPF documents in the current Asaas subaccount provisioning flow', async () => {
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
 
+    await savePlatformFinanceSettings({
+      paymentArchitecture: 'subaccount',
+      platformWalletId: 'wallet_platform_777',
+      defaultPlatformFeePercent: 6,
+    });
+
     const response = await request(app)
       .post(`/api/admin/finance/businesses/${business._id.toString()}/asaas/subaccount`)
       .set('Authorization', `Bearer ${superAdminToken}`)
@@ -740,6 +783,12 @@ describe('Admin finance routes', () => {
 
   it('keeps the Asaas 400 invalid_object error visible and sanitized for companyType regressions', async () => {
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+
+    await savePlatformFinanceSettings({
+      paymentArchitecture: 'subaccount',
+      platformWalletId: 'wallet_platform_777',
+      defaultPlatformFeePercent: 6,
+    });
     const providerError = new Error('E necessario informar o tipo de empresa.');
     providerError.statusCode = 400;
     providerError.code = 'asaas_validation_error';

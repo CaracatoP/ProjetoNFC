@@ -22,6 +22,8 @@ let seedDemoData;
 let Business;
 let Order;
 let Payment;
+let SystemSetting;
+let TenantLedgerEntry;
 let WebhookEvent;
 let subscribeToTenantUpdates;
 let encryptSecret;
@@ -40,6 +42,7 @@ describe('Asaas webhook routes', () => {
     process.env.ADMIN_PASSWORD = 'admin123456';
     process.env.ADMIN_TOKEN_SECRET = 'test-admin-secret';
     process.env.PAYMENT_CREDENTIALS_ENCRYPTION_KEY = '12345678901234567890123456789012';
+    process.env.ASAAS_API_KEY = '$aact_hmlg_platform_root';
     process.env.ASAAS_WEBHOOK_TOKEN = 'asaas-webhook-token';
     process.env.ASAAS_WEBHOOK_AUTH_TOKEN = 'asaas-webhook-token';
 
@@ -48,6 +51,8 @@ describe('Asaas webhook routes', () => {
     ({ Business } = await import('../models/Business.js'));
     ({ Order } = await import('../models/Order.js'));
     ({ Payment } = await import('../models/Payment.js'));
+    ({ SystemSetting } = await import('../models/SystemSetting.js'));
+    ({ TenantLedgerEntry } = await import('../models/TenantLedgerEntry.js'));
     ({ WebhookEvent } = await import('../models/WebhookEvent.js'));
     ({ subscribeToTenantUpdates } = await import('../services/tenantRealtimeService.js'));
     ({ encryptSecret } = await import('../utils/secretCrypto.js'));
@@ -60,10 +65,17 @@ describe('Asaas webhook routes', () => {
   beforeEach(async () => {
     process.env.ASAAS_WEBHOOK_TOKEN = 'asaas-webhook-token';
     process.env.ASAAS_WEBHOOK_AUTH_TOKEN = 'asaas-webhook-token';
+    process.env.ASAAS_API_KEY = '$aact_hmlg_platform_root';
+    envConfig.asaasApiKey = '$aact_hmlg_platform_root';
     envConfig.asaasWebhookAuthToken = 'asaas-webhook-token';
     envConfig.paymentCredentialsEncryptionKey = '12345678901234567890123456789012';
     await seedDemoData({ reset: true });
-    await Promise.all([Payment.deleteMany({}), WebhookEvent.deleteMany({})]);
+    await Promise.all([
+      Payment.deleteMany({}),
+      WebhookEvent.deleteMany({}),
+      TenantLedgerEntry.deleteMany({}),
+      SystemSetting.deleteMany({}),
+    ]);
     asaasServiceMock.getAsaasPayment.mockReset();
   });
 
@@ -74,7 +86,14 @@ describe('Asaas webhook routes', () => {
 
   async function createAsaasOrderFixture() {
     const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
-    const encryptedApiKey = encryptSecret('$aact_hmlg_sub_key');
+
+    await SystemSetting.create({
+      key: 'finance:asaas',
+      value: {
+        paymentArchitecture: 'centralized',
+        defaultPlatformFeePercent: 5,
+      },
+    });
 
     await Business.updateOne(
       { _id: business._id },
@@ -91,9 +110,6 @@ describe('Asaas webhook routes', () => {
           provider: 'asaas',
           asaas: {
             enabled: true,
-            subaccountId: 'subacc_123',
-            walletId: 'wallet_sub',
-            apiKeyEncrypted: encryptedApiKey,
             accountEmail: 'seller@example.com',
             accountName: 'Casa do Preto',
             status: 'active',
@@ -122,8 +138,12 @@ describe('Asaas webhook routes', () => {
       payment: {
         method: 'pix',
         provider: 'asaas',
+        paymentArchitecture: 'centralized',
         status: 'pending',
         amount: 79.9,
+        grossAmount: 79.9,
+        platformFeeAmount: 4,
+        tenantNetAmount: 75.9,
         providerPaymentId: 'pay_123',
         providerCustomerId: 'cus_123',
         invoiceUrl: 'https://sandbox.asaas.com/i/pay_123',
@@ -215,10 +235,32 @@ describe('Asaas webhook routes', () => {
         businessId: business._id,
         orderId: order._id,
         status: 'paid',
+        paymentArchitecture: 'centralized',
         providerStatus: 'RECEIVED',
         externalReference,
         amount: 79.9,
+        grossAmount: 79.9,
+        platformFeeAmount: 4,
+        tenantNetAmount: 75.9,
       }),
+    );
+    expect(await TenantLedgerEntry.find({ businessId: business._id }).sort({ type: 1 }).lean()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          paymentId: expect.anything(),
+          orderId: order._id,
+          type: 'sale_gross',
+          status: 'available',
+          amount: 79.9,
+        }),
+        expect.objectContaining({
+          paymentId: expect.anything(),
+          orderId: order._id,
+          type: 'platform_fee',
+          status: 'available',
+          amount: -4,
+        }),
+      ]),
     );
     unsubscribe();
   });
@@ -308,6 +350,7 @@ describe('Asaas webhook routes', () => {
     expect(paidEvents).toHaveLength(1);
     expect(asaasServiceMock.getAsaasPayment).toHaveBeenCalledTimes(1);
     expect(await WebhookEvent.countDocuments({ provider: 'asaas', eventId: 'evt_payment_received_duplicate' })).toBe(1);
+    expect(await TenantLedgerEntry.countDocuments({ businessId: business._id })).toBe(2);
   });
 
   it('keeps webhook effects idempotent when duplicate events arrive concurrently', async () => {
@@ -364,6 +407,7 @@ describe('Asaas webhook routes', () => {
     expect(asaasServiceMock.getAsaasPayment).toHaveBeenCalledTimes(1);
     expect(await WebhookEvent.countDocuments({ provider: 'asaas', eventId: 'evt_payment_received_concurrent' })).toBe(1);
     expect(await Payment.countDocuments({ provider: 'asaas', providerPaymentId: 'pay_123' })).toBe(1);
+    expect(await TenantLedgerEntry.countDocuments({ businessId: business._id })).toBe(2);
   });
 
   it('allows retrying a failed webhook event without duplicating the financial effect', async () => {
@@ -424,6 +468,7 @@ describe('Asaas webhook routes', () => {
       }),
     );
     expect(await Payment.countDocuments({ provider: 'asaas', providerPaymentId: 'pay_123' })).toBe(1);
+    expect(await TenantLedgerEntry.countDocuments({ businessId: business._id })).toBe(2);
   });
 
   it('does not let an older pending event downgrade an already paid payment', async () => {

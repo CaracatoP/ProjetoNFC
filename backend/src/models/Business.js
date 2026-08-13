@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 import {
   BUSINESS_SEGMENT_VALUES,
   BUSINESS_STATUS_VALUES,
+  DEFAULT_PAYMENT_ARCHITECTURE,
+  PAYMENT_ARCHITECTURE_VALUES,
   PAYMENT_PROVIDER_VALUES,
 } from '../../../shared/constants/index.js';
 import { normalizeBusinessContact } from '../../../shared/utils/businessContact.js';
@@ -79,6 +81,12 @@ const businessSchema = new mongoose.Schema(
     },
     paymentSettings: {
       enabled: { type: Boolean, default: true },
+      paymentArchitecture: {
+        type: String,
+        enum: PAYMENT_ARCHITECTURE_VALUES,
+        default: DEFAULT_PAYMENT_ARCHITECTURE,
+        trim: true,
+      },
       methods: {
         pix: { type: Boolean, default: false },
         creditCard: { type: Boolean, default: false },

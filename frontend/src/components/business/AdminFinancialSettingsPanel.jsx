@@ -18,6 +18,11 @@ const PROVIDER_LABELS = {
   [PAYMENT_PROVIDERS.ASAAS]: 'Asaas',
 };
 
+const PAYMENT_ARCHITECTURE_LABELS = {
+  centralized: 'Conta centralizada',
+  subaccount: 'Subcontas + split',
+};
+
 const INTEGRATION_LABELS = {
   missing_api_key: 'API ausente',
   configured: 'Configurado',
@@ -47,6 +52,7 @@ const ASAAS_COMPANY_TYPE_OPTIONS = [
 
 function buildGlobalDraft(settings = {}) {
   return {
+    paymentArchitecture: settings.paymentArchitecture || 'centralized',
     platformWalletId: settings.platformWalletId || '',
     defaultPlatformFeePercent: String(settings.defaultPlatformFeePercent ?? 0),
   };
@@ -299,40 +305,48 @@ function maskInlineValue(value) {
 
 function deriveTenantViewState({ globalSettings, globalDraft, tenantDraft, tenantSettings }) {
   const integrationStatus = globalSettings?.integrationStatus || tenantSettings?.integrationStatus || 'missing_api_key';
+  const paymentArchitecture = globalSettings?.paymentArchitecture || globalDraft.paymentArchitecture || 'centralized';
+  const isCentralized = paymentArchitecture === 'centralized';
   const provider = tenantDraft.provider || tenantSettings?.provider || PAYMENT_PROVIDERS.MANUAL;
   const isAsaasProvider = provider === PAYMENT_PROVIDERS.ASAAS;
   const usesGlobalFee = tenantDraft.split.inheritsGlobal !== false;
   const globalPercent = parsePercentInput(globalSettings?.defaultPlatformFeePercent ?? globalDraft.defaultPlatformFeePercent);
   const tenantOverridePercent = usesGlobalFee ? null : parsePercentInput(tenantDraft.split.platformFeePercent);
   const effectivePlatformFeePercent = usesGlobalFee ? globalPercent : tenantOverridePercent;
-  const splitActive = Boolean(tenantDraft.split.enabled);
+  const splitActive = isCentralized ? false : Boolean(tenantDraft.split.enabled);
   const platformWalletConfigured = isWalletConfigured(globalSettings?.platformWalletId || globalDraft.platformWalletId);
   const tenantWalletConfigured = isWalletConfigured(tenantDraft.asaas.walletId);
   const tenantFinancialStatus = tenantDraft.asaas.status || tenantSettings?.tenantFinancialStatus || 'not_connected';
   const integrationValid = isConfiguredIntegration(integrationStatus);
-  const canEnableSplit = !splitActive || (platformWalletConfigured && tenantWalletConfigured);
+  const canEnableSplit = isCentralized ? false : !splitActive || (platformWalletConfigured && tenantWalletConfigured);
   const canEnableCheckout =
     !isAsaasProvider ||
-    (integrationValid &&
-      tenantFinancialStatus === 'active' &&
-      tenantWalletConfigured &&
-      (!splitActive || canEnableSplit));
+    (isCentralized
+      ? integrationValid
+      : integrationValid &&
+        tenantFinancialStatus === 'active' &&
+        tenantWalletConfigured &&
+        (!splitActive || canEnableSplit));
   const warnings = [];
 
   if (isAsaasProvider && !integrationValid) {
     warnings.push('A integracao global do Asaas precisa estar configurada antes de ativar este tenant.');
   }
 
-  if (splitActive && !platformWalletConfigured) {
+  if (!isCentralized && splitActive && !platformWalletConfigured) {
     warnings.push('Configure a wallet da plataforma antes de aplicar o split.');
   }
 
-  if (splitActive && !tenantWalletConfigured) {
+  if (!isCentralized && splitActive && !tenantWalletConfigured) {
     warnings.push('A subconta precisa ter walletId valido antes de aplicar o split.');
   }
 
-  if (isAsaasProvider && tenantFinancialStatus !== 'active') {
+  if (!isCentralized && isAsaasProvider && tenantFinancialStatus !== 'active') {
     warnings.push('Checkout online com Asaas exige subconta ativa.');
+  }
+
+  if (isCentralized && isAsaasProvider) {
+    warnings.push('Neste modo, o checkout online usa a conta central TapLink e o repasse e controlado internamente pelo ledger.');
   }
 
   const splitPreview = {
@@ -350,11 +364,14 @@ function deriveTenantViewState({ globalSettings, globalDraft, tenantDraft, tenan
     providerLabel: PROVIDER_LABELS[provider] || 'Manual',
     integrationLabel: humanizeIntegrationStatus(integrationStatus),
     tenantFinancialLabel: humanizeTenantFinancialStatus(tenantFinancialStatus),
-    splitLabel: splitActive ? 'Ativo' : 'Desativado',
+    splitLabel: isCentralized ? 'Interno' : splitActive ? 'Ativo' : 'Desativado',
     checkoutLabel: tenantDraft.enabled ? 'Ativo' : 'Desativado',
+    processingLabel: isCentralized ? 'Conta central TapLink' : 'Subconta Asaas do tenant',
   };
 
   return {
+    paymentArchitecture,
+    isCentralized,
     integrationStatus,
     integrationValid,
     provider,
@@ -713,6 +730,7 @@ export function AdminFinancialSettingsPanel({
 
     try {
       const nextSettings = await updateAdminFinanceSettings(token, {
+        paymentArchitecture: globalDraft.paymentArchitecture,
         platformWalletId: globalDraft.platformWalletId,
         defaultPlatformFeePercent: parsePercentInput(globalDraft.defaultPlatformFeePercent),
       });
@@ -891,20 +909,43 @@ export function AdminFinancialSettingsPanel({
                     />
                   </div>
                 </AdminField>
-                <SensitiveField
-                  label="Wallet da plataforma"
-                  value={globalDraft.platformWalletId}
-                  revealed={showPlatformWallet}
-                  onToggleReveal={() => setShowPlatformWallet((current) => !current)}
-                  onCopy={() => handleCopy(globalDraft.platformWalletId)}
-                  onChange={(event) =>
-                    setGlobalDraft((current) => ({
-                      ...current,
-                      platformWalletId: event.target.value,
-                    }))
-                  }
-                  helperText={globalDraft.platformWalletId ? `Preview mascarada: ${maskInlineValue(globalDraft.platformWalletId)}` : ''}
-                />
+                <AdminField label="Arquitetura financeira">
+                  <select
+                    value={globalDraft.paymentArchitecture}
+                    onChange={(event) =>
+                      setGlobalDraft((current) => ({
+                        ...current,
+                        paymentArchitecture: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="centralized">Conta centralizada</option>
+                    <option value="subaccount">Subcontas + split</option>
+                  </select>
+                </AdminField>
+                {globalDraft.paymentArchitecture === 'subaccount' ? (
+                  <SensitiveField
+                    label="Wallet da plataforma"
+                    value={globalDraft.platformWalletId}
+                    revealed={showPlatformWallet}
+                    onToggleReveal={() => setShowPlatformWallet((current) => !current)}
+                    onCopy={() => handleCopy(globalDraft.platformWalletId)}
+                    onChange={(event) =>
+                      setGlobalDraft((current) => ({
+                        ...current,
+                        platformWalletId: event.target.value,
+                      }))
+                    }
+                    helperText={globalDraft.platformWalletId ? `Preview mascarada: ${maskInlineValue(globalDraft.platformWalletId)}` : ''}
+                  />
+                ) : (
+                  <AdminField label="Processamento">
+                    <div className="admin-finance-field-stack">
+                      <FinanceStatusBadge label="Conta central TapLink" tone="accent" />
+                      <small>Sem subconta e sem split externo neste modo.</small>
+                    </div>
+                  </AdminField>
+                )}
                 <AdminField label="Taxa padrao da plataforma (%)">
                   <input
                     type="number"
@@ -923,6 +964,10 @@ export function AdminFinancialSettingsPanel({
               </div>
 
               <div className="admin-finance-summary-grid admin-finance-summary-grid--platform">
+                <div className="admin-finance-summary-item">
+                  <span>Modo financeiro</span>
+                  <strong>{PAYMENT_ARCHITECTURE_LABELS[globalSettings?.paymentArchitecture || globalDraft.paymentArchitecture] || 'Conta centralizada'}</strong>
+                </div>
                 <div className="admin-finance-summary-item">
                   <span>Webhook Asaas</span>
                   <strong>{globalSettings?.webhookUrl || '-'}</strong>
@@ -968,7 +1013,11 @@ export function AdminFinancialSettingsPanel({
           <div>
             <SectionEyebrow>Tenant</SectionEyebrow>
             <h2>Operacao financeira por tenant</h2>
-            <p>Controle provider, split, checkout online e o provisionamento da subconta financeira do tenant selecionado.</p>
+            <p>
+              {tenantViewState.isCentralized
+                ? 'Checkout online usando a conta central TapLink, com taxa interna e repasse controlado pela plataforma.'
+                : 'Controle provider, split, checkout online e o provisionamento da subconta financeira do tenant selecionado.'}
+            </p>
           </div>
         </div>
 
@@ -986,11 +1035,11 @@ export function AdminFinancialSettingsPanel({
                   ))}
                 </select>
               </AdminField>
-              <AdminField label="Subconta conectada">
+              <AdminField label={tenantViewState.isCentralized ? 'Processamento' : 'Subconta conectada'}>
                 <div className="admin-finance-field-stack">
                   <FinanceStatusBadge
-                    label={tenantSettings?.asaas?.connected ? 'Ativa' : 'Nao conectada'}
-                    tone={tenantSettings?.asaas?.connected ? 'success' : 'neutral'}
+                    label={tenantViewState.isCentralized ? 'Conta central TapLink' : tenantSettings?.asaas?.connected ? 'Ativa' : 'Nao conectada'}
+                    tone={tenantViewState.isCentralized ? 'accent' : tenantSettings?.asaas?.connected ? 'success' : 'neutral'}
                   />
                 </div>
               </AdminField>
@@ -1014,7 +1063,11 @@ export function AdminFinancialSettingsPanel({
                   <FinanceSection
                     eyebrow="Tenant"
                     title="Configuracao Financeira do Tenant"
-                    description="Ajuste provider, status da subconta, metodos de pagamento, split e checkout online para este tenant."
+                    description={
+                      tenantViewState.isCentralized
+                        ? 'Ajuste provider, metodos de pagamento, taxa efetiva e ativacao do checkout online deste tenant.'
+                        : 'Ajuste provider, status da subconta, metodos de pagamento, split e checkout online para este tenant.'
+                    }
                   >
                     <div className="admin-form-grid">
                       <AdminField label="Provider ativo">
@@ -1038,42 +1091,46 @@ export function AdminFinancialSettingsPanel({
                           <option value={PAYMENT_PROVIDERS.ASAAS}>Asaas</option>
                         </select>
                       </AdminField>
-                      <AdminField label="Status financeiro da subconta">
+                      <AdminField label={tenantViewState.isCentralized ? 'Processamento financeiro' : 'Status financeiro da subconta'}>
                         <div className="admin-finance-field-stack">
                           <FinanceStatusBadge
-                            label={tenantViewState.summary.tenantFinancialLabel}
-                            tone={getStatusTone(tenantViewState.tenantFinancialStatus)}
+                            label={tenantViewState.isCentralized ? 'Conta central TapLink' : tenantViewState.summary.tenantFinancialLabel}
+                            tone={tenantViewState.isCentralized ? 'accent' : getStatusTone(tenantViewState.tenantFinancialStatus)}
                           />
                         </div>
                       </AdminField>
-                      <AdminField label="Nome da conta">
-                        <input
-                          value={tenantDraft.asaas.accountName}
-                          onChange={(event) =>
-                            setTenantDraft((current) => ({
-                              ...current,
-                              asaas: {
-                                ...current.asaas,
-                                accountName: event.target.value,
-                              },
-                            }))
-                          }
-                        />
-                      </AdminField>
-                      <AdminField label="Conta financeira">
-                        <input
-                          value={tenantDraft.asaas.accountEmail}
-                          onChange={(event) =>
-                            setTenantDraft((current) => ({
-                              ...current,
-                              asaas: {
-                                ...current.asaas,
-                                accountEmail: event.target.value,
-                              },
-                            }))
-                          }
-                        />
-                      </AdminField>
+                      {!tenantViewState.isCentralized ? (
+                        <AdminField label="Nome da conta">
+                          <input
+                            value={tenantDraft.asaas.accountName}
+                            onChange={(event) =>
+                              setTenantDraft((current) => ({
+                                ...current,
+                                asaas: {
+                                  ...current.asaas,
+                                  accountName: event.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </AdminField>
+                      ) : null}
+                      {!tenantViewState.isCentralized ? (
+                        <AdminField label="Conta financeira">
+                          <input
+                            value={tenantDraft.asaas.accountEmail}
+                            onChange={(event) =>
+                              setTenantDraft((current) => ({
+                                ...current,
+                                asaas: {
+                                  ...current.asaas,
+                                  accountEmail: event.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </AdminField>
+                      ) : null}
                     </div>
 
                     <div className="admin-card-stack admin-finance-panel__toggles">
@@ -1167,7 +1224,8 @@ export function AdminFinancialSettingsPanel({
                       />
                     </div>
 
-                    <div className="admin-card-stack admin-finance-config-card">
+                    {!tenantViewState.isCentralized ? (
+                      <div className="admin-card-stack admin-finance-config-card">
                       <div className="admin-finance-config-card__header">
                         <div>
                           <strong>Configuracao de split</strong>
@@ -1234,7 +1292,14 @@ export function AdminFinancialSettingsPanel({
                       </div>
 
                       <FinanceSplitPreview viewState={tenantViewState} />
-                    </div>
+                      </div>
+                    ) : (
+                      <div className="admin-inline-note admin-inline-note--preview">
+                        <strong>Taxa interna da plataforma</strong>
+                        <span>O tenant usa a taxa efetiva de {formatPercent(tenantViewState.effectivePlatformFeePercent)}% sem split externo no Asaas.</span>
+                        <span>O repasse fica registrado e conciliado internamente no ledger.</span>
+                      </div>
+                    )}
 
                     <div className="admin-inline-actions admin-inline-actions--between">
                       <Button
@@ -1246,7 +1311,7 @@ export function AdminFinancialSettingsPanel({
                       </Button>
                     </div>
 
-                    {showAdvanced ? (
+                    {showAdvanced && !tenantViewState.isCentralized ? (
                       <div className="admin-card-stack admin-finance-advanced-card">
                         <div className="admin-finance-advanced-card__header">
                           <div>
@@ -1343,12 +1408,19 @@ export function AdminFinancialSettingsPanel({
                   </FinanceSection>
                 </form>
 
-                <form className="admin-card-stack admin-finance-panel__form" onSubmit={handleCreateSubaccount}>
-                  <FinanceSection
-                    eyebrow="Provisionamento"
-                    title="Criar Subconta Asaas"
-                    description="Provisiona uma subconta usando a conta raiz do TapLink e vincula o walletId retornado ao tenant sem precisar atualizar a pagina."
-                  >
+                {tenantViewState.isCentralized ? (
+                  <div className="admin-inline-note admin-inline-note--preview">
+                    <strong>Provisionamento desativado neste modo</strong>
+                    <span>A arquitetura centralizada usa a conta Asaas principal do TapLink para todos os tenants.</span>
+                    <span>Quando a plataforma voltar para subcontas, este bloco volta a ficar disponivel automaticamente.</span>
+                  </div>
+                ) : (
+                  <form className="admin-card-stack admin-finance-panel__form" onSubmit={handleCreateSubaccount}>
+                    <FinanceSection
+                      eyebrow="Provisionamento"
+                      title="Criar Subconta Asaas"
+                      description="Provisiona uma subconta usando a conta raiz do TapLink e vincula o walletId retornado ao tenant sem precisar atualizar a pagina."
+                    >
                     <div className="admin-card-stack admin-finance-config-card">
                       <div className="admin-finance-config-card__header">
                         <div>
@@ -1493,8 +1565,9 @@ export function AdminFinancialSettingsPanel({
                         {creatingSubaccount ? 'Criando subconta...' : tenantHasSubaccount ? 'Subconta ja vinculada' : 'Criar subconta'}
                       </Button>
                     </div>
-                  </FinanceSection>
-                </form>
+                    </FinanceSection>
+                  </form>
+                )}
               </div>
             ) : (
               <p className="admin-muted-copy">Selecione um tenant para revisar a integracao financeira.</p>

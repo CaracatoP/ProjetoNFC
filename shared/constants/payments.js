@@ -28,6 +28,44 @@ export const PAYMENT_PROVIDERS = Object.freeze({
 
 export const PAYMENT_PROVIDER_VALUES = Object.values(PAYMENT_PROVIDERS);
 
+export const PAYMENT_ARCHITECTURES = Object.freeze({
+  CENTRALIZED: 'centralized',
+  SUBACCOUNT: 'subaccount',
+});
+
+export const PAYMENT_ARCHITECTURE_VALUES = Object.values(PAYMENT_ARCHITECTURES);
+
+export const TENANT_LEDGER_ENTRY_TYPES = Object.freeze({
+  SALE_GROSS: 'sale_gross',
+  PLATFORM_FEE: 'platform_fee',
+  REFUND: 'refund',
+  ADJUSTMENT: 'adjustment',
+  PAYOUT: 'payout',
+  PAYOUT_REVERSAL: 'payout_reversal',
+});
+
+export const TENANT_LEDGER_ENTRY_TYPE_VALUES = Object.values(TENANT_LEDGER_ENTRY_TYPES);
+
+export const TENANT_LEDGER_ENTRY_STATUSES = Object.freeze({
+  PENDING: 'pending',
+  AVAILABLE: 'available',
+  PAID_OUT: 'paid_out',
+  REVERSED: 'reversed',
+});
+
+export const TENANT_LEDGER_ENTRY_STATUS_VALUES = Object.values(TENANT_LEDGER_ENTRY_STATUSES);
+
+export const TENANT_PAYOUT_STATUSES = Object.freeze({
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  PROCESSING: 'processing',
+  PAID: 'paid',
+  FAILED: 'failed',
+  CANCELLED: 'cancelled',
+});
+
+export const TENANT_PAYOUT_STATUS_VALUES = Object.values(TENANT_PAYOUT_STATUSES);
+
 export const PAYMENT_METHOD_LABELS = Object.freeze({
   [PAYMENT_METHODS.PIX]: 'Pix',
   [PAYMENT_METHODS.CREDIT_CARD]: 'Cartao de credito',
@@ -55,3 +93,4 @@ export const PAYMENT_PROVIDER_LABELS = Object.freeze({
 export const DEFAULT_PAYMENT_METHOD = PAYMENT_METHODS.CASH_ON_PICKUP;
 export const DEFAULT_PAYMENT_PROVIDER = PAYMENT_PROVIDERS.MANUAL;
 export const DEFAULT_PAYMENT_STATUS = PAYMENT_STATUS.MANUAL;
+export const DEFAULT_PAYMENT_ARCHITECTURE = PAYMENT_ARCHITECTURES.CENTRALIZED;

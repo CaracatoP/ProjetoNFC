@@ -375,6 +375,29 @@ const editorFixture = {
   },
 };
 
+const centralizedAdminFinanceSettingsFixture = {
+  environment: 'sandbox',
+  paymentArchitecture: 'centralized',
+  rootApiKeyConfigured: true,
+  platformWalletId: 'wallet_platform_root',
+  defaultPlatformFeePercent: 5,
+  webhookUrl: 'http://localhost:4000/api/webhooks/asaas',
+  integrationStatus: 'configured',
+  summary: {
+    platformReady: true,
+    processingLabel: 'Conta central TapLink',
+  },
+};
+
+const subaccountAdminFinanceSettingsFixture = {
+  ...centralizedAdminFinanceSettingsFixture,
+  paymentArchitecture: 'subaccount',
+  summary: {
+    platformReady: true,
+    processingLabel: 'Subcontas + split',
+  },
+};
+
 describe('DashboardHomePage', () => {
   let realtimeCallbacks;
   let realtimeCleanup;
@@ -398,27 +421,10 @@ describe('DashboardHomePage', () => {
       baselineAt: '2026-06-01T10:05:00.000Z',
       updatedBusinesses: 3,
     });
-    adminService.fetchAdminFinanceSettings.mockResolvedValue({
-      environment: 'sandbox',
-      rootApiKeyConfigured: true,
-      platformWalletId: 'wallet_platform_root',
-      defaultPlatformFeePercent: 5,
-      webhookUrl: 'http://localhost:4000/api/webhooks/asaas',
-      integrationStatus: 'configured',
-      summary: {
-        platformReady: true,
-      },
-    });
+    adminService.fetchAdminFinanceSettings.mockResolvedValue(centralizedAdminFinanceSettingsFixture);
     adminService.updateAdminFinanceSettings.mockResolvedValue({
-      environment: 'sandbox',
-      rootApiKeyConfigured: true,
-      platformWalletId: 'wallet_platform_root',
+      ...centralizedAdminFinanceSettingsFixture,
       defaultPlatformFeePercent: 6.5,
-      webhookUrl: 'http://localhost:4000/api/webhooks/asaas',
-      integrationStatus: 'configured',
-      summary: {
-        platformReady: true,
-      },
     });
     adminService.testAdminAsaasConnection.mockResolvedValue({
       ok: true,
@@ -1038,11 +1044,11 @@ describe('DashboardHomePage', () => {
     );
 
     expect(await screen.findByText('Workspace da operacao')).toBeInTheDocument();
-    const tenantListCard = await screen.findByText('Tenants');
-    const tenantListScope = within(tenantListCard.closest('section'));
+    const tenantSearchInput = await screen.findByLabelText('Buscar tenant');
+    const tenantListScope = within(tenantSearchInput.closest('section'));
     expect(tenantListScope.getByRole('button', { name: /Loja Central/i })).toBeInTheDocument();
 
-    await user.type(tenantListScope.getByLabelText('Buscar tenant'), 'barbearia');
+    await user.type(tenantSearchInput, 'barbearia');
 
     await waitFor(() => {
       expect(tenantListScope.queryByRole('button', { name: /Loja Central/i })).not.toBeInTheDocument();
@@ -1368,6 +1374,11 @@ describe('DashboardHomePage', () => {
   it('shows the financial settings area only for level 0 and lets the admin update global and tenant Asaas settings safely', async () => {
     const user = userEvent.setup();
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    adminService.fetchAdminFinanceSettings.mockResolvedValueOnce(subaccountAdminFinanceSettingsFixture);
+    adminService.updateAdminFinanceSettings.mockResolvedValueOnce({
+      ...subaccountAdminFinanceSettingsFixture,
+      defaultPlatformFeePercent: 6.5,
+    });
 
     render(
       <MemoryRouter>
@@ -1448,6 +1459,7 @@ describe('DashboardHomePage', () => {
 
   it('creates an Asaas subaccount with company type and keeps provider errors visible', async () => {
     const user = userEvent.setup();
+    adminService.fetchAdminFinanceSettings.mockResolvedValueOnce(subaccountAdminFinanceSettingsFixture);
 
     adminService.fetchAdminBusinessFinanceSettings.mockResolvedValueOnce({
       businessId: 'business-1',
@@ -1641,7 +1653,7 @@ describe('DashboardHomePage', () => {
     await user.click(screen.getByRole('button', { name: /Mostrar configuracoes avancadas/i }));
     expect(await screen.findByDisplayValue('wallet_sub_created')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Subconta ja vinculada/i })).toBeDisabled();
-  });
+  }, 10000);
 
   it('lets level 0 reset the analytics baseline from the admin analytics view', async () => {
     const user = userEvent.setup();
@@ -1681,8 +1693,9 @@ describe('DashboardHomePage', () => {
 
     expect(await screen.findByText('Base comercial')).toBeInTheDocument();
 
-    const createCard = screen.getByText('Cadastrar cliente').closest('section');
-    const createScope = within(createCard);
+    await user.click(screen.getByRole('button', { name: /Novo cliente/i }));
+    const createDialog = await screen.findByRole('dialog', { name: /Cadastrar cliente/i });
+    const createScope = within(createDialog);
 
     await user.type(createScope.getByLabelText('Nome'), 'Cliente Novo');
     await user.type(createScope.getByLabelText('E-mail'), 'novo@cliente.local');

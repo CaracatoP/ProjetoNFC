@@ -1,4 +1,5 @@
 import { PAYMENT_METHODS, PAYMENT_PROVIDERS } from '../../../shared/constants/index.js';
+import { resolveAsaasProviderContext } from '../services/platformFinanceService.js';
 
 export function isOnlinePaymentMethod(method) {
   return [
@@ -37,12 +38,12 @@ export function isMercadoPagoProviderConnected(paymentSettings = {}) {
   );
 }
 
-export function isAsaasProviderConnected(paymentSettings = {}) {
+export function isAsaasProviderConnected(paymentSettings = {}, financeSettings = {}, business = null) {
   return Boolean(
-    paymentSettings?.enabled &&
-      paymentSettings?.provider === PAYMENT_PROVIDERS.ASAAS &&
-      paymentSettings?.asaas?.enabled &&
-      paymentSettings?.asaas?.apiKeyEncrypted &&
-      paymentSettings?.asaas?.walletId,
+    resolveAsaasProviderContext({
+      business,
+      paymentSettings,
+      financeSettings,
+    }).connected,
   );
 }

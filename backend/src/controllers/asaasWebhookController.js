@@ -10,6 +10,7 @@ import {
 } from '../repositories/webhookEventRepository.js';
 import { getAsaasPayment, parseAsaasExternalReference } from '../services/asaasService.js';
 import { syncAsaasOrderPaymentWebhook } from '../services/moduleService.js';
+import { getPlatformFinanceSettings, resolveAsaasProviderContext } from '../services/platformFinanceService.js';
 import { AppError } from '../utils/appError.js';
 
 function getWebhookHeaderValue(value) {
@@ -110,8 +111,14 @@ export async function asaasWebhookController(req, res, next) {
     validateWebhookOrderScope(business, order, businessId, orderId, providerPaymentId);
 
     const paymentSettings = resolveBusinessPaymentSettings(business, { mode: 'storage' });
+    const financeSettings = await getPlatformFinanceSettings();
+    const asaasContext = resolveAsaasProviderContext({
+      business,
+      paymentSettings,
+      financeSettings,
+    });
     const providerPayment = await getAsaasPayment({
-      apiKey: paymentSettings?.asaas?.apiKeyEncrypted,
+      apiKey: asaasContext.apiKey,
       paymentId: providerPaymentId,
     });
 

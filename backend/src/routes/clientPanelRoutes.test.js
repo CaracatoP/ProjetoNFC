@@ -14,6 +14,10 @@ let Plan;
 let Subscription;
 let Product;
 let Order;
+let Payment;
+let SystemSetting;
+let TenantLedgerEntry;
+let TenantPayout;
 let decryptSecret;
 let envConfig;
 let mongoServer;
@@ -56,6 +60,10 @@ describe('Client panel routes', () => {
     ({ Subscription } = await import('../models/Subscription.js'));
     ({ Product } = await import('../models/Product.js'));
     ({ Order } = await import('../models/Order.js'));
+    ({ Payment } = await import('../models/Payment.js'));
+    ({ SystemSetting } = await import('../models/SystemSetting.js'));
+    ({ TenantLedgerEntry } = await import('../models/TenantLedgerEntry.js'));
+    ({ TenantPayout } = await import('../models/TenantPayout.js'));
     ({ decryptSecret } = await import('../utils/secretCrypto.js'));
     ({ env: envConfig } = await import('../config/env.js'));
     ({ default: app } = await import('../app.js'));
@@ -70,6 +78,10 @@ describe('Client panel routes', () => {
     await User.deleteMany({});
     await Business.deleteMany({ slug: 'restaurante-vista-boa' });
     await Subscription.deleteMany({});
+    await Payment.deleteMany({});
+    await SystemSetting.deleteMany({});
+    await TenantLedgerEntry.deleteMany({});
+    await TenantPayout.deleteMany({});
 
     primaryBusiness = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
     const premiumPlan = await Plan.findOne({ code: 'premium' });
@@ -1111,6 +1123,153 @@ describe('Client panel routes', () => {
           eventTypeLabel: 'Link Click',
           targetTypeLabel: 'Whatsapp',
           displayLabel: 'Whatsapp',
+        }),
+      ]),
+    );
+  });
+
+  it('returns the tenant finance overview with ledger-derived balances and payout context', async () => {
+    const ownerToken = await login('owner@cliente.local', 'owner123456');
+
+    await SystemSetting.create({
+      key: 'finance:asaas',
+      value: {
+        paymentArchitecture: 'centralized',
+        defaultPlatformFeePercent: 3,
+      },
+    });
+
+    const order = await Order.create({
+      businessId: primaryBusiness._id,
+      customerName: 'Bruna',
+      customerPhone: '5511998877665',
+      items: [
+        {
+          name: 'Pomada modeladora',
+          quantity: 1,
+          unitPrice: 100,
+          measurementUnit: 'unit',
+          displayQuantity: '1 unidade',
+          itemTotal: 100,
+        },
+      ],
+      total: 100,
+      status: 'received',
+      receivedAt: new Date('2026-08-10T11:00:00.000Z'),
+      payment: {
+        method: 'pix',
+        provider: 'asaas',
+        paymentArchitecture: 'centralized',
+        status: 'paid',
+        amount: 100,
+        grossAmount: 100,
+        platformFeeAmount: 3,
+        tenantNetAmount: 97,
+        providerPaymentId: 'pay_finance_1',
+      },
+      paymentEvents: [],
+    });
+
+    const payment = await Payment.create({
+      businessId: primaryBusiness._id,
+      orderId: order._id,
+      provider: 'asaas',
+      method: 'pix',
+      paymentArchitecture: 'centralized',
+      status: 'paid',
+      providerStatus: 'RECEIVED',
+      providerPaymentId: 'pay_finance_1',
+      externalReference: `tenant:${primaryBusiness._id.toString()}:order:${order._id.toString()}`,
+      amount: 100,
+      grossAmount: 100,
+      platformFeeAmount: 3,
+      tenantNetAmount: 97,
+      confirmedAt: new Date('2026-08-10T11:05:00.000Z'),
+      receivedAt: new Date('2026-08-10T11:05:00.000Z'),
+    });
+
+    await Payment.create({
+      businessId: primaryBusiness._id,
+      orderId: order._id,
+      provider: 'asaas',
+      method: 'pix',
+      paymentArchitecture: 'centralized',
+      status: 'pending',
+      providerStatus: 'PENDING',
+      providerPaymentId: 'pay_finance_pending',
+      externalReference: `tenant:${primaryBusiness._id.toString()}:order:${order._id.toString()}:pending`,
+      amount: 40,
+      grossAmount: 40,
+      platformFeeAmount: 1.2,
+      tenantNetAmount: 38.8,
+    });
+
+    await TenantLedgerEntry.create([
+      {
+        businessId: primaryBusiness._id,
+        paymentId: payment._id,
+        orderId: order._id,
+        type: 'sale_gross',
+        status: 'available',
+        amount: 100,
+        description: 'Venda recebida',
+        idempotencyKey: `payment:${payment._id.toString()}:sale`,
+        availableAt: new Date('2026-08-10T11:05:00.000Z'),
+      },
+      {
+        businessId: primaryBusiness._id,
+        paymentId: payment._id,
+        orderId: order._id,
+        type: 'platform_fee',
+        status: 'available',
+        amount: -3,
+        description: 'Taxa TapLink',
+        idempotencyKey: `payment:${payment._id.toString()}:platform_fee`,
+        availableAt: new Date('2026-08-10T11:05:00.000Z'),
+      },
+    ]);
+
+    await TenantPayout.create({
+      businessId: primaryBusiness._id,
+      amount: 97,
+      status: 'pending',
+      requestedAt: new Date('2026-08-12T09:00:00.000Z'),
+      reference: 'PAYOUT-001',
+    });
+
+    const response = await request(app)
+      .get('/api/panel/finance')
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.summary).toEqual(
+      expect.objectContaining({
+        pendingBalance: 40,
+        availableBalance: 97,
+        totalReceived: 100,
+        platformFees: 3,
+        refunds: 0,
+        totalPaidOut: 0,
+        balanceDue: 97,
+        settledNet: 97,
+      }),
+    );
+    expect(response.body.data.payout.next).toEqual(
+      expect.objectContaining({
+        amount: 97,
+        status: 'pending',
+        reference: 'PAYOUT-001',
+      }),
+    );
+    expect(response.body.data.history).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          orderId: order._id.toString(),
+          orderCustomerName: 'Bruna',
+          type: 'sale_gross',
+          grossAmount: 100,
+          platformFeeAmount: 3,
+          netAmount: 97,
         }),
       ]),
     );

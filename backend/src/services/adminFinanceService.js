@@ -1,17 +1,32 @@
-import { PAYMENT_PROVIDERS, PAYMENT_PROVIDER_LABELS } from '../../../shared/constants/index.js';
+import {
+  PAYMENT_ARCHITECTURES,
+  PAYMENT_PROVIDERS,
+  PAYMENT_PROVIDER_LABELS,
+} from '../../../shared/constants/index.js';
 import { resolveBusinessPaymentSettings } from '../../../shared/utils/businessPayment.js';
 import { env } from '../config/env.js';
 import { updateBusinessRecord } from '../repositories/adminRepository.js';
 import { findBusinessById } from '../repositories/businessRepository.js';
-import { getFinanceSettingsRecord, upsertFinanceSettingsRecord } from '../repositories/systemSettingRepository.js';
 import { createAsaasSubaccount, testAsaasConnection, validatePlatformFeePercent } from './asaasService.js';
 import { encryptSecret } from '../utils/secretCrypto.js';
 import { AppError } from '../utils/appError.js';
-
-export const MAX_PLATFORM_FEE_PERCENT = 30;
+import {
+  getPlatformFinanceSettings,
+  getPlatformFinanceSettingsRecord,
+  getStoredFinanceSettings,
+  isAsaasIntegrationConfigured,
+  isValidWalletId,
+  MAX_PLATFORM_FEE_PERCENT,
+  normalizePlatformWalletId,
+  normalizeStoredPlatformFeePercent,
+  resolveAsaasIntegrationStatus,
+  resolveAsaasProviderContext,
+  resolveEffectivePlatformFeePercent,
+  resolveTenantFinancialStatus,
+  savePlatformFinanceSettings,
+  usesCentralizedPaymentArchitecture,
+} from './platformFinanceService.js';
 export const ASAAS_SUBACCOUNT_COMPANY_TYPES = Object.freeze(['MEI', 'LIMITED', 'INDIVIDUAL', 'ASSOCIATION']);
-
-const VALID_WALLET_ID_PATTERN = /^[A-Za-z0-9_-]{6,120}$/;
 const TENANT_FINANCIAL_STATUS_LABELS = Object.freeze({
   active: 'Ativo',
   pending: 'Pendente',
@@ -35,14 +50,6 @@ function normalizeBaseUrl(value) {
 
 function hasOwnProperty(value, key) {
   return Object.prototype.hasOwnProperty.call(value, key);
-}
-
-export function normalizePlatformWalletId(value) {
-  if (value === undefined || value === null) {
-    return '';
-  }
-
-  return String(value).trim();
 }
 
 function normalizeOptionalString(value) {
@@ -121,52 +128,8 @@ function normalizeBoolean(value, fallback = false) {
   return Boolean(value);
 }
 
-export function normalizeStoredPlatformFeePercent(value) {
-  const numericValue = Number(value);
-
-  if (!Number.isFinite(numericValue) || numericValue < 0 || numericValue > MAX_PLATFORM_FEE_PERCENT) {
-    return 0;
-  }
-
-  return Number(numericValue.toFixed(2));
-}
-
-export function getStoredFinanceSettings(value = {}) {
-  return {
-    platformWalletId: normalizePlatformWalletId(value?.platformWalletId),
-    defaultPlatformFeePercent: normalizeStoredPlatformFeePercent(value?.defaultPlatformFeePercent),
-  };
-}
-
 function isIntegrationConfigured(integrationStatus) {
   return integrationStatus === 'configured';
-}
-
-function isValidWalletId(value) {
-  const normalized = normalizePlatformWalletId(value);
-  return Boolean(normalized) && VALID_WALLET_ID_PATTERN.test(normalized);
-}
-
-function resolveTenantFinancialStatus(paymentSettings = {}) {
-  const normalizedStatus = normalizeOptionalString(paymentSettings.asaas?.status).toLowerCase();
-  const walletId = normalizePlatformWalletId(paymentSettings.asaas?.walletId);
-  const hasApiKey = Boolean(paymentSettings.asaas?.hasApiKey || paymentSettings.asaas?.apiKeyEncrypted);
-  const provider = paymentSettings.provider || PAYMENT_PROVIDERS.MANUAL;
-  const enabled = Boolean(paymentSettings.asaas?.enabled);
-
-  if (provider !== PAYMENT_PROVIDERS.ASAAS && !enabled && !walletId) {
-    return 'manual';
-  }
-
-  if (!walletId) {
-    return normalizedStatus || 'not_connected';
-  }
-
-  if (['pending', 'in_review', 'rejected', 'blocked', 'active'].includes(normalizedStatus)) {
-    return normalizedStatus;
-  }
-
-  return hasApiKey ? 'active' : 'pending';
 }
 
 function hasValidAsaasSubaccountLink(asaasSettings = {}) {
@@ -332,6 +295,7 @@ function resolveWarnings({
   tenantWalletId,
   usesGlobalFee,
   splitRequested,
+  paymentArchitecture,
 }) {
   const warnings = [];
 
@@ -339,38 +303,40 @@ function resolveWarnings({
     warnings.push('Integracao global do Asaas ainda nao esta valida.');
   }
 
-  if (provider === PAYMENT_PROVIDERS.ASAAS && !tenantWalletId) {
+  if (
+    provider === PAYMENT_PROVIDERS.ASAAS &&
+    paymentArchitecture === PAYMENT_ARCHITECTURES.SUBACCOUNT &&
+    !tenantWalletId
+  ) {
     warnings.push('Tenant sem walletId valida para operacoes Asaas.');
   }
 
-  if (provider === PAYMENT_PROVIDERS.ASAAS && tenantFinancialStatus !== 'active') {
+  if (
+    provider === PAYMENT_PROVIDERS.ASAAS &&
+    paymentArchitecture === PAYMENT_ARCHITECTURES.SUBACCOUNT &&
+    tenantFinancialStatus !== 'active'
+  ) {
     warnings.push('Subconta Asaas ainda nao esta ativa para checkout online.');
   }
 
-  if ((splitRequested || usesGlobalFee) && !platformWalletId) {
+  if (
+    paymentArchitecture === PAYMENT_ARCHITECTURES.SUBACCOUNT &&
+    (splitRequested || usesGlobalFee) &&
+    !platformWalletId
+  ) {
     warnings.push('Wallet da plataforma ausente para aplicar split.');
   }
 
   return warnings;
 }
 
-function resolveIntegrationStatus() {
-  if (!String(env.asaasApiKey || '').trim()) {
-    return 'missing_api_key';
-  }
-
-  if (!String(env.asaasWebhookAuthToken || '').trim()) {
-    return 'missing_webhook_auth_token';
-  }
-
-  return 'configured';
-}
-
 export function buildFinanceSettingsDto(value = {}) {
   const settings = getStoredFinanceSettings(value);
-  const integrationStatus = resolveIntegrationStatus();
+  const integrationStatus = resolveAsaasIntegrationStatus();
+  const centralizedMode = usesCentralizedPaymentArchitecture(settings);
 
   return {
+    paymentArchitecture: settings.paymentArchitecture,
     environment: env.asaasEnv,
     rootApiKeyConfigured: Boolean(String(env.asaasApiKey || '').trim()),
     platformWalletId: settings.platformWalletId,
@@ -378,19 +344,30 @@ export function buildFinanceSettingsDto(value = {}) {
     webhookUrl: `${normalizeBaseUrl(env.apiPublicBaseUrl)}/api/webhooks/asaas`,
     integrationStatus,
     summary: {
-      platformReady: isIntegrationConfigured(integrationStatus) && isValidWalletId(settings.platformWalletId),
+      platformReady:
+        isIntegrationConfigured(integrationStatus) &&
+        (centralizedMode || isValidWalletId(settings.platformWalletId)),
+      processingLabel: centralizedMode ? 'Conta Asaas centralizada' : 'Subcontas + split Asaas',
     },
   };
 }
 
 export async function getAdminFinanceSettings() {
-  const record = await getFinanceSettingsRecord();
-  return buildFinanceSettingsDto(record?.value);
+  const record = await getPlatformFinanceSettingsRecord();
+  return buildFinanceSettingsDto(record?.value || {});
 }
 
 export async function updateAdminFinanceSettings(payload = {}) {
-  const currentRecord = await getFinanceSettingsRecord();
-  const nextSettings = getStoredFinanceSettings(currentRecord?.value);
+  const currentSettings = await getPlatformFinanceSettings();
+  const nextSettings = {
+    ...currentSettings,
+  };
+
+  if (hasOwnProperty(payload, 'paymentArchitecture')) {
+    nextSettings.paymentArchitecture =
+      String(payload.paymentArchitecture || '').trim().toLowerCase() ||
+      currentSettings.paymentArchitecture;
+  }
 
   if (hasOwnProperty(payload, 'platformWalletId')) {
     nextSettings.platformWalletId = normalizePlatformWalletId(payload.platformWalletId);
@@ -400,8 +377,8 @@ export async function updateAdminFinanceSettings(payload = {}) {
     nextSettings.defaultPlatformFeePercent = validatePlatformFeePercent(payload.defaultPlatformFeePercent);
   }
 
-  const updatedRecord = await upsertFinanceSettingsRecord(nextSettings);
-  return buildFinanceSettingsDto(updatedRecord?.value);
+  const updatedSettings = await savePlatformFinanceSettings(nextSettings);
+  return buildFinanceSettingsDto(updatedSettings);
 }
 
 export async function testAdminAsaasConnection() {
@@ -413,6 +390,7 @@ export async function testAdminAsaasConnection() {
 export function resolveEffectiveAsaasSplitSettings(paymentSettings = {}, financeSettings = {}) {
   const normalizedPaymentSettings = resolveBusinessPaymentSettings({ paymentSettings }, { mode: 'storage' });
   const normalizedFinanceSettings = getStoredFinanceSettings(financeSettings);
+  const centralizedMode = usesCentralizedPaymentArchitecture(normalizedFinanceSettings);
   const split = normalizedPaymentSettings.split || {};
   const inheritsGlobal = split.inheritsGlobal !== false;
   const platformWalletId = normalizedFinanceSettings.platformWalletId;
@@ -420,7 +398,8 @@ export function resolveEffectiveAsaasSplitSettings(paymentSettings = {}, finance
   const tenantPercent = normalizeStoredPlatformFeePercent(split.platformFeePercent);
   const effectivePercent = inheritsGlobal ? globalPercent : tenantPercent;
   const enabled = Boolean(
-    platformWalletId &&
+    !centralizedMode &&
+      platformWalletId &&
       effectivePercent > 0 &&
       (inheritsGlobal ? globalPercent > 0 : normalizeBoolean(split.enabled, false)),
   );
@@ -431,7 +410,7 @@ export function resolveEffectiveAsaasSplitSettings(paymentSettings = {}, finance
     platformWalletId,
     platformFeePercent: effectivePercent,
     defaultPlatformFeePercent: globalPercent,
-    mode: 'percentage',
+    mode: centralizedMode ? 'centralized_internal' : 'percentage',
   };
 }
 
@@ -442,18 +421,28 @@ function buildTenantFinanceDto(business, financeSettings = {}) {
 
   const paymentSettings = resolveBusinessPaymentSettings(business, { mode: 'storage' });
   const effectiveSplit = resolveEffectiveAsaasSplitSettings(paymentSettings, financeSettings);
-  const integrationStatus = resolveIntegrationStatus();
-  const tenantFinancialStatus = resolveTenantFinancialStatus(paymentSettings);
+  const integrationStatus = resolveAsaasIntegrationStatus();
+  const tenantFinancialStatus = resolveTenantFinancialStatus(paymentSettings, financeSettings);
+  const asaasContext = resolveAsaasProviderContext({
+    business,
+    paymentSettings,
+    financeSettings,
+  });
+  const centralizedMode = usesCentralizedPaymentArchitecture(financeSettings);
   const platformWalletId = normalizePlatformWalletId(effectiveSplit.platformWalletId);
   const tenantWalletId = normalizePlatformWalletId(paymentSettings.asaas?.walletId);
   const usesGlobalFee = effectiveSplit.inheritsGlobal !== false;
-  const effectivePlatformFeePercent = normalizeStoredPlatformFeePercent(effectiveSplit.platformFeePercent);
+  const effectivePlatformFeePercent = resolveEffectivePlatformFeePercent(
+    paymentSettings,
+    financeSettings,
+  );
   const canEnableSplit = Boolean(
     paymentSettings.provider === PAYMENT_PROVIDERS.ASAAS &&
       isIntegrationConfigured(integrationStatus) &&
       tenantFinancialStatus === 'active' &&
       isValidWalletId(platformWalletId) &&
-      isValidWalletId(tenantWalletId),
+      isValidWalletId(tenantWalletId) &&
+      !centralizedMode,
   );
   const splitActive = Boolean(
     canEnableSplit &&
@@ -462,10 +451,12 @@ function buildTenantFinanceDto(business, financeSettings = {}) {
   );
   const canEnableCheckout = Boolean(
     paymentSettings.provider !== PAYMENT_PROVIDERS.ASAAS ||
-      (isIntegrationConfigured(integrationStatus) &&
-        tenantFinancialStatus === 'active' &&
-        isValidWalletId(tenantWalletId) &&
-        (!splitActive || canEnableSplit)),
+      (centralizedMode
+        ? asaasContext.connected
+        : isIntegrationConfigured(integrationStatus) &&
+          tenantFinancialStatus === 'active' &&
+          isValidWalletId(tenantWalletId) &&
+          (!splitActive || canEnableSplit)),
   );
   const warnings = resolveWarnings({
     integrationStatus,
@@ -475,6 +466,7 @@ function buildTenantFinanceDto(business, financeSettings = {}) {
     tenantWalletId,
     usesGlobalFee,
     splitRequested: normalizeBoolean(paymentSettings.split?.enabled, false),
+    paymentArchitecture: asaasContext.paymentArchitecture,
   });
 
   return {
@@ -483,13 +475,15 @@ function buildTenantFinanceDto(business, financeSettings = {}) {
     businessSlug: business.slug || '',
     enabled: Boolean(paymentSettings.enabled),
     provider: paymentSettings.provider || PAYMENT_PROVIDERS.MANUAL,
+    paymentArchitecture: asaasContext.paymentArchitecture,
+    usesCentralizedProcessing: centralizedMode,
     integrationStatus,
     tenantFinancialStatus,
     methods: paymentSettings.methods || {},
     manualPixConfigured: Boolean(paymentSettings.pix?.key),
     asaas: {
       enabled: Boolean(paymentSettings.asaas?.enabled),
-      connected: Boolean(paymentSettings.asaas?.connected),
+      connected: Boolean(centralizedMode ? asaasContext.connected : paymentSettings.asaas?.connected),
       hasApiKey: Boolean(paymentSettings.asaas?.hasApiKey),
       walletId: paymentSettings.asaas?.walletId || '',
       accountEmail: paymentSettings.asaas?.accountEmail || '',
@@ -524,22 +518,23 @@ function buildTenantFinanceDto(business, financeSettings = {}) {
       tenantNetPercent: Number((100 - effectivePlatformFeePercent).toFixed(2)),
       inheritsGlobal: usesGlobalFee,
       splitActive,
-      mode: usesGlobalFee ? 'global' : 'custom',
+      mode: centralizedMode ? 'centralized' : usesGlobalFee ? 'global' : 'custom',
     },
     summary: {
       providerLabel: PAYMENT_PROVIDER_LABELS[paymentSettings.provider] || 'Manual',
       integrationLabel: INTEGRATION_STATUS_LABELS[integrationStatus] || integrationStatus,
       tenantFinancialLabel:
         TENANT_FINANCIAL_STATUS_LABELS[tenantFinancialStatus] || tenantFinancialStatus || 'Nao conectada',
-      splitLabel: splitActive ? 'Ativo' : 'Desativado',
+      splitLabel: centralizedMode ? 'Interno' : splitActive ? 'Ativo' : 'Desativado',
       checkoutLabel: canEnableCheckout ? 'Ativo' : 'Bloqueado',
+      processingLabel: centralizedMode ? 'Conta central TapLink' : 'Subconta Asaas do tenant',
     },
     split: {
-      enabled: splitActive,
+      enabled: centralizedMode ? false : splitActive,
       inheritsGlobal: usesGlobalFee,
       platformFeePercent: paymentSettings.split?.platformFeePercent || 0,
       effectivePlatformFeePercent,
-      platformWalletConfigured: isValidWalletId(platformWalletId),
+      platformWalletConfigured: centralizedMode ? false : isValidWalletId(platformWalletId),
       defaultPlatformFeePercent: effectiveSplit.defaultPlatformFeePercent,
       mode: effectiveSplit.mode,
     },
@@ -557,19 +552,23 @@ function assertWalletId(value, code = 'finance_wallet_invalid') {
 }
 
 function assertAsaasFinanceState(nextSettings, financeSettings) {
-  const integrationStatus = resolveIntegrationStatus();
+  const integrationStatus = resolveAsaasIntegrationStatus();
+  const centralizedMode = usesCentralizedPaymentArchitecture(financeSettings);
   const platformWalletId = normalizePlatformWalletId(financeSettings.platformWalletId);
   const tenantWalletId = normalizePlatformWalletId(nextSettings.asaas?.walletId);
   const provider = nextSettings.provider || PAYMENT_PROVIDERS.MANUAL;
   const usesGlobalFee = nextSettings.split?.inheritsGlobal !== false;
-  const tenantFinancialStatus = resolveTenantFinancialStatus(nextSettings);
-  const splitRequested = normalizeBoolean(nextSettings.split?.enabled, false) || usesGlobalFee;
+  const tenantFinancialStatus = resolveTenantFinancialStatus(nextSettings, financeSettings);
+  const splitRequested =
+    !centralizedMode && (normalizeBoolean(nextSettings.split?.enabled, false) || usesGlobalFee);
   const effectivePlatformFeePercent = usesGlobalFee
     ? normalizeStoredPlatformFeePercent(financeSettings.defaultPlatformFeePercent)
     : normalizeStoredPlatformFeePercent(nextSettings.split?.platformFeePercent);
 
-  assertWalletId(platformWalletId, 'finance_platform_wallet_invalid');
-  assertWalletId(tenantWalletId, 'finance_tenant_wallet_invalid');
+  if (!centralizedMode) {
+    assertWalletId(platformWalletId, 'finance_platform_wallet_invalid');
+    assertWalletId(tenantWalletId, 'finance_tenant_wallet_invalid');
+  }
 
   if ((provider === PAYMENT_PROVIDERS.ASAAS || nextSettings.asaas?.enabled) && !isIntegrationConfigured(integrationStatus)) {
     throw new AppError('Integracao global do Asaas invalida para este tenant.', 400, 'finance_integration_invalid');
@@ -581,6 +580,10 @@ function assertAsaasFinanceState(nextSettings, financeSettings) {
 
   if (splitRequested && !tenantWalletId) {
     throw new AppError('A wallet do tenant e obrigatoria para aplicar split.', 400, 'finance_tenant_wallet_required');
+  }
+
+  if (centralizedMode) {
+    return true;
   }
 
   if (
@@ -610,7 +613,7 @@ function assertAsaasFinanceState(nextSettings, financeSettings) {
 export async function getAdminBusinessFinanceSettings(businessId) {
   const [business, financeRecord] = await Promise.all([
     findBusinessById(businessId),
-    getFinanceSettingsRecord(),
+    getPlatformFinanceSettingsRecord(),
   ]);
 
   return buildTenantFinanceDto(business, financeRecord?.value);
@@ -619,7 +622,7 @@ export async function getAdminBusinessFinanceSettings(businessId) {
 export async function updateAdminBusinessFinanceSettings(businessId, payload = {}) {
   const [existingBusiness, financeRecord] = await Promise.all([
     findBusinessById(businessId),
-    getFinanceSettingsRecord(),
+    getPlatformFinanceSettingsRecord(),
   ]);
 
   if (!existingBusiness) {
@@ -697,7 +700,9 @@ export async function updateAdminBusinessFinanceSettings(businessId, payload = {
 
   const financeSettings = getStoredFinanceSettings(financeRecord?.value);
   nextSettings.split.platformWalletId = financeSettings.platformWalletId;
-  nextSettings.split.mode = 'percentage';
+  nextSettings.split.mode = usesCentralizedPaymentArchitecture(financeSettings)
+    ? 'centralized_internal'
+    : 'percentage';
   assertAsaasFinanceState(nextSettings, financeSettings);
 
   const updatedBusiness = await updateBusinessRecord(businessId, {
@@ -710,7 +715,7 @@ export async function updateAdminBusinessFinanceSettings(businessId, payload = {
 export async function createAdminBusinessAsaasSubaccount(businessId, payload = {}) {
   const [existingBusiness, financeRecord] = await Promise.all([
     findBusinessById(businessId),
-    getFinanceSettingsRecord(),
+    getPlatformFinanceSettingsRecord(),
   ]);
 
   if (!existingBusiness) {
@@ -735,7 +740,15 @@ export async function createAdminBusinessAsaasSubaccount(businessId, payload = {
   }
 
   const financeSettings = getStoredFinanceSettings(financeRecord?.value);
-  const integrationStatus = resolveIntegrationStatus();
+  const integrationStatus = resolveAsaasIntegrationStatus();
+
+  if (usesCentralizedPaymentArchitecture(financeSettings)) {
+    throw new AppError(
+      'Criacao de subconta Asaas desativada enquanto a plataforma estiver em modo centralizado.',
+      409,
+      'finance_subaccount_disabled_in_centralized_mode',
+    );
+  }
 
   if (!isIntegrationConfigured(integrationStatus)) {
     throw new AppError(

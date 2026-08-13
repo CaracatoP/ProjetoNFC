@@ -66,11 +66,9 @@ import { TENANT_REALTIME_KINDS } from '../../../shared/constants/tenantRealtime.
 import { buildPixPayload } from '../../../shared/utils/pix.js';
 import { publishTenantUpdated } from './tenantRealtimeService.js';
 import { createMercadoPagoCheckoutPreference } from './mercadoPagoService.js';
-import { getFinanceSettingsRecord } from '../repositories/systemSettingRepository.js';
 import { upsertPaymentByProviderPaymentId } from '../repositories/paymentRepository.js';
 import {
   getDeclaredHostedCheckoutProvider,
-  isAsaasProviderConnected,
   isMercadoPagoProviderConnected,
 } from '../utils/paymentProvider.js';
 import { validatePaymentMethodForDeliveryType } from '../utils/paymentDeliveryValidation.js';
@@ -83,6 +81,14 @@ import {
 } from './asaasService.js';
 import { resolveEffectiveAsaasSplitSettings } from './adminFinanceService.js';
 import { resolveOrCreateAsaasPaymentCustomer } from './paymentCustomerService.js';
+import {
+  calculatePlatformFeeBreakdown,
+  getPlatformFinanceSettings,
+  resolveAsaasProviderContext,
+  resolveEffectivePlatformFeePercent,
+  usesCentralizedPaymentArchitecture,
+} from './platformFinanceService.js';
+import { syncTenantLedgerForPayment } from './tenantFinanceService.js';
 
 function toPlainRecord(value) {
   if (!value) {
@@ -352,7 +358,12 @@ function assertMercadoPagoPaymentMethodAllowed(paymentSettings, method) {
   }
 }
 
-function assertAsaasPaymentMethodAllowed(paymentSettings, method) {
+function assertAsaasPaymentMethodAllowed({
+  business,
+  paymentSettings,
+  financeSettings,
+  method,
+}) {
   if (!getDeclaredHostedCheckoutProvider(paymentSettings)) {
     throw new AppError(
       'Pagamento online indisponivel para este tenant no momento.',
@@ -373,7 +384,13 @@ function assertAsaasPaymentMethodAllowed(paymentSettings, method) {
     );
   }
 
-  if (!isAsaasProviderConnected(paymentSettings)) {
+  const asaasContext = resolveAsaasProviderContext({
+    business,
+    paymentSettings,
+    financeSettings,
+  });
+
+  if (!asaasContext.connected) {
     throw new AppError(
       'Este tenant ainda nao concluiu a configuracao do Asaas.',
       400,
@@ -451,13 +468,20 @@ function buildMercadoPagoPaymentSnapshot(method, amount, occurredAt = new Date()
   );
 }
 
-function buildAsaasPaymentSnapshot(method, amount, occurredAt = new Date()) {
+function buildAsaasPaymentSnapshot(
+  method,
+  amount,
+  { paymentArchitecture = 'centralized', occurredAt = new Date() } = {},
+) {
   return normalizeOrderPayment(
     {
       method,
       status: PAYMENT_STATUS.PENDING,
       provider: PAYMENT_PROVIDERS.ASAAS,
+      paymentArchitecture,
       amount,
+      grossAmount: amount,
+      refundedAmount: 0,
       pixCopyPaste: '',
       pixQrCodeUrl: '',
       pixQrCode: '',
@@ -466,9 +490,40 @@ function buildAsaasPaymentSnapshot(method, amount, occurredAt = new Date()) {
       invoiceUrl: '',
       bankSlipUrl: '',
       paidAt: null,
+      confirmedAt: null,
+      receivedAt: null,
+      providerUpdatedAt: occurredAt,
       updatedAt: occurredAt,
     },
     amount,
+  );
+}
+
+function enrichAsaasPaymentFinancials(
+  payment,
+  totalAmount,
+  { businessPaymentSettings = {}, financeSettings = {} } = {},
+) {
+  const normalizedPayment = normalizeOrderPayment(payment || {}, totalAmount);
+  const effectiveFeePercent = resolveEffectivePlatformFeePercent(
+    businessPaymentSettings,
+    financeSettings,
+  );
+  const breakdown = calculatePlatformFeeBreakdown(
+    normalizedPayment.grossAmount || normalizedPayment.amount || totalAmount,
+    effectiveFeePercent,
+  );
+
+  return normalizeOrderPayment(
+    {
+      ...normalizedPayment,
+      paymentArchitecture:
+        normalizedPayment.paymentArchitecture || financeSettings?.paymentArchitecture || 'centralized',
+      grossAmount: breakdown.grossAmount,
+      platformFeeAmount: breakdown.platformFeeAmount,
+      tenantNetAmount: breakdown.tenantNetAmount,
+    },
+    totalAmount,
   );
 }
 
@@ -504,8 +559,11 @@ function buildAsaasPaymentReferencePayload({
     providerCustomerId: String(providerPayment?.customer || normalizedPayment.providerCustomerId || '').trim(),
     externalReference: String(externalReference || providerPayment?.externalReference || '').trim(),
     amount: normalizedPayment.amount,
+    grossAmount: normalizedPayment.grossAmount || normalizedPayment.amount,
     platformFeeAmount: normalizedPayment.platformFeeAmount,
     tenantNetAmount: normalizedPayment.tenantNetAmount,
+    paymentArchitecture: normalizedPayment.paymentArchitecture,
+    refundedAmount: normalizedPayment.refundedAmount || 0,
     invoiceUrl: normalizedPayment.invoiceUrl,
     bankSlipUrl: normalizedPayment.bankSlipUrl,
     checkoutUrl: normalizedPayment.checkoutUrl,
@@ -513,11 +571,18 @@ function buildAsaasPaymentReferencePayload({
     pixQrCode: normalizedPayment.pixQrCode,
     pixQrCodeUrl: normalizedPayment.pixQrCodeUrl,
     paidAt: normalizedPayment.paidAt,
+    confirmedAt: normalizedPayment.confirmedAt,
+    receivedAt: normalizedPayment.receivedAt,
     providerUpdatedAt: occurredAt,
   };
 }
 
-function buildPublicOrderPaymentSnapshot(business, payload, amount, occurredAt = new Date()) {
+async function buildPublicOrderPaymentSnapshot(
+  business,
+  payload,
+  amount,
+  occurredAt = new Date(),
+) {
   const paymentSettings = resolveBusinessPaymentSettings(business, { mode: 'storage' });
   const method = resolveRequestedPaymentMethod(payload, paymentSettings);
   const provider = resolveRequestedPaymentProvider(payload, method, paymentSettings);
@@ -528,8 +593,24 @@ function buildPublicOrderPaymentSnapshot(business, payload, amount, occurredAt =
   }
 
   if (provider === PAYMENT_PROVIDERS.ASAAS) {
-    assertAsaasPaymentMethodAllowed(paymentSettings, method);
-    return buildAsaasPaymentSnapshot(method, amount, occurredAt);
+    const financeSettings = await getPlatformFinanceSettings();
+    const asaasContext = resolveAsaasProviderContext({
+      business,
+      paymentSettings,
+      financeSettings,
+    });
+
+    assertAsaasPaymentMethodAllowed({
+      business,
+      paymentSettings,
+      financeSettings,
+      method,
+    });
+
+    return buildAsaasPaymentSnapshot(method, amount, {
+      paymentArchitecture: asaasContext.paymentArchitecture,
+      occurredAt,
+    });
   }
 
   if (method === PAYMENT_METHODS.PIX) {
@@ -665,6 +746,33 @@ function resolveNonRegressivePaymentStatus(currentStatus, incomingStatus) {
   return incoming;
 }
 
+function sumAsaasRefunds(refunds = []) {
+  if (!Array.isArray(refunds)) {
+    return 0;
+  }
+
+  return Number(
+    refunds
+      .filter((refund) => ['DONE', 'PENDING'].includes(String(refund?.status || '').trim().toUpperCase()))
+      .reduce((sum, refund) => sum + Number(refund?.value || 0), 0)
+      .toFixed(2),
+  );
+}
+
+function resolveAsaasRefundedAmount(asaasPayment = {}, providerEvent = '') {
+  const refundsAmount = sumAsaasRefunds(asaasPayment?.refunds);
+
+  if (refundsAmount > 0) {
+    return refundsAmount;
+  }
+
+  if (String(providerEvent || '').trim().toUpperCase() === 'PAYMENT_REFUNDED') {
+    return Number(Number(asaasPayment?.value || 0).toFixed(2));
+  }
+
+  return 0;
+}
+
 function buildAsaasWebhookPaymentPatch(
   existingOrder,
   asaasPayment,
@@ -675,16 +783,24 @@ function buildAsaasWebhookPaymentPatch(
   const currentPaymentEvents = normalizeOrderPaymentEvents(existingOrder?.paymentEvents || []);
   const providerMappedStatus = mapAsaasPaymentStatus(asaasPayment?.status);
   const nextStatus = resolveNonRegressivePaymentStatus(currentPayment.status, providerMappedStatus);
+  const refundedAmount = Math.max(
+    Number(currentPayment.refundedAmount || 0),
+    resolveAsaasRefundedAmount(asaasPayment, providerEvent),
+  );
   const nextPayment = normalizeOrderPayment(
     {
       ...currentPayment,
       provider: PAYMENT_PROVIDERS.ASAAS,
       status: nextStatus,
       amount: Number(Number(existingOrder?.total || currentPayment.amount || 0).toFixed(2)),
+      grossAmount: Number(
+        Number(existingOrder?.total || currentPayment.grossAmount || currentPayment.amount || 0).toFixed(2),
+      ),
       providerPaymentId: String(asaasPayment?.id || currentPayment.providerPaymentId || '').trim(),
       providerCustomerId: String(asaasPayment?.customer || currentPayment.providerCustomerId || '').trim(),
       invoiceUrl: String(asaasPayment?.invoiceUrl || currentPayment.invoiceUrl || '').trim(),
       bankSlipUrl: String(asaasPayment?.bankSlipUrl || currentPayment.bankSlipUrl || '').trim(),
+      refundedAmount,
       paidAt:
         nextStatus === PAYMENT_STATUS.PAID
           ? currentPayment.paidAt ||
@@ -692,6 +808,18 @@ function buildAsaasWebhookPaymentPatch(
             asaasPayment?.clientPaymentDate ||
             occurredAt
           : currentPayment.paidAt || null,
+      confirmedAt:
+        currentPayment.confirmedAt ||
+        asaasPayment?.confirmedDate ||
+        asaasPayment?.clientPaymentDate ||
+        null,
+      receivedAt:
+        currentPayment.receivedAt ||
+        asaasPayment?.creditDate ||
+        asaasPayment?.clientPaymentDate ||
+        asaasPayment?.paymentDate ||
+        null,
+      providerUpdatedAt: occurredAt,
       updatedAt: occurredAt,
     },
     existingOrder?.total || currentPayment.amount || 0,
@@ -707,6 +835,12 @@ function buildAsaasWebhookPaymentPatch(
         : nextStatus === PAYMENT_STATUS.CANCELLED
           ? 'payment_cancelled'
           : '';
+  const normalizedProviderEvent = String(providerEvent || '').trim().toUpperCase();
+  const refundEventType =
+    normalizedProviderEvent === 'PAYMENT_REFUNDED' ||
+    normalizedProviderEvent === 'PAYMENT_PARTIALLY_REFUNDED'
+      ? 'payment_refunded'
+      : '';
   const nextEvents = appendUniquePaymentEvents(currentPaymentEvents, [
     {
       type: 'webhook_received',
@@ -736,16 +870,37 @@ function buildAsaasWebhookPaymentPatch(
           },
         ]
       : []),
+    ...(refundEventType
+      ? [
+          {
+            type: refundEventType,
+            provider: PAYMENT_PROVIDERS.ASAAS,
+            status: nextStatus,
+            providerEvent: String(providerEvent || '').trim(),
+            providerPaymentId: String(asaasPayment?.id || currentPayment.providerPaymentId || '').trim(),
+            occurredAt,
+            meta: {
+              externalReference: String(asaasPayment?.externalReference || '').trim(),
+              refundedAmount,
+            },
+          },
+        ]
+      : []),
   ]);
   const hasChanged =
     nextPayment.method !== currentPayment.method ||
     nextPayment.status !== currentPayment.status ||
     nextPayment.provider !== currentPayment.provider ||
+    nextPayment.grossAmount !== currentPayment.grossAmount ||
+    nextPayment.refundedAmount !== currentPayment.refundedAmount ||
     nextPayment.providerPaymentId !== currentPayment.providerPaymentId ||
     nextPayment.providerCustomerId !== currentPayment.providerCustomerId ||
     nextPayment.invoiceUrl !== currentPayment.invoiceUrl ||
     nextPayment.bankSlipUrl !== currentPayment.bankSlipUrl ||
     String(nextPayment.paidAt || '') !== String(currentPayment.paidAt || '') ||
+    String(nextPayment.confirmedAt || '') !== String(currentPayment.confirmedAt || '') ||
+    String(nextPayment.receivedAt || '') !== String(currentPayment.receivedAt || '') ||
+    String(nextPayment.providerUpdatedAt || '') !== String(currentPayment.providerUpdatedAt || '') ||
     String(nextPayment.updatedAt || '') !== String(currentPayment.updatedAt || '') ||
     nextEvents.length !== currentPaymentEvents.length;
 
@@ -985,7 +1140,7 @@ export async function createPublicOrder(slug, payload) {
       method: paymentMethod,
     },
   };
-  const payment = buildPublicOrderPaymentSnapshot(business, normalizedPayload, total, receivedAt);
+  const payment = await buildPublicOrderPaymentSnapshot(business, normalizedPayload, total, receivedAt);
   const created = await createOrderRecord({
     ...normalizedPayload,
     businessId: business._id,
@@ -1034,7 +1189,12 @@ export async function createPublicOrder(slug, payload) {
 
   if (payment.provider === PAYMENT_PROVIDERS.ASAAS) {
     try {
-      const financeSettingsRecord = await getFinanceSettingsRecord();
+      const financeSettings = await getPlatformFinanceSettings();
+      const asaasContext = resolveAsaasProviderContext({
+        business,
+        paymentSettings: storedPaymentSettings,
+        financeSettings,
+      });
       const customerName = String(payload.customerName || '').trim();
       const customerPhone = String(payload.customerPhone || '').trim();
       const customerEmail = String(payload.customerEmail || payload.email || '').trim();
@@ -1043,7 +1203,7 @@ export async function createPublicOrder(slug, payload) {
       ).trim();
       const customer = await resolveOrCreateAsaasPaymentCustomer({
         businessId: business._id,
-        apiKey: storedPaymentSettings.asaas.apiKeyEncrypted,
+        apiKey: asaasContext.apiKey,
         name: customerName,
         phone: customerPhone,
         email: customerEmail,
@@ -1056,19 +1216,27 @@ export async function createPublicOrder(slug, payload) {
       }
       const effectiveSplitSettings = resolveEffectiveAsaasSplitSettings(
         storedPaymentSettings,
-        financeSettingsRecord?.value,
+        financeSettings,
       );
-      const { platformFeeAmount, tenantNetAmount, split } = buildAsaasSplitRules({
-        total,
-        platformFeePercent: effectiveSplitSettings.enabled
-          ? effectiveSplitSettings.platformFeePercent
-          : 0,
-        platformWalletId: effectiveSplitSettings.platformWalletId,
-      });
+      const centralizedMode = usesCentralizedPaymentArchitecture(financeSettings);
+      const feeBreakdown = centralizedMode
+        ? calculatePlatformFeeBreakdown(total, effectiveSplitSettings.platformFeePercent)
+        : buildAsaasSplitRules({
+            total,
+            platformFeePercent: effectiveSplitSettings.enabled
+              ? effectiveSplitSettings.platformFeePercent
+              : 0,
+            platformWalletId: effectiveSplitSettings.platformWalletId,
+          });
+      const {
+        platformFeeAmount = 0,
+        tenantNetAmount = total,
+        split = [],
+      } = feeBreakdown;
       const billingType = resolveAsaasBillingType(payment.method);
       const externalReference = buildAsaasExternalReference(business._id, created._id);
       const charge = await createAsaasPaymentCharge({
-        apiKey: storedPaymentSettings.asaas.apiKeyEncrypted,
+        apiKey: asaasContext.apiKey,
         charge: {
           customer: providerCustomerId,
           billingType,
@@ -1076,19 +1244,23 @@ export async function createPublicOrder(slug, payload) {
           dueDate: receivedAt.toISOString().slice(0, 10),
           description: business.name ? `Pedido em ${business.name}` : 'Pedido TapLink',
           externalReference,
-          ...(split.length ? { split } : {}),
+          ...(!centralizedMode && split.length ? { split } : {}),
         },
       });
 
       let nextPayment = normalizeOrderPayment(
         {
           ...payment,
+          paymentArchitecture: asaasContext.paymentArchitecture,
           providerPaymentId: String(charge.id || '').trim(),
           providerCustomerId,
           invoiceUrl: String(charge.invoiceUrl || '').trim(),
           bankSlipUrl: String(charge.bankSlipUrl || '').trim(),
+          grossAmount: total,
           platformFeeAmount,
           tenantNetAmount,
+          refundedAmount: 0,
+          providerUpdatedAt: new Date(),
           updatedAt: new Date(),
         },
         total,
@@ -1096,7 +1268,7 @@ export async function createPublicOrder(slug, payload) {
 
       if (payment.method === PAYMENT_METHODS.PIX) {
         const pixQrCode = await getAsaasPixQrCode({
-          apiKey: storedPaymentSettings.asaas.apiKeyEncrypted,
+          apiKey: asaasContext.apiKey,
           paymentId: String(charge.id || '').trim(),
         });
 
@@ -1122,12 +1294,13 @@ export async function createPublicOrder(slug, payload) {
             meta: {
               externalReference,
               method: payment.method,
+              paymentArchitecture: asaasContext.paymentArchitecture,
             },
           },
         ]),
       });
 
-      await upsertPaymentByProviderPaymentId(
+      const storedPayment = await upsertPaymentByProviderPaymentId(
         PAYMENT_PROVIDERS.ASAAS,
         String(charge.id || '').trim(),
         buildAsaasPaymentReferencePayload({
@@ -1141,6 +1314,13 @@ export async function createPublicOrder(slug, payload) {
           occurredAt: new Date(),
         }),
       );
+
+      await syncTenantLedgerForPayment(storedPayment, {
+        businessPaymentSettings: storedPaymentSettings,
+        financeSettings,
+        providerEvent: 'PAYMENT_CREATED',
+        occurredAt: new Date(),
+      });
     } catch (error) {
       await updateOrderRecordByBusinessId(business._id, created._id, {
         payment: normalizeOrderPayment(
@@ -1246,6 +1426,8 @@ export async function syncAsaasOrderPaymentWebhook(
   const business = await assertBusinessExists(businessId);
   const existing = await findOrderById(id);
   assertTenantScope(existing, businessId, 'Pedido');
+  const storedPaymentSettings = resolveBusinessPaymentSettings(business, { mode: 'storage' });
+  const financeSettings = await getPlatformFinanceSettings();
 
   if (existing.payment?.provider !== PAYMENT_PROVIDERS.ASAAS) {
     throw new AppError('Pedido nao configurado para Asaas', 404, 'module_resource_not_found');
@@ -1257,9 +1439,22 @@ export async function syncAsaasOrderPaymentWebhook(
     providerEvent,
     occurredAt,
   );
+  nextPaymentPatch.payment = enrichAsaasPaymentFinancials(nextPaymentPatch.payment, existing.total || 0, {
+    businessPaymentSettings: storedPaymentSettings,
+    financeSettings,
+  });
+  const existingNormalizedPayment = normalizeOrderPayment(existing.payment || {}, existing.total || 0);
+  if (
+    nextPaymentPatch.payment.grossAmount !== existingNormalizedPayment.grossAmount ||
+    nextPaymentPatch.payment.platformFeeAmount !== existingNormalizedPayment.platformFeeAmount ||
+    nextPaymentPatch.payment.tenantNetAmount !== existingNormalizedPayment.tenantNetAmount ||
+    nextPaymentPatch.payment.paymentArchitecture !== existingNormalizedPayment.paymentArchitecture
+  ) {
+    nextPaymentPatch.hasChanged = true;
+  }
 
   if (!nextPaymentPatch.hasChanged) {
-    await upsertPaymentByProviderPaymentId(
+    const storedPayment = await upsertPaymentByProviderPaymentId(
       PAYMENT_PROVIDERS.ASAAS,
       nextPaymentPatch.payment.providerPaymentId,
       buildAsaasPaymentReferencePayload({
@@ -1274,6 +1469,13 @@ export async function syncAsaasOrderPaymentWebhook(
       }),
     );
 
+    await syncTenantLedgerForPayment(storedPayment, {
+      businessPaymentSettings: storedPaymentSettings,
+      financeSettings,
+      providerEvent,
+      occurredAt,
+    });
+
     return serializeOrderRecord(existing);
   }
 
@@ -1286,7 +1488,7 @@ export async function syncAsaasOrderPaymentWebhook(
     throw new AppError('Pedido nao encontrado', 404, 'module_resource_not_found');
   }
 
-  await upsertPaymentByProviderPaymentId(
+  const storedPayment = await upsertPaymentByProviderPaymentId(
     PAYMENT_PROVIDERS.ASAAS,
     nextPaymentPatch.payment.providerPaymentId,
     buildAsaasPaymentReferencePayload({
@@ -1300,6 +1502,13 @@ export async function syncAsaasOrderPaymentWebhook(
       occurredAt,
     }),
   );
+
+  await syncTenantLedgerForPayment(storedPayment, {
+    businessPaymentSettings: storedPaymentSettings,
+    financeSettings,
+    providerEvent,
+    occurredAt,
+  });
 
   publishBusinessModuleEvent(business, TENANT_REALTIME_KINDS.PAYMENT_UPDATED);
   return serializeOrderRecord(updated);

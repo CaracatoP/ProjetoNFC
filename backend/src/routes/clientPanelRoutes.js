@@ -11,6 +11,7 @@ import {
   deleteClientPanelProfessionalController,
   getClientPanelAnalyticsController,
   getClientPanelBusinessController,
+  getClientPanelFinanceController,
   listClientPanelAppointmentRequestsController,
   listClientPanelAppointmentServicesController,
   listClientPanelOrdersController,
@@ -63,6 +64,7 @@ router.use(requireSessionAuth);
 router.get('/business', validateRequest({ query: clientPanelBusinessQuerySchema }), getClientPanelBusinessController);
 router.put('/business/basics', validateRequest({ body: clientPanelBusinessBasicsBodySchema }), updateClientPanelBusinessBasicsController);
 router.get('/analytics', getClientPanelAnalyticsController);
+router.get('/finance', getClientPanelFinanceController);
 
 router.post('/uploads/image', adminUploadRateLimiter, upload.single('file'), uploadClientPanelImageController);
 

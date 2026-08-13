@@ -192,6 +192,403 @@ function DashboardViewFallback({ title, description }) {
   );
 }
 
+function formatMetricValue(value) {
+  return new Intl.NumberFormat('pt-BR').format(Number(value || 0));
+}
+
+const ADMIN_VIEW_COPY = Object.freeze({
+  dashboard: {
+    icon: 'dashboard',
+    label: 'Dashboard',
+    title: 'Dashboard',
+    description: 'Resumo operacional para encontrar rapidamente tenants, clientes e pendencias.',
+  },
+  workspace: {
+    icon: 'tenants',
+    label: 'Tenants',
+    title: 'Tenants',
+    description: 'Crie, edite, duplique e publique tenants sem perder o contexto da operacao.',
+  },
+  analytics: {
+    icon: 'analytics',
+    label: 'Analises',
+    title: 'Analises',
+    description: 'Acompanhe uso, baseline e desempenho dos sites publicos.',
+  },
+  clients: {
+    icon: 'clients',
+    label: 'Clientes',
+    title: 'Clientes',
+    description: 'Gerencie acessos, vinculos, niveis, planos e status financeiros.',
+  },
+  finance: {
+    icon: 'finance',
+    label: 'Financeiro',
+    title: 'Financeiro',
+    description: 'Configure Asaas, split, checkout e credenciais financeiras da plataforma.',
+  },
+});
+
+const ADMIN_NAV_GROUPS = [
+  { id: 'overview', label: 'Visao geral', views: ['dashboard'] },
+  { id: 'management', label: 'Gestao', views: ['workspace', 'clients'] },
+  { id: 'intelligence', label: 'Inteligencia', views: ['analytics'] },
+  { id: 'finance', label: 'Financeiro', views: ['finance'] },
+];
+
+function buildAdminNavigationGroups(canManageBilling = false) {
+  const allowedViews = Object.entries(ADMIN_VIEW_COPY)
+    .filter(([viewId]) => viewId !== 'finance' || canManageBilling)
+    .map(([id, view]) => ({ id, ...view }));
+  const viewMap = new Map(allowedViews.map((view) => [view.id, view]));
+
+  return ADMIN_NAV_GROUPS
+    .map((group) => ({
+      ...group,
+      items: group.views.map((viewId) => viewMap.get(viewId)).filter(Boolean),
+    }))
+    .filter((group) => group.items.length);
+}
+
+function AdminNavIcon({ icon }) {
+  const sharedProps = {
+    width: 18,
+    height: 18,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: '1.8',
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': 'true',
+  };
+
+  switch (icon) {
+    case 'tenants':
+      return (
+        <svg {...sharedProps}>
+          <path d="M4 7h16" />
+          <path d="M6 7v12" />
+          <path d="M18 7v12" />
+          <path d="M4 19h16" />
+        </svg>
+      );
+    case 'clients':
+      return (
+        <svg {...sharedProps}>
+          <circle cx="9" cy="8" r="3" />
+          <path d="M3.8 19c1.4-3.2 3.1-4.8 5.2-4.8s3.8 1.6 5.2 4.8" />
+          <circle cx="17" cy="9" r="2.4" />
+          <path d="M14.8 15.2c1.5.4 2.8 1.6 3.7 3.8" />
+        </svg>
+      );
+    case 'analytics':
+      return (
+        <svg {...sharedProps}>
+          <path d="M5 18V9" />
+          <path d="M12 18V5" />
+          <path d="M19 18v-7" />
+        </svg>
+      );
+    case 'finance':
+      return (
+        <svg {...sharedProps}>
+          <path d="M4 7h16v10H4z" />
+          <path d="M8 11h.01" />
+          <path d="M12 11h4" />
+        </svg>
+      );
+    case 'dashboard':
+    default:
+      return (
+        <svg {...sharedProps}>
+          <path d="M4 13h7V4H4z" />
+          <path d="M13 20h7v-7h-7z" />
+          <path d="M13 11h7V4h-7z" />
+          <path d="M4 20h7v-5H4z" />
+        </svg>
+      );
+  }
+}
+
+function AdminSidebar({
+  navigationGroups,
+  activeView,
+  onViewChange,
+  user,
+  selectedSummary,
+  overview,
+  loading,
+  onRefresh,
+  onLogout,
+}) {
+  return (
+    <aside className="admin-modern-sidebar client-panel-sidebar">
+      <div className="client-panel-sidebar__brand">
+        <div className="client-panel-sidebar__brand-badge">TA</div>
+        <div>
+          <strong>TapLink Admin</strong>
+          <span>{user?.displayName || 'Operacao'}</span>
+        </div>
+      </div>
+
+      <nav className="client-panel-sidebar__navigation" aria-label="Navegacao do painel administrativo">
+        {navigationGroups.map((group) => (
+          <div key={group.id} className="client-panel-sidebar__group">
+            <span className="client-panel-sidebar__group-title">{group.label}</span>
+            <div className="client-panel-sidebar__nav">
+              {group.items.map((view) => (
+                <button
+                  key={view.id}
+                  type="button"
+                  className={`client-panel-sidebar__nav-button${activeView === view.id ? ' is-active' : ''}`}
+                  onClick={() => onViewChange(view.id)}
+                >
+                  <span className="client-panel-sidebar__nav-icon">
+                    <AdminNavIcon icon={view.icon} />
+                  </span>
+                  <span className="client-panel-sidebar__nav-label">{view.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      <div className="client-panel-sidebar__footer">
+        <div className="client-panel-sidebar__plan admin-modern-sidebar__tenant">
+          <span>Tenant em foco</span>
+          <strong>{selectedSummary?.name || 'Nenhum tenant'}</strong>
+          <small>{selectedSummary ? `/site/${selectedSummary.slug}` : 'Selecione um tenant para editar.'}</small>
+        </div>
+        <div className="admin-modern-sidebar__stats">
+          <span>{formatMetricValue(overview?.totals?.activeBusinesses)} ativos</span>
+          <span>{formatMetricValue(overview?.totals?.inactiveBusinesses)} inativos</span>
+        </div>
+        <div className="client-panel-sidebar__footer-actions">
+          <Button variant="ghost" className="client-panel-sidebar__logout" onClick={onRefresh} disabled={loading}>
+            {loading ? 'Atualizando...' : 'Atualizar dados'}
+          </Button>
+          <Button variant="ghost" className="client-panel-sidebar__logout" onClick={onLogout}>
+            Sair
+          </Button>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function AdminMobileNav({ navigationGroups, activeView, onViewChange }) {
+  const [shouldRenderMobileNav, setShouldRenderMobileNav] = useState(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return false;
+    }
+
+    return window.matchMedia('(max-width: 920px)').matches;
+  });
+  const views = navigationGroups.flatMap((group) => group.items);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia('(max-width: 920px)');
+    const syncMobileNav = () => setShouldRenderMobileNav(mediaQuery.matches);
+
+    syncMobileNav();
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', syncMobileNav);
+      return () => mediaQuery.removeEventListener('change', syncMobileNav);
+    }
+
+    mediaQuery.addListener(syncMobileNav);
+    return () => mediaQuery.removeListener(syncMobileNav);
+  }, []);
+
+  if (!shouldRenderMobileNav) {
+    return null;
+  }
+
+  return (
+    <div className="client-panel-mobile-nav admin-modern-mobile-nav" role="tablist" aria-label="Navegacao rapida do painel administrativo">
+      {views.map((view) => (
+        <button
+          key={`mobile-${view.id}`}
+          type="button"
+          className={`client-panel-mobile-nav__button${activeView === view.id ? ' is-active' : ''}`}
+          aria-selected={activeView === view.id}
+          onClick={() => onViewChange(view.id)}
+        >
+          {view.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AdminPageHeader({
+  currentView,
+  activeView,
+  selectedSummary,
+  loading,
+  onRefresh,
+  onCopyPublicLink,
+  onOpenWorkspace,
+}) {
+  return (
+    <section className="client-panel-page-header admin-modern-page-header">
+      <div className="client-panel-page-header__copy">
+        <h2>{currentView.title}</h2>
+        <p>{currentView.description}</p>
+        {activeView === 'workspace' ? <span className="admin-visually-hidden">Workspace da operacao</span> : null}
+      </div>
+      <div className="client-panel-page-header__actions">
+        {activeView === 'dashboard' ? (
+          <Button variant="secondary" onClick={onOpenWorkspace}>
+            Abrir tenants
+          </Button>
+        ) : null}
+        <Button variant="secondary" onClick={onRefresh} disabled={loading}>
+          {loading ? 'Atualizando...' : 'Atualizar'}
+        </Button>
+        {activeView === 'workspace' && selectedSummary ? (
+          <>
+            <Button href={selectedSummary.publicUrl || `/site/${selectedSummary.slug}`} target="_blank" rel="noreferrer">
+              Abrir pagina publica
+            </Button>
+            <Button variant="ghost" onClick={onCopyPublicLink}>
+              Copiar link
+            </Button>
+          </>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function AdminOperationsDashboard({ overview, businesses = [], selectedSummary, onNavigate, onSelectBusiness }) {
+  const analyticsHighlights = overview?.analytics?.highlights || {};
+  const attentionTenants = businesses
+    .filter((business) => business.status !== 'active' || !Object.values(business.modules || {}).some(Boolean))
+    .slice(0, 6);
+  const recentEvents = overview?.recentEvents || overview?.analytics?.recentEvents || [];
+
+  return (
+    <div className="admin-operations-dashboard">
+      <div className="client-panel-kpi-grid admin-operations-dashboard__kpis">
+        <div className="client-panel-kpi client-panel-kpi--info">
+          <span>Tenants ativos</span>
+          <strong>{formatMetricValue(overview?.totals?.activeBusinesses)}</strong>
+          <small>Sites liberados para o publico.</small>
+        </div>
+        <div className="client-panel-kpi client-panel-kpi--warning">
+          <span>Tenants em atencao</span>
+          <strong>{formatMetricValue((overview?.totals?.inactiveBusinesses || 0) + (overview?.totals?.draftBusinesses || 0))}</strong>
+          <small>Inativos, drafts ou sem publicacao final.</small>
+        </div>
+        <div className="client-panel-kpi client-panel-kpi--accent">
+          <span>Eventos totais</span>
+          <strong>{formatMetricValue(analyticsHighlights.totalEvents || overview?.totals?.totalEvents)}</strong>
+          <small>Visitas e interacoes no baseline atual.</small>
+        </div>
+        <div className="client-panel-kpi client-panel-kpi--danger">
+          <span>Ultimos 7 dias</span>
+          <strong>{formatMetricValue(analyticsHighlights.last7DaysEvents || overview?.totals?.last7DaysEvents)}</strong>
+          <small>Ritmo recente da operacao.</small>
+        </div>
+      </div>
+
+      <div className="client-panel-overview-grid admin-operations-dashboard__grid">
+        <section className="client-panel-overview-main">
+          <div className="client-panel-section-heading">
+            <div>
+              <h3>Tenants que pedem atencao</h3>
+              <p>Priorize status, modulos vazios e configuracoes incompletas.</p>
+            </div>
+            <Button variant="secondary" size="sm" onClick={() => onNavigate('workspace')}>
+              Ver tenants
+            </Button>
+          </div>
+
+          {attentionTenants.length ? (
+            <div className="admin-tenant-attention-list">
+              {attentionTenants.map((business) => (
+                <button
+                  key={business.id}
+                  type="button"
+                  className="client-panel-order-row admin-tenant-attention-row"
+                  onClick={() => {
+                    onSelectBusiness?.(business.id);
+                    onNavigate('workspace');
+                  }}
+                >
+                  <span className="client-panel-order-row__id">{business.status || 'draft'}</span>
+                  <span className="client-panel-order-row__name">{business.name}</span>
+                  <span className="client-panel-order-row__value">/{business.slug}</span>
+                  <span className="client-panel-order-row__time">{business.segment || 'other'}</span>
+                  <span className={`tenant-list__status tenant-list__status--${business.status || 'draft'}`}>{business.status || 'draft'}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="client-panel-empty-note">
+              <strong>Nenhum tenant critico agora.</strong>
+              <span>Tenants inativos, drafts ou sem modulos ativos aparecem aqui.</span>
+            </div>
+          )}
+        </section>
+
+        <aside className="client-panel-overview-side">
+          <section className="client-panel-side-section">
+            <div className="client-panel-section-heading">
+              <h3>Acoes rapidas</h3>
+            </div>
+            <div className="client-panel-action-list">
+              <button type="button" className="client-panel-action-link" onClick={() => onNavigate('workspace')}>
+                <span>Editar tenant em foco</span>
+                <small>{selectedSummary?.name || 'Abrir'}</small>
+              </button>
+              <button type="button" className="client-panel-action-link" onClick={() => onNavigate('clients')}>
+                <span>Gerenciar clientes</span>
+                <small>Acessos</small>
+              </button>
+              <button type="button" className="client-panel-action-link" onClick={() => onNavigate('analytics')}>
+                <span>Ver analytics</span>
+                <small>Baseline</small>
+              </button>
+            </div>
+          </section>
+
+          <section className="client-panel-side-section">
+            <div className="client-panel-section-heading">
+              <h3>Atividade recente</h3>
+            </div>
+            {recentEvents.length ? (
+              <div className="admin-event-list admin-event-list--scroll admin-operations-dashboard__events">
+                {recentEvents.slice(0, 5).map((event) => (
+                  <div key={event.id || `${event.eventType}-${event.occurredAt}`} className="admin-event-item admin-event-item--analytics">
+                    <div>
+                      <strong>{event.businessName || 'Tenant'}</strong>
+                      <span>{event.targetLabel || event.eventType || 'Evento'}</span>
+                    </div>
+                    <time dateTime={event.occurredAt}>{event.occurredAt ? new Date(event.occurredAt).toLocaleString('pt-BR') : ''}</time>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="client-panel-empty-note client-panel-empty-note--inline">
+                <strong>Sem eventos recentes.</strong>
+              </div>
+            )}
+          </section>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
 export function DashboardHomePage() {
   const { token, user, access, logout } = useAuth();
   const [overview, setOverview] = useState(null);
@@ -713,233 +1110,171 @@ export function DashboardHomePage() {
       : selectedSummary?.slug
         ? ''
         : selectedSummary?.publicUrl || '';
+  const canManageBilling = Boolean(access?.capabilities?.canManageBilling);
+  const navigationGroups = useMemo(() => buildAdminNavigationGroups(canManageBilling), [canManageBilling]);
+  const currentView = ADMIN_VIEW_COPY[activeView] || ADMIN_VIEW_COPY.workspace;
 
   return (
     <AppShell
-      eyebrow="TapLink Admin"
-      title="Painel administrativo"
-      description="Operacao central"
-      shellClassName="dashboard-shell"
-      heroClassName="dashboard-shell__topbar"
-      contentClassName="dashboard-shell__content"
+      shellClassName="dashboard-shell admin-modern-shell"
+      contentClassName="dashboard-shell__content admin-modern-shell__content"
       pageTitle="TapLink | Dashboard"
-      headerVariant="topbar"
+      headerVariant="none"
     >
-      <Card className="admin-panel-card admin-panel-card--hero admin-dashboard-hero">
-        <div className="admin-editor-header admin-dashboard-header">
-          <div>
-            <h2>Workspace da operacao</h2>
-            <p>
-              Logado como <strong>{user?.displayName || 'Admin'}</strong>. Sessao protegida por token, uploads no Cloudinary e operacao centralizada do TapLink.
-            </p>
-          </div>
-          <div className="admin-toolbar admin-dashboard-header__actions">
-            <div className="admin-toolbar__group">
-              <Button variant="secondary" onClick={() => refreshCollections(selectedBusinessId)} disabled={loadingWorkspace}>
-                {loadingWorkspace ? 'Atualizando...' : 'Atualizar dados'}
-              </Button>
-              {selectedSummary ? (
-                <Button href={selectedSummary.publicUrl || `/site/${selectedSummary.slug}`} target="_blank" rel="noreferrer">
-                  Abrir pagina publica
-                </Button>
-              ) : null}
-              {selectedSummary ? (
-                <Button variant="secondary" onClick={handleCopyPublicLink}>
-                  Copiar link publico
-                </Button>
-              ) : null}
-            </div>
-            <div className="admin-toolbar__group admin-toolbar__group--end">
-              <Button variant="secondary" onClick={logout}>
-                Sair
-              </Button>
-            </div>
-          </div>
-        </div>
+      <div className="admin-modern-layout">
+        <AdminSidebar
+          navigationGroups={navigationGroups}
+          activeView={activeView}
+          onViewChange={setActiveView}
+          user={user}
+          selectedSummary={selectedSummary}
+          overview={overview}
+          loading={loadingWorkspace}
+          onRefresh={() => refreshCollections(selectedBusinessId)}
+          onLogout={logout}
+        />
 
-        <div className="admin-mini-stats admin-dashboard-header__stats">
-          <div className="admin-mini-stat-card">
-            <span>Tenant em foco</span>
-            <strong>{selectedSummary?.name || 'Nenhum tenant selecionado'}</strong>
-            <small>{selectedSummary ? `/site/${selectedSummary.slug}` : 'Selecione um tenant na coluna lateral para editar.'}</small>
-          </div>
-          <div className="admin-mini-stat-card">
-            <span>Status operacional</span>
-            <strong>{selectedSummary?.status || 'Sem status'}</strong>
-            <small>{selectedSummary ? 'Controle manual de disponibilidade da pagina publica.' : 'Status aparece assim que houver um tenant ativo na area.'}</small>
-          </div>
-          {overview ? (
-            <>
-              <div className="admin-mini-stat-card">
-                <span>Tenants ativos</span>
-                <strong>{overview.totals.activeBusinesses}</strong>
-                <small>Operacoes publicas que estao liberadas neste momento.</small>
+        <div className="admin-modern-workspace">
+          <AdminMobileNav navigationGroups={navigationGroups} activeView={activeView} onViewChange={setActiveView} />
+
+          <AdminPageHeader
+            currentView={currentView}
+            activeView={activeView}
+            selectedSummary={selectedSummary}
+            loading={loadingWorkspace}
+            onRefresh={() => refreshCollections(selectedBusinessId)}
+            onCopyPublicLink={handleCopyPublicLink}
+            onOpenWorkspace={() => setActiveView('workspace')}
+          />
+
+          {message ? <p className="admin-status-banner admin-status-banner--success">{message}</p> : null}
+          {error ? <p className="admin-status-banner admin-status-banner--error">{error}</p> : null}
+
+          {loadingWorkspace && !overview ? (
+            <EmptyState title="Carregando dashboard" description="Buscando tenants, analytics e configuracoes da operacao." />
+          ) : activeView === 'dashboard' ? (
+            <AdminOperationsDashboard
+              overview={overview}
+              businesses={businesses}
+              selectedSummary={selectedSummary}
+              onNavigate={setActiveView}
+              onSelectBusiness={setSelectedBusinessId}
+            />
+          ) : activeView === 'workspace' ? (
+            <div className="admin-workspace admin-workspace--redesigned">
+              <div className="admin-sidebar-stack">
+                <TenantOnboardingForm creating={creating} onCreate={handleCreate} />
+                <TenantListPanel
+                  businesses={filteredBusinesses}
+                  selectedBusinessId={selectedBusinessId}
+                  loading={loadingWorkspace}
+                  onSelect={setSelectedBusinessId}
+                  searchValue={tenantSearchInput}
+                  onSearchChange={setTenantSearchInput}
+                  sortValue={tenantSort}
+                  onSortChange={setTenantSort}
+                  statusFilter={tenantStatusFilter}
+                  onStatusFilterChange={setTenantStatusFilter}
+                />
               </div>
-              <div className="admin-mini-stat-card">
-                <span>Tenants inativos</span>
-                <strong>{overview.totals.inactiveBusinesses}</strong>
-                <small>Sites pausados manualmente e bloqueados para o publico.</small>
-              </div>
-            </>
-          ) : null}
-          {overview?.uploadConfig ? (
-            <>
-              <div className="admin-mini-stat-card">
-                <span>Uploads preparados</span>
-                <strong>{overview.uploadConfig.maxFileSizeMb} MB por arquivo</strong>
-                <small>Cloudinary pelo backend com validacao de imagem.</small>
-              </div>
-              <div className="admin-mini-stat-card">
-                <span>Formatos aceitos</span>
-                <strong>{overview.uploadConfig.acceptedMimeTypes.join(', ')}</strong>
-                <small>Fluxo pronto para logo, banner, favicon e galerias.</small>
-              </div>
-            </>
-          ) : null}
-        </div>
-      </Card>
 
-      <div className="admin-dashboard-flow admin-dashboard-flow--redesigned">
-        {message ? <p className="admin-status-banner admin-status-banner--success">{message}</p> : null}
-        {error ? <p className="admin-status-banner admin-status-banner--error">{error}</p> : null}
-
-        {loadingWorkspace && !overview ? (
-          <EmptyState title="Carregando dashboard" description="Buscando tenants, analytics e configuracoes da operacao." />
-        ) : (
-          <div className="admin-dashboard-main admin-dashboard-main--redesigned">
-            <div className="admin-dashboard-switcher admin-dashboard-switcher--tabs">
-              <Button variant={activeView === 'workspace' ? 'primary' : 'secondary'} onClick={() => setActiveView('workspace')}>
-                Operacao
-              </Button>
-              <Button variant={activeView === 'analytics' ? 'primary' : 'secondary'} onClick={() => setActiveView('analytics')}>
-                Analises
-              </Button>
-              <Button variant={activeView === 'clients' ? 'primary' : 'secondary'} onClick={() => setActiveView('clients')}>
-                Clientes
-              </Button>
-              {access?.capabilities?.canManageBilling ? (
-                <Button variant={activeView === 'finance' ? 'primary' : 'secondary'} onClick={() => setActiveView('finance')}>
-                  Financeiro
-                </Button>
-              ) : null}
-            </div>
-
-            {activeView === 'workspace' ? (
-              <div className="admin-workspace admin-workspace--redesigned">
-                <div className="admin-sidebar-stack">
-                  <TenantOnboardingForm creating={creating} onCreate={handleCreate} />
-                  <TenantListPanel
-                    businesses={filteredBusinesses}
-                    selectedBusinessId={selectedBusinessId}
-                    loading={loadingWorkspace}
-                    onSelect={setSelectedBusinessId}
-                    searchValue={tenantSearchInput}
-                    onSearchChange={setTenantSearchInput}
-                    sortValue={tenantSort}
-                    onSortChange={setTenantSort}
-                    statusFilter={tenantStatusFilter}
-                    onStatusFilterChange={setTenantStatusFilter}
-                  />
-                </div>
-
-                <div className="admin-editor-column">
-                  <div className="admin-editor-layout">
-                    <div className="admin-editor-pane">
-                      {loadingEditor ? (
-                        <Card className="admin-panel-card">
-                          <p className="admin-muted-copy">Carregando editor do tenant...</p>
-                        </Card>
-                      ) : (
-                        <TenantEditorPanel
-                          editor={editor}
-                          saving={saving}
-                          togglingStatus={togglingStatus}
-                          deleting={deleting}
-                          duplicating={duplicating}
-                          onSave={handleSave}
-                          onToggleStatus={handleToggleStatus}
-                          onDelete={handleDelete}
-                          onUpload={handleUpload}
-                          onDuplicate={handleDuplicate}
-                          onCopyPublicLink={handleCopyPublicLink}
-                          moduleActions={moduleActions}
-                          moduleBusyKey={moduleBusyKey}
-                        />
-                      )}
-                    </div>
-
-                    <TenantPreviewPanel
-                      previewUrl={previewUrl}
-                      publicUrl={selectedSummary?.publicUrl || ''}
-                      businessName={selectedSummary?.name || ''}
-                      status={selectedSummary?.status || ''}
-                      previewKey={previewRefreshKey}
-                      onRefresh={refreshPreview}
-                    />
+              <div className="admin-editor-column">
+                <div className="admin-editor-layout">
+                  <div className="admin-editor-pane">
+                    {loadingEditor ? (
+                      <Card className="admin-panel-card">
+                        <p className="admin-muted-copy">Carregando editor do tenant...</p>
+                      </Card>
+                    ) : (
+                      <TenantEditorPanel
+                        editor={editor}
+                        saving={saving}
+                        togglingStatus={togglingStatus}
+                        deleting={deleting}
+                        duplicating={duplicating}
+                        onSave={handleSave}
+                        onToggleStatus={handleToggleStatus}
+                        onDelete={handleDelete}
+                        onUpload={handleUpload}
+                        onDuplicate={handleDuplicate}
+                        onCopyPublicLink={handleCopyPublicLink}
+                        moduleActions={moduleActions}
+                        moduleBusyKey={moduleBusyKey}
+                      />
+                    )}
                   </div>
+
+                  <TenantPreviewPanel
+                    previewUrl={previewUrl}
+                    publicUrl={selectedSummary?.publicUrl || ''}
+                    businessName={selectedSummary?.name || ''}
+                    status={selectedSummary?.status || ''}
+                    previewKey={previewRefreshKey}
+                    onRefresh={refreshPreview}
+                  />
                 </div>
               </div>
-            ) : activeView === 'analytics' ? (
-              <Suspense
-                fallback={
-                  <DashboardViewFallback
-                    title="Carregando analises"
-                    description="Preparando os graficos e consolidando os dados do tenant selecionado."
-                  />
-                }
-              >
-                <LazyAdminAnalyticsView
-                  overview={overview}
-                  editor={editor}
-                  selectedSummary={selectedSummary}
-                  businesses={businesses}
-                  selectedBusinessId={selectedBusinessId}
-                  onSelectBusiness={setSelectedBusinessId}
-                  onOpenWorkspace={() => setActiveView('workspace')}
-                  onResetAnalytics={handleResetAnalytics}
-                  canResetAnalytics={Boolean(access?.capabilities?.canManageBilling)}
-                  resettingAnalytics={resettingAnalytics}
-                  loadingEditor={loadingEditor}
+            </div>
+          ) : activeView === 'analytics' ? (
+            <Suspense
+              fallback={
+                <DashboardViewFallback
+                  title="Carregando analises"
+                  description="Preparando os graficos e consolidando os dados do tenant selecionado."
                 />
-              </Suspense>
-            ) : activeView === 'clients' ? (
-              <Suspense
-                fallback={
-                  <DashboardViewFallback
-                    title="Carregando clientes"
-                    description="Buscando acessos, tenant vinculado e dados comerciais da base atual."
-                  />
-                }
-              >
-                <LazyAdminClientsPanel
-                  token={token}
-                  businesses={businesses}
-                  canManageBilling={Boolean(access?.capabilities?.canManageBilling)}
-                  onOpenBusiness={(businessId) => {
-                    setSelectedBusinessId(businessId);
-                    setActiveView('workspace');
-                  }}
+              }
+            >
+              <LazyAdminAnalyticsView
+                overview={overview}
+                editor={editor}
+                selectedSummary={selectedSummary}
+                businesses={businesses}
+                selectedBusinessId={selectedBusinessId}
+                onSelectBusiness={setSelectedBusinessId}
+                onOpenWorkspace={() => setActiveView('workspace')}
+                onResetAnalytics={handleResetAnalytics}
+                canResetAnalytics={canManageBilling}
+                resettingAnalytics={resettingAnalytics}
+                loadingEditor={loadingEditor}
+              />
+            </Suspense>
+          ) : activeView === 'clients' ? (
+            <Suspense
+              fallback={
+                <DashboardViewFallback
+                  title="Carregando clientes"
+                  description="Buscando acessos, tenant vinculado e dados comerciais da base atual."
                 />
-              </Suspense>
-            ) : (
-              <Suspense
-                fallback={
-                  <DashboardViewFallback
-                    title="Carregando financeiro"
-                    description="Buscando a integracao da plataforma com o Asaas e a configuracao do tenant selecionado."
-                  />
-                }
-              >
-                <LazyAdminFinancialSettingsPanel
-                  token={token}
-                  businesses={businesses}
-                  selectedBusinessId={selectedBusinessId}
-                  onSelectBusiness={setSelectedBusinessId}
+              }
+            >
+              <LazyAdminClientsPanel
+                token={token}
+                businesses={businesses}
+                canManageBilling={canManageBilling}
+                onOpenBusiness={(businessId) => {
+                  setSelectedBusinessId(businessId);
+                  setActiveView('workspace');
+                }}
+              />
+            </Suspense>
+          ) : (
+            <Suspense
+              fallback={
+                <DashboardViewFallback
+                  title="Carregando financeiro"
+                  description="Buscando a integracao da plataforma com o Asaas e a configuracao do tenant selecionado."
                 />
-              </Suspense>
-            )}
-          </div>
-        )}
+              }
+            >
+              <LazyAdminFinancialSettingsPanel
+                token={token}
+                businesses={businesses}
+                selectedBusinessId={selectedBusinessId}
+                onSelectBusiness={setSelectedBusinessId}
+              />
+            </Suspense>
+          )}
+        </div>
       </div>
     </AppShell>
   );

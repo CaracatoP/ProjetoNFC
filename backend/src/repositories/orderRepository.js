@@ -1,7 +1,17 @@
 import { Order } from '../models/Order.js';
 
-export function listOrdersByBusinessId(businessId) {
-  return Order.find({ businessId, archivedAt: null }).sort({ createdAt: -1 }).lean();
+export function listOrdersByBusinessId(
+  businessId,
+  { includeArchived = false, limit = null } = {},
+) {
+  const query = includeArchived ? { businessId } : { businessId, archivedAt: null };
+  const cursor = Order.find(query).sort({ createdAt: -1 });
+
+  if (Number.isFinite(Number(limit)) && Number(limit) > 0) {
+    cursor.limit(Math.min(Number(limit), 500));
+  }
+
+  return cursor.lean();
 }
 
 export function countOrdersByBusinessId(businessId) {

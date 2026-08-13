@@ -439,6 +439,85 @@ function ClientAnalyticsPanel({ analytics, analyticsLoading, analyticsError, sco
   );
 }
 
+const LEDGER_STATUS_LABELS = Object.freeze({
+  pending: 'Pendente',
+  available: 'Disponivel',
+  paid_out: 'Repassado',
+  reversed: 'Revertido',
+});
+
+function ClientFinancePanel({ finance, financeLoading, financeError, paymentArchitecture }) {
+  const summary = finance?.summary || {};
+  const history = Array.isArray(finance?.history) ? finance.history : [];
+  const processingLabel =
+    paymentArchitecture === 'centralized' ? 'Conta central TapLink' : 'Subconta Asaas do tenant';
+
+  return (
+    <Card className="admin-panel-card client-analytics-card">
+      <div className="admin-panel-card__header">
+        <div>
+          <SectionEyebrow>Financeiro</SectionEyebrow>
+          <h2>Saldo e conciliacao do tenant</h2>
+          <p>Leitura interna baseada no Payment autoritativo e no ledger append-only do tenant.</p>
+        </div>
+        <div className="client-analytics-card__scope">
+          <span className="admin-section-chip admin-section-chip--accent">{processingLabel}</span>
+        </div>
+      </div>
+
+      {financeLoading ? <p className="admin-muted-copy">Carregando resumo financeiro do tenant...</p> : null}
+      {financeError ? <p className="admin-status-banner admin-status-banner--error">{financeError}</p> : null}
+
+      {finance ? (
+        <div className="client-analytics-stack">
+          <div className="analytics-metric-grid analytics-metric-grid--tenant">
+            <ClientAnalyticsMetricCard label="Saldo pendente" value={formatCurrencyValue(summary.pendingBalance)} description="Pedidos ainda nao liquidados financeiramente." accent="warning" />
+            <ClientAnalyticsMetricCard label="Saldo disponivel" value={formatCurrencyValue(summary.availableBalance)} description="Valor liquido disponivel para repasse." accent="success" />
+            <ClientAnalyticsMetricCard label="Total recebido" value={formatCurrencyValue(summary.totalReceived)} description="Entradas brutas confirmadas pelo Asaas." accent="info" />
+            <ClientAnalyticsMetricCard label="Taxas TapLink" value={formatCurrencyValue(summary.platformFees)} description="Total contabilizado como taxa da plataforma." accent="accent" />
+            <ClientAnalyticsMetricCard label="Estornos" value={formatCurrencyValue(summary.refunds)} description="Saidas por refund ou reversao financeira." accent="warning" />
+            <ClientAnalyticsMetricCard label="Saldo a repassar" value={formatCurrencyValue(summary.balanceDue)} description="Disponivel menos repasses ja concluídos." accent="default" />
+          </div>
+
+          <div className="admin-subpanel analytics-panel">
+            <div className="admin-panel-card__header admin-panel-card__header--compact">
+              <div>
+                <h2>Historico financeiro</h2>
+                <p>Cada linha representa uma movimentacao auditavel ligada ao pagamento e ao pedido do tenant.</p>
+              </div>
+            </div>
+
+            {history.length ? (
+              <div className="admin-event-list admin-event-list--scroll analytics-recent-events">
+                {history.map((row) => (
+                  <div key={row.id} className="admin-event-item admin-event-item--analytics">
+                    <div>
+                      <strong>{row.typeLabel || 'Movimentacao'}</strong>
+                      <span>
+                        {row.orderCustomerName ? `${row.orderCustomerName} · ` : ''}
+                        {LEDGER_STATUS_LABELS[row.status] || formatAnalyticsFallbackLabel(row.status)}
+                      </span>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <strong>{formatCurrencyValue(row.amount)}</strong>
+                      <time dateTime={row.createdAt || undefined}>{formatDateTime(row.createdAt)}</time>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="analytics-empty-state analytics-empty-state--compact">
+                <strong>Nenhuma movimentacao financeira ainda</strong>
+                <span>Assim que pagamentos reais forem confirmados, o ledger do tenant aparecera aqui.</span>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
 function BillingBanner({ billingStatus }) {
   if (billingStatus !== 'overdue') {
     return null;
@@ -1162,12 +1241,18 @@ const CLIENT_PANEL_VIEW_COPY = Object.freeze({
     title: 'Analytics',
     description: 'Acompanhe visitas, cliques e resultados do seu site.',
   },
+  finance: {
+    icon: 'finance',
+    label: 'Financeiro',
+    title: 'Financeiro',
+    description: 'Acompanhe saldo, taxas, estornos e historico do tenant.',
+  },
 });
 
 const CLIENT_PANEL_NAV_GROUPS = [
   { id: 'overview', label: 'Visao geral', views: ['overview'] },
   { id: 'operation', label: 'Operacao', views: ['orders', 'catalog', 'stock', 'appointments'] },
-  { id: 'business', label: 'Negocio', views: ['professionals', 'services', 'analytics'] },
+  { id: 'business', label: 'Negocio', views: ['professionals', 'services', 'finance', 'analytics'] },
   { id: 'settings', label: 'Configuracoes', views: ['settings'] },
 ];
 
@@ -1256,6 +1341,15 @@ function ClientPanelNavIcon({ icon }) {
           <path d="M19 18v-7" />
         </svg>
       );
+    case 'finance':
+      return (
+        <svg {...sharedProps}>
+          <path d="M4 7h16" />
+          <path d="M6 12h12" />
+          <path d="M8 17h8" />
+          <circle cx="17" cy="7" r="2" />
+        </svg>
+      );
     case 'settings':
       return (
         <svg {...sharedProps}>
@@ -1291,6 +1385,7 @@ function buildClientPanelViews({ editor, capabilities, canSeeAnalyticsSection })
 
   if ((modules.orders || modules.cart) && capabilities.canViewOrders) {
     views.push({ id: 'orders', ...CLIENT_PANEL_VIEW_COPY.orders });
+    views.push({ id: 'finance', ...CLIENT_PANEL_VIEW_COPY.finance });
   }
 
   if (modules.appointments && capabilities.canViewAppointments) {
@@ -1747,9 +1842,12 @@ export function ClientPanelPage() {
     draft,
     setDraft,
     analytics,
+    finance,
     loading,
     analyticsLoading,
+    financeLoading,
     analyticsError,
+    financeError,
     message,
     error,
     moduleBusyKey,
@@ -2069,6 +2167,15 @@ export function ClientPanelPage() {
                 analyticsError={analyticsError}
                 scope={analytics?.scope || analyticsScope}
                 planCode={planCode}
+              />
+            ) : null}
+
+            {activeView === 'finance' ? (
+              <ClientFinancePanel
+                finance={finance}
+                financeLoading={financeLoading}
+                financeError={financeError}
+                paymentArchitecture={editor?.business?.paymentSettings?.paymentArchitecture || 'centralized'}
               />
             ) : null}
           </div>

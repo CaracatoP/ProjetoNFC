@@ -124,8 +124,9 @@ describe('AdminClientsPanel', () => {
 
     expect(await screen.findByText('Base comercial')).toBeInTheDocument();
 
-    const createCard = screen.getByText('Cadastrar cliente').closest('section');
-    const createScope = within(createCard);
+    await user.click(screen.getByRole('button', { name: /Novo cliente/i }));
+    const createDialog = await screen.findByRole('dialog', { name: /Cadastrar cliente/i });
+    const createScope = within(createDialog);
 
     await user.type(createScope.getByLabelText('Nome'), 'Cliente Novo');
     await user.type(createScope.getByLabelText('E-mail'), 'novo@cliente.local');
@@ -142,6 +143,9 @@ describe('AdminClientsPanel', () => {
         roleLevel: 3,
       }));
     });
+
+    const detailTabs = screen.getByRole('tablist', { name: /Secoes do cliente/i });
+    await user.click(within(detailTabs).getByRole('button', { name: /Financeiro/i }));
 
     const planCard = screen.getByText('Controles financeiros').closest('section');
     const planScope = within(planCard);
@@ -175,6 +179,9 @@ describe('AdminClientsPanel', () => {
 
     expect(await screen.findByText('Base comercial')).toBeInTheDocument();
 
+    const detailTabs = screen.getByRole('tablist', { name: /Secoes do cliente/i });
+    await user.click(within(detailTabs).getByRole('button', { name: /Financeiro/i }));
+
     const planCard = screen.getByText('Controles financeiros').closest('section');
     const planScope = within(planCard);
 
@@ -182,6 +189,8 @@ describe('AdminClientsPanel', () => {
     expect(planScope.getByLabelText('Status financeiro')).toBeDisabled();
     expect(planScope.getByRole('button', { name: /Atualizar plano/i })).toBeDisabled();
     expect(planScope.getByRole('button', { name: /Atualizar status financeiro/i })).toBeDisabled();
+
+    await user.click(within(detailTabs).getByRole('button', { name: /Seguranca/i }));
 
     const securityCard = screen.getByText('Reset de senha').closest('section');
     const securityScope = within(securityCard);
