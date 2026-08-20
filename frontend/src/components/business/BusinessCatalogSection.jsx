@@ -74,18 +74,37 @@ function buildCheckoutErrorMessage(error) {
 
 function buildPendingPixRecoveryErrorMessage(error) {
   if (error?.code === 'timeout_error') {
-    return 'O pagamento existe, mas nÃ£o conseguimos retomar agora. Tente novamente em instantes.';
+    return 'O pagamento existe, mas não conseguimos retomar agora. Tente novamente em instantes.';
   }
 
   if (error?.code === 'network_error') {
-    return 'NÃ£o foi possÃ­vel retomar o pagamento agora. Verifique sua conexÃ£o e tente novamente.';
+    return 'Não foi possível conectar para retomar o pagamento. Verifique sua conexão e tente novamente.';
+  }
+
+  if (error?.code === 'public_order_payment_not_found') {
+    return 'Esse pagamento não está mais disponível para retomada.';
+  }
+
+  if (error?.code === 'public_order_payment_already_paid') {
+    return 'Esse pagamento já foi confirmado.';
+  }
+
+  if (
+    error?.code === 'public_order_payment_provider_unavailable' ||
+    error?.code === 'public_order_payment_payload_unavailable'
+  ) {
+    return 'O pedido está pendente, mas não conseguimos carregar os dados do Pix agora. Tente novamente em instantes.';
+  }
+
+  if (error?.code === 'public_order_payment_scope_mismatch') {
+    return 'Não foi possível recuperar este pagamento com segurança.';
   }
 
   if (typeof error?.message === 'string' && error.message.trim()) {
     return error.message.trim();
   }
 
-  return 'NÃ£o foi possÃ­vel retomar o pagamento agora. Tente novamente em instantes.';
+  return 'Não foi possível retomar o pagamento agora. Tente novamente em instantes.';
 }
 
 function isPublicOrderPaymentNotFoundError(error) {
@@ -423,6 +442,30 @@ function isAsaasPixHostedFallback(order) {
     !order?.payment?.pixCopyPaste &&
     Boolean(order?.payment?.invoiceUrl)
   );
+}
+
+function hasRecoverablePixPresentation(order) {
+  if (!isPixPayment(order)) {
+    return false;
+  }
+
+  if (order?.payment?.status && isTerminalRecoverablePixStatus(order.payment.status)) {
+    return true;
+  }
+
+  return Boolean(order?.payment?.pixCopyPaste || order?.payment?.pixQrCode || order?.payment?.invoiceUrl);
+}
+
+function hasActionablePixPayment(order) {
+  if (!isPixPayment(order)) {
+    return false;
+  }
+
+  if (order?.payment?.status && isTerminalRecoverablePixStatus(order.payment.status)) {
+    return true;
+  }
+
+  return Boolean(order?.payment?.pixCopyPaste || order?.payment?.pixQrCode || order?.payment?.invoiceUrl);
 }
 
 function requiresCheckoutCustomerDocument(checkout, paymentSettings = {}) {
@@ -843,7 +886,7 @@ export function BusinessCatalogSection({
       const order = await onRecoverPendingPixOrder(checkoutToken);
 
       if (!isValidCheckoutResponse(order) || !isPixPayment(order)) {
-        throw new Error('NÃ£o foi possÃ­vel retomar o pagamento agora.');
+        throw new Error('Não foi possível retomar o pagamento agora.');
       }
 
       return syncPendingPixOrderState(order, checkoutToken);
@@ -937,7 +980,7 @@ export function BusinessCatalogSection({
         }
 
         if (!isValidCheckoutResponse(order) || !isPixPayment(order)) {
-          setPendingPixRecoveryError('NÃ£o foi possÃ­vel retomar o pagamento agora. Tente novamente em instantes.');
+          setPendingPixRecoveryError('Não foi possível retomar o pagamento agora. Tente novamente em instantes.');
           return;
         }
 
@@ -1581,13 +1624,21 @@ export function BusinessCatalogSection({
     setPendingPixActionFeedback('');
 
     try {
-      const recoveredOrder =
-        typeof onRecoverPendingPixOrder === 'function'
+      const recoveredOrder = hasRecoverablePixPresentation(pendingPixDisplayOrder)
+        ? pendingPixDisplayOrder
+        : typeof onRecoverPendingPixOrder === 'function'
           ? await recoverPendingPixOrderReference(fallbackReference)
           : pendingPixDisplayOrder;
 
       if (!recoveredOrder) {
-        setPendingPixActionFeedback('Esse pagamento nÃ£o estÃ¡ mais disponÃ­vel.');
+        setPendingPixActionFeedback('Esse pagamento não está mais disponível.');
+        return;
+      }
+
+      if (!hasActionablePixPayment(recoveredOrder)) {
+        setPendingPixActionFeedback(
+          'O pedido está pendente, mas os dados do Pix ainda não estão disponíveis. Tente novamente em instantes.',
+        );
         return;
       }
 
@@ -1617,7 +1668,7 @@ export function BusinessCatalogSection({
       const cancelledOrder = await onCancelPendingPixOrder(fallbackReference.checkoutToken);
 
       if (!isValidCheckoutResponse(cancelledOrder) || !isPixPayment(cancelledOrder)) {
-        throw new Error('NÃ£o foi possÃ­vel cancelar o pedido agora.');
+        throw new Error('Não foi possível cancelar o pedido agora.');
       }
 
       const nextOrder = {
@@ -1635,7 +1686,7 @@ export function BusinessCatalogSection({
       setPendingPixActionFeedback(
         typeof error?.message === 'string' && error.message.trim()
           ? error.message.trim()
-          : 'NÃ£o foi possÃ­vel cancelar o pedido agora. Tente novamente.',
+          : 'Não foi possível cancelar o pedido agora. Tente novamente.',
       );
     } finally {
       setCancellingPendingPixOrder(false);
@@ -2254,9 +2305,19 @@ export function BusinessCatalogSection({
                             <span>Total do pedido</span>
                             <strong>{formatCurrency(checkoutResult?.payment?.amount || checkoutResult?.total || 0)}</strong>
                           </div>
-                          {isPixPayment(checkoutResult) && checkoutResult?.payment?.status === PAYMENT_STATUS.PENDING ? (
+                          {isPixPayment(checkoutResult) &&
+                          checkoutResult?.payment?.status === PAYMENT_STATUS.PENDING &&
+                          checkoutResult?.payment?.pixCopyPaste ? (
                             <Button type="button" className="catalog-drawer__submit" onClick={() => handleCopyPixCode(checkoutResult)}>
                               Copiar código Pix
+                            </Button>
+                          ) : isAsaasPixHostedFallback(checkoutResult) ? (
+                            <Button
+                              type="button"
+                              className="catalog-drawer__submit"
+                              onClick={() => redirectToCheckoutUrl(checkoutResult.payment.invoiceUrl)}
+                            >
+                              Abrir cobrança Pix
                             </Button>
                           ) : (
                             <Button type="button" className="catalog-drawer__submit" onClick={closeCartPanel}>

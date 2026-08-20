@@ -73,7 +73,10 @@ import { TENANT_REALTIME_KINDS } from '../../../shared/constants/tenantRealtime.
 import { buildPixPayload } from '../../../shared/utils/pix.js';
 import { publishTenantUpdated } from './tenantRealtimeService.js';
 import { createMercadoPagoCheckoutPreference } from './mercadoPagoService.js';
-import { upsertPaymentByProviderPaymentId } from '../repositories/paymentRepository.js';
+import {
+  findPaymentByBusinessIdAndOrderId,
+  upsertPaymentByProviderPaymentId,
+} from '../repositories/paymentRepository.js';
 import {
   getDeclaredHostedCheckoutProvider,
   isMercadoPagoProviderConnected,
@@ -285,8 +288,170 @@ function buildPublicOrderPaymentSummary(order, paymentOverride = null) {
   };
 }
 
+function buildPaymentRecoveryLogContext({
+  business = null,
+  order = null,
+  payment = null,
+  providerPaymentId = '',
+  status = '',
+  result = '',
+  reason = '',
+} = {}) {
+  return {
+    businessId: String(business?._id || business?.id || order?.businessId || '').trim(),
+    orderId: String(order?._id || order?.id || '').trim(),
+    provider: String(payment?.provider || '').trim(),
+    providerPaymentId: String(providerPaymentId || payment?.providerPaymentId || '').trim(),
+    status: String(status || payment?.status || '').trim(),
+    ...(result ? { result } : {}),
+    ...(reason ? { reason } : {}),
+  };
+}
+
+function logPaymentRecovery(stage, context = {}, level = 'info') {
+  const log = typeof logger[level] === 'function' ? logger[level].bind(logger) : logger.info.bind(logger);
+  log(context, stage);
+}
+
+function hasUsableAsaasPixRecoveryData(payment = {}) {
+  return Boolean(
+    payment?.pixCopyPaste ||
+      payment?.pixQrCode ||
+      payment?.pixQrCodeUrl ||
+      payment?.invoiceUrl ||
+      payment?.checkoutUrl
+  );
+}
+
+function mergeOrderPaymentWithStoredPayment(orderPayment = {}, storedPayment = null, amount = 0) {
+  if (!storedPayment) {
+    return normalizeOrderPayment(orderPayment, amount);
+  }
+
+  const currentPayment = normalizeOrderPayment(orderPayment, amount);
+  const paymentRecord = toPlainRecord(storedPayment) || {};
+  const storedNormalizedPayment = normalizeOrderPayment(paymentRecord, amount);
+
+  if (
+    storedNormalizedPayment.provider !== PAYMENT_PROVIDERS.ASAAS ||
+    (
+      currentPayment.providerPaymentId &&
+      storedNormalizedPayment.providerPaymentId &&
+      currentPayment.providerPaymentId !== storedNormalizedPayment.providerPaymentId
+    )
+  ) {
+    return currentPayment;
+  }
+
+  return normalizeOrderPayment(
+    {
+      ...currentPayment,
+      status: resolveNonRegressivePaymentStatus(currentPayment.status, storedNormalizedPayment.status),
+      providerPaymentId: currentPayment.providerPaymentId || storedNormalizedPayment.providerPaymentId,
+      providerCustomerId: currentPayment.providerCustomerId || storedNormalizedPayment.providerCustomerId,
+      invoiceUrl: currentPayment.invoiceUrl || storedNormalizedPayment.invoiceUrl,
+      checkoutUrl: currentPayment.checkoutUrl || storedNormalizedPayment.checkoutUrl,
+      bankSlipUrl: currentPayment.bankSlipUrl || storedNormalizedPayment.bankSlipUrl,
+      pixCopyPaste: currentPayment.pixCopyPaste || storedNormalizedPayment.pixCopyPaste,
+      pixQrCode: currentPayment.pixQrCode || storedNormalizedPayment.pixQrCode,
+      pixQrCodeUrl: currentPayment.pixQrCodeUrl || storedNormalizedPayment.pixQrCodeUrl,
+      paidAt: currentPayment.paidAt || storedNormalizedPayment.paidAt,
+      confirmedAt: currentPayment.confirmedAt || storedNormalizedPayment.confirmedAt,
+      receivedAt: currentPayment.receivedAt || storedNormalizedPayment.receivedAt,
+      providerUpdatedAt: currentPayment.providerUpdatedAt || storedNormalizedPayment.providerUpdatedAt,
+      updatedAt: currentPayment.updatedAt || storedNormalizedPayment.updatedAt,
+    },
+    amount,
+  );
+}
+
+function areNormalizedPaymentsEqual(left = {}, right = {}, amount = 0) {
+  return JSON.stringify(normalizeOrderPayment(left, amount)) === JSON.stringify(normalizeOrderPayment(right, amount));
+}
+
+async function persistRecoveredAsaasPaymentState({
+  business,
+  order,
+  payment,
+  paymentEvents = null,
+  providerPayment = {},
+  providerStatus = '',
+  billingType = '',
+  externalReference = '',
+  providerEvent = 'PUBLIC_PAYMENT_RECOVERY',
+  occurredAt = new Date(),
+  storedPaymentSettings = null,
+  financeSettings = null,
+} = {}) {
+  const nextPayment = normalizeOrderPayment(payment || {}, order?.total || payment?.amount || 0);
+  const currentPayment = normalizeOrderPayment(order?.payment || {}, order?.total || nextPayment.amount || 0);
+  const nextPaymentEvents = paymentEvents
+    ? normalizeOrderPaymentEvents(paymentEvents)
+    : normalizeOrderPaymentEvents(order?.paymentEvents || []);
+  let nextOrder = order;
+
+  if (
+    !areNormalizedPaymentsEqual(currentPayment, nextPayment, order?.total || nextPayment.amount || 0) ||
+    nextPaymentEvents.length !== normalizeOrderPaymentEvents(order?.paymentEvents || []).length
+  ) {
+    nextOrder = await updateOrderRecordByBusinessId(
+      business._id,
+      order._id || order.id,
+      {
+        payment: nextPayment,
+        paymentEvents: nextPaymentEvents,
+      },
+      { includeArchived: true },
+    );
+
+    if (!nextOrder) {
+      throw new AppError('Pagamento não encontrado.', 404, 'public_order_payment_not_found');
+    }
+  }
+
+  if (nextPayment.provider === PAYMENT_PROVIDERS.ASAAS && nextPayment.providerPaymentId) {
+    const resolvedFinanceSettings = financeSettings || (await getPlatformFinanceSettings());
+    const resolvedPaymentSettings =
+      storedPaymentSettings || resolveBusinessPaymentSettings(business, { mode: 'storage' });
+    const storedPayment = await upsertPaymentByProviderPaymentId(
+      PAYMENT_PROVIDERS.ASAAS,
+      nextPayment.providerPaymentId,
+      buildAsaasPaymentReferencePayload({
+        businessId: business._id,
+        orderId: order._id || order.id,
+        payment: nextPayment,
+        providerPayment: {
+          ...providerPayment,
+          id: providerPayment?.id || nextPayment.providerPaymentId,
+          externalReference:
+            String(providerPayment?.externalReference || '').trim() ||
+            externalReference ||
+            buildAsaasExternalReference(business._id, order._id || order.id),
+        },
+        providerStatus,
+        billingType,
+        externalReference:
+          externalReference ||
+          String(providerPayment?.externalReference || '').trim() ||
+          buildAsaasExternalReference(business._id, order._id || order.id),
+        occurredAt,
+      }),
+    );
+
+    await syncTenantLedgerForPayment(storedPayment, {
+      businessPaymentSettings: resolvedPaymentSettings,
+      financeSettings: resolvedFinanceSettings,
+      providerEvent,
+      occurredAt,
+    });
+  }
+
+  return nextOrder;
+}
+
 async function serializePublicOrderPaymentRecovery(order, business = null) {
-  const serializedOrder = serializeOrderRecord(order);
+  let recoveredOrder = order;
+  const serializedOrder = serializeOrderRecord(recoveredOrder);
   let recoveredPayment = serializedOrder.payment;
 
   if (
@@ -294,6 +459,23 @@ async function serializePublicOrderPaymentRecovery(order, business = null) {
     recoveredPayment?.provider === PAYMENT_PROVIDERS.ASAAS &&
     recoveredPayment?.providerPaymentId
   ) {
+    const storedPaymentRecord = await findPaymentByBusinessIdAndOrderId(business._id, serializedOrder.id);
+    recoveredPayment = mergeOrderPaymentWithStoredPayment(
+      recoveredPayment,
+      storedPaymentRecord,
+      serializedOrder.total || recoveredPayment.amount || 0,
+    );
+
+    logPaymentRecovery(
+      'payment_recovery_payment_found',
+      buildPaymentRecoveryLogContext({
+        business,
+        order: serializedOrder,
+        payment: recoveredPayment,
+        result: storedPaymentRecord ? 'found' : 'missing',
+      }),
+    );
+
     try {
       const storedPaymentSettings = resolveBusinessPaymentSettings(business, { mode: 'storage' });
       const financeSettings = await getPlatformFinanceSettings();
@@ -307,6 +489,41 @@ async function serializePublicOrderPaymentRecovery(order, business = null) {
         apiKey: asaasContext.apiKey,
         paymentId: providerPaymentId,
       });
+      const expectedExternalReference = buildAsaasExternalReference(business._id, serializedOrder.id);
+      const providerExternalReference = String(providerPayment?.externalReference || '').trim();
+
+      if (providerExternalReference && providerExternalReference !== expectedExternalReference) {
+        logPaymentRecovery(
+          'payment_recovery_failed',
+          buildPaymentRecoveryLogContext({
+            business,
+            order: serializedOrder,
+            payment: recoveredPayment,
+            providerPaymentId,
+            result: 'failed',
+            reason: 'provider_scope_mismatch',
+          }),
+          'warn',
+        );
+        throw new AppError(
+          'Não foi possível recuperar este pagamento.',
+          409,
+          'public_order_payment_scope_mismatch',
+        );
+      }
+
+      logPaymentRecovery(
+        'payment_recovery_provider_refresh',
+        buildPaymentRecoveryLogContext({
+          business,
+          order: serializedOrder,
+          payment: recoveredPayment,
+          providerPaymentId,
+          status: mapAsaasPaymentStatus(providerPayment?.status),
+          result: 'success',
+        }),
+      );
+
       const paymentPatch = buildAsaasWebhookPaymentPatch(
         {
           ...serializedOrder,
@@ -317,7 +534,10 @@ async function serializePublicOrderPaymentRecovery(order, business = null) {
         new Date(),
       );
 
-      recoveredPayment = paymentPatch.payment;
+      recoveredPayment = enrichAsaasPaymentFinancials(paymentPatch.payment, serializedOrder.total || 0, {
+        businessPaymentSettings: storedPaymentSettings,
+        financeSettings,
+      });
 
       if (
         recoveredPayment?.method === PAYMENT_METHODS.PIX &&
@@ -352,6 +572,7 @@ async function serializePublicOrderPaymentRecovery(order, business = null) {
             },
             serializedOrder.total || recoveredPayment.amount || 0,
           );
+          paymentPatch.hasChanged = true;
         } catch (error) {
           logger.warn(
             {
@@ -366,7 +587,50 @@ async function serializePublicOrderPaymentRecovery(order, business = null) {
           );
         }
       }
+
+      recoveredOrder = await persistRecoveredAsaasPaymentState({
+        business,
+        order: recoveredOrder,
+        payment: recoveredPayment,
+        paymentEvents: paymentPatch.paymentEvents,
+        providerPayment,
+        providerStatus: providerPayment?.status,
+        billingType: String(providerPayment?.billingType || '').trim(),
+        externalReference:
+          String(providerPayment?.externalReference || '').trim() ||
+          expectedExternalReference,
+        providerEvent: 'PUBLIC_PAYMENT_RECOVERY',
+        occurredAt: new Date(),
+        storedPaymentSettings,
+        financeSettings,
+      });
     } catch (error) {
+      if (error?.code === 'public_order_payment_scope_mismatch') {
+        throw error;
+      }
+
+      if (
+        recoveredPayment?.status === PAYMENT_STATUS.PENDING &&
+        !hasUsableAsaasPixRecoveryData(recoveredPayment)
+      ) {
+        logPaymentRecovery(
+          'payment_recovery_failed',
+          buildPaymentRecoveryLogContext({
+            business,
+            order: serializedOrder,
+            payment: recoveredPayment,
+            result: 'failed',
+            reason: error?.code || 'provider_refresh_failed',
+          }),
+          'warn',
+        );
+        throw new AppError(
+          'Não foi possível recuperar os dados desta cobrança Pix agora. Tente novamente em instantes.',
+          502,
+          'public_order_payment_provider_unavailable',
+        );
+      }
+
       logger.warn(
         {
           businessId: String(business?._id || ''),
@@ -381,7 +645,42 @@ async function serializePublicOrderPaymentRecovery(order, business = null) {
     }
   }
 
-  return buildPublicOrderPaymentSummary(serializedOrder, recoveredPayment);
+  const recoverySummary = buildPublicOrderPaymentSummary(recoveredOrder, recoveredPayment);
+
+  if (
+    recoverySummary.payment?.provider === PAYMENT_PROVIDERS.ASAAS &&
+    recoverySummary.payment?.status === PAYMENT_STATUS.PENDING &&
+    !hasUsableAsaasPixRecoveryData(recoverySummary.payment)
+  ) {
+    logPaymentRecovery(
+      'payment_recovery_failed',
+      buildPaymentRecoveryLogContext({
+        business,
+        order: recoverySummary,
+        payment: recoverySummary.payment,
+        result: 'failed',
+        reason: 'missing_public_payment_payload',
+      }),
+      'warn',
+    );
+    throw new AppError(
+      'Não foi possível recuperar os dados desta cobrança Pix agora. Tente novamente em instantes.',
+      502,
+      'public_order_payment_payload_unavailable',
+    );
+  }
+
+  logPaymentRecovery(
+    'payment_recovery_success',
+    buildPaymentRecoveryLogContext({
+      business,
+      order: recoverySummary,
+      payment: recoverySummary.payment,
+      result: 'success',
+    }),
+  );
+
+  return recoverySummary;
 }
 
 const ORDER_STATUS_TIMESTAMP_FIELDS = {
@@ -1643,7 +1942,26 @@ export async function getPublicOrderPaymentByCheckoutToken(slug, checkoutToken) 
   const business = await assertPublicBusinessBySlug(slug);
   const normalizedCheckoutToken = String(checkoutToken || '').trim();
 
+  logPaymentRecovery(
+    'payment_recovery_requested',
+    {
+      businessId: String(business._id || ''),
+      slug: String(business.slug || slug || '').trim(),
+      hasCheckoutToken: Boolean(normalizedCheckoutToken),
+    },
+  );
+
   if (!normalizedCheckoutToken) {
+    logPaymentRecovery(
+      'payment_recovery_failed',
+      {
+        businessId: String(business._id || ''),
+        slug: String(business.slug || slug || '').trim(),
+        result: 'failed',
+        reason: 'missing_checkout_token',
+      },
+      'warn',
+    );
     throw new AppError('Pagamento não encontrado.', 404, 'public_order_payment_not_found');
   }
 
@@ -1654,8 +1972,29 @@ export async function getPublicOrderPaymentByCheckoutToken(slug, checkoutToken) 
   );
 
   if (!order || !isRecoverablePublicOrderPayment(order.payment || {})) {
+    logPaymentRecovery(
+      'payment_recovery_failed',
+      {
+        businessId: String(business._id || ''),
+        slug: String(business.slug || slug || '').trim(),
+        orderFound: Boolean(order),
+        result: 'failed',
+        reason: order ? 'payment_not_recoverable' : 'order_not_found',
+      },
+      'warn',
+    );
     throw new AppError('Pagamento não encontrado.', 404, 'public_order_payment_not_found');
   }
+
+  logPaymentRecovery(
+    'payment_recovery_order_found',
+    buildPaymentRecoveryLogContext({
+      business,
+      order,
+      payment: order.payment,
+      result: 'found',
+    }),
+  );
 
   return serializePublicOrderPaymentRecovery(order, business);
 }

@@ -578,6 +578,13 @@ describe('BusinessCatalogSection', () => {
 
   it('recovers a pending Pix checkout from the opaque storage token after refresh and lets the shopper continue payment', async () => {
     const user = userEvent.setup();
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: writeTextMock,
+      },
+    });
     const onRecoverPendingPixOrder = vi.fn().mockResolvedValue({
       id: 'order-pending-1',
       total: 59.9,
@@ -635,6 +642,129 @@ describe('BusinessCatalogSection', () => {
       'data:image/png;base64,pendingpixqr',
     );
     expect(screen.getByRole('button', { name: /Copiar código Pix/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Copiar código Pix/i }));
+
+    await waitFor(() => {
+      expect(writeTextMock).toHaveBeenCalledWith('000201010212pendingpixpayload');
+    });
+    expect(onRecoverPendingPixOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it('recovers a pending Asaas Pix invoice fallback after refresh without showing fake copy actions', async () => {
+    const user = userEvent.setup();
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const onRecoverPendingPixOrder = vi.fn().mockResolvedValue({
+      id: 'order-pending-invoice',
+      total: 63.2,
+      status: 'received',
+      payment: {
+        method: PAYMENT_METHODS.PIX,
+        status: PAYMENT_STATUS.PENDING,
+        provider: 'asaas',
+        amount: 63.2,
+        invoiceUrl: 'https://sandbox.asaas.com/i/pay_recovery_invoice',
+        pixCopyPaste: '',
+        pixQrCode: '',
+      },
+    });
+
+    window.localStorage.setItem(
+      'taplink:pending-pix:barbearia-estilo-vivo',
+      JSON.stringify({
+        checkoutToken: 'checkout-token-invoice',
+        orderId: 'order-pending-invoice',
+      }),
+    );
+
+    render(
+      <BusinessCatalogSection
+        business={asaasBusinessFixture}
+        tenantSlug="barbearia-estilo-vivo"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={vi.fn()}
+        onRecoverPendingPixOrder={onRecoverPendingPixOrder}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(onRecoverPendingPixOrder).toHaveBeenCalledWith('checkout-token-invoice');
+    });
+
+    expect(screen.queryByRole('button', { name: /Copiar Pix/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Continuar pagamento/i }));
+
+    expect(await screen.findByRole('dialog', { name: /Seu pedido/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Copiar código Pix/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Abrir cobrança Pix/i }).length).toBeGreaterThan(0);
+
+    await user.click(screen.getAllByRole('button', { name: /Abrir cobrança Pix/i })[0]);
+
+    expect(openSpy).toHaveBeenCalledWith('https://sandbox.asaas.com/i/pay_recovery_invoice', '_self');
+    expect(onRecoverPendingPixOrder).toHaveBeenCalledTimes(1);
+    openSpy.mockRestore();
+  });
+
+  it('does not open an empty payment modal or show copy success when recovered Pix data is unavailable', async () => {
+    const user = userEvent.setup();
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: writeTextMock,
+      },
+    });
+    const onRecoverPendingPixOrder = vi.fn().mockResolvedValue({
+      id: 'order-pending-empty',
+      total: 63.2,
+      status: 'received',
+      payment: {
+        method: PAYMENT_METHODS.PIX,
+        status: PAYMENT_STATUS.PENDING,
+        provider: 'asaas',
+        amount: 63.2,
+        pixCopyPaste: '',
+        pixQrCode: '',
+        invoiceUrl: '',
+      },
+    });
+
+    window.localStorage.setItem(
+      'taplink:pending-pix:barbearia-estilo-vivo',
+      JSON.stringify({
+        checkoutToken: 'checkout-token-empty',
+        orderId: 'order-pending-empty',
+      }),
+    );
+
+    render(
+      <BusinessCatalogSection
+        business={asaasBusinessFixture}
+        tenantSlug="barbearia-estilo-vivo"
+        modules={modulesFixture}
+        segmentConfig={{}}
+        products={productsFixture}
+        onSubmitOrder={vi.fn()}
+        onRecoverPendingPixOrder={onRecoverPendingPixOrder}
+      />,
+    );
+
+    await screen.findByText('Pagamento pendente');
+    expect(screen.queryByRole('button', { name: /Copiar Pix/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Continuar pagamento/i }));
+
+    await waitFor(() => {
+      expect(onRecoverPendingPixOrder).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.queryByRole('dialog', { name: /Seu pedido/i })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/O pedido está pendente, mas os dados do Pix ainda não estão disponíveis/i),
+    ).toBeInTheDocument();
+    expect(writeTextMock).not.toHaveBeenCalled();
   });
 
   it('shows the CPF/CNPJ field only for Asaas Pix and preserves the value when the shopper switches payment methods', async () => {
@@ -903,7 +1033,7 @@ describe('BusinessCatalogSection', () => {
       expect(openSpy).toHaveBeenCalledWith('https://sandbox.asaas.com/i/pay_pix_fallback', '_self');
     });
 
-    expect(await screen.findByText('Abrir cobrança Pix')).toBeInTheDocument();
+    expect((await screen.findAllByRole('button', { name: /Abrir cobrança Pix/i })).length).toBeGreaterThan(0);
     expect(
       screen.getAllByText(
         /Finalize o Pix no ambiente seguro do Asaas. Depois da confirmação, o pedido será atualizado automaticamente./i,

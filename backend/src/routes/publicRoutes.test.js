@@ -1787,6 +1787,19 @@ describe('Public routes', () => {
         }),
       }),
     );
+
+    const secondRecoveryResponse = await request(app).get(
+      `/api/public/site/barbearia-estilo-vivo/orders/payment/${encodeURIComponent(createResponse.body.data.checkoutToken)}`,
+    );
+
+    expect(secondRecoveryResponse.status).toBe(200);
+    expect(secondRecoveryResponse.body.data.payment).toEqual(
+      expect.objectContaining({
+        providerPaymentId: 'pay_recovery_pix',
+        pixCopyPaste: '000201010212recoverypixpayload',
+        pixQrCode: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA',
+      }),
+    );
     expect(asaasServiceMock.createAsaasPaymentCharge).toHaveBeenCalledTimes(1);
     expect(asaasServiceMock.getAsaasPayment).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1799,8 +1812,213 @@ describe('Public routes', () => {
         businessId: business._id,
         providerPaymentId: 'pay_recovery_pix',
         invoiceUrl: 'https://sandbox.asaas.com/i/pay_recovery_pix',
+        pixCopyPaste: '000201010212recoverypixpayload',
+        pixQrCode: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA',
       }),
     );
+    expect((await Order.findById(createResponse.body.data.id).lean()).payment).toEqual(
+      expect.objectContaining({
+        providerPaymentId: 'pay_recovery_pix',
+        pixCopyPaste: '000201010212recoverypixpayload',
+        pixQrCode: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA',
+      }),
+    );
+  });
+
+  it('recovers the hosted Asaas invoice fallback without creating another Pix charge', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Combo recovery invoice fallback',
+      description: 'Mesmo pedido deve abrir invoice apos refresh',
+      price: 63.2,
+      image: '',
+      category: 'Combos',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    await SystemSetting.create({
+      key: 'finance:asaas',
+      value: {
+        paymentArchitecture: 'centralized',
+        platformWalletId: 'wallet_platform_global',
+        defaultPlatformFeePercent: 5,
+      },
+    });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            creditCard: false,
+            debitCard: false,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          provider: 'asaas',
+          asaas: {
+            enabled: true,
+            status: 'active',
+          },
+        },
+      },
+    );
+
+    asaasServiceMock.createAsaasCustomer.mockResolvedValue({
+      id: 'cus_recovery_invoice',
+      name: 'Joao Invoice',
+    });
+    asaasServiceMock.createAsaasPaymentCharge.mockResolvedValue({
+      id: 'pay_recovery_invoice',
+      customer: 'cus_recovery_invoice',
+      status: 'PENDING',
+      invoiceUrl: 'https://sandbox.asaas.com/i/pay_recovery_invoice',
+    });
+    asaasServiceMock.getAsaasPixQrCode.mockRejectedValue(
+      new AppError('QR indisponivel temporariamente.', 503, 'asaas_qr_unavailable'),
+    );
+    asaasServiceMock.getAsaasPayment.mockRejectedValue(
+      new AppError('Asaas indisponivel no momento.', 503, 'asaas_unavailable'),
+    );
+
+    const createResponse = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Joao Invoice',
+        customerPhone: '5511988877665',
+        customerDocument: '529.982.247-25',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: product.price,
+          },
+        ],
+        deliveryType: 'pickup',
+        payment: {
+          method: 'pix',
+          provider: 'asaas',
+        },
+      });
+
+    const recoveryResponse = await request(app).get(
+      `/api/public/site/barbearia-estilo-vivo/orders/payment/${encodeURIComponent(createResponse.body.data.checkoutToken)}`,
+    );
+
+    expect(createResponse.status).toBe(201);
+    expect(recoveryResponse.status).toBe(200);
+    expect(recoveryResponse.body.data).toEqual(
+      expect.objectContaining({
+        id: createResponse.body.data.id,
+        payment: expect.objectContaining({
+          method: 'pix',
+          provider: 'asaas',
+          status: 'pending',
+          providerPaymentId: 'pay_recovery_invoice',
+          invoiceUrl: 'https://sandbox.asaas.com/i/pay_recovery_invoice',
+          pixCopyPaste: '',
+          pixQrCode: '',
+        }),
+      }),
+    );
+    expect(asaasServiceMock.createAsaasPaymentCharge).toHaveBeenCalledTimes(1);
+    expect(asaasServiceMock.getAsaasPixQrCode).toHaveBeenCalledTimes(1);
+    expect(await Payment.countDocuments({ provider: 'asaas', providerPaymentId: 'pay_recovery_invoice' })).toBe(1);
+  });
+
+  it('does not recover a checkout token from another tenant slug', async () => {
+    const business = await Business.findOne({ slug: 'barbearia-estilo-vivo' });
+    const otherBusiness = await Business.create({
+      name: 'Outro tenant recovery',
+      slug: 'outro-tenant-recovery',
+      status: 'active',
+      segment: 'restaurant',
+      modules: {
+        catalog: true,
+        cart: true,
+        orders: true,
+      },
+      paymentSettings: {
+        enabled: true,
+        methods: {
+          pix: true,
+          cashOnPickup: true,
+          cashOnDelivery: true,
+        },
+        pix: {
+          key: 'outro@example.com',
+          merchantName: 'Outro Tenant',
+          merchantCity: 'Sao Paulo',
+        },
+        provider: 'manual',
+      },
+      seo: {
+        title: 'Outro tenant recovery',
+        description: 'Tenant usado para testar isolamento de token publico.',
+      },
+    });
+    const product = await Product.create({
+      businessId: business._id,
+      name: 'Combo tenant token',
+      description: 'Pedido nao deve recuperar em outro tenant',
+      price: 41.2,
+      image: '',
+      category: 'Combos',
+      measurementUnit: 'unit',
+      active: true,
+    });
+
+    await Business.updateOne(
+      { _id: business._id },
+      {
+        paymentSettings: {
+          enabled: true,
+          methods: {
+            pix: true,
+            cashOnPickup: true,
+            cashOnDelivery: true,
+          },
+          pix: {
+            key: 'barbearia@example.com',
+            merchantName: 'Barbearia Estilo Vivo',
+            merchantCity: 'Sao Paulo',
+          },
+          provider: 'manual',
+        },
+      },
+    );
+
+    const createResponse = await request(app)
+      .post('/api/public/site/barbearia-estilo-vivo/orders')
+      .send({
+        customerName: 'Cliente Token',
+        customerPhone: '5511988877665',
+        items: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: product.price,
+          },
+        ],
+        deliveryType: 'pickup',
+        payment: {
+          method: 'pix',
+        },
+      });
+
+    const recoveryResponse = await request(app).get(
+      `/api/public/site/${otherBusiness.slug}/orders/payment/${encodeURIComponent(createResponse.body.data.checkoutToken)}`,
+    );
+
+    expect(createResponse.status).toBe(201);
+    expect(recoveryResponse.status).toBe(404);
+    expect(recoveryResponse.body.error?.code || recoveryResponse.body.code).toBe('public_order_payment_not_found');
   });
 
   it('rejects an Asaas Pix checkout without CPF or CNPJ before trying to create the provider customer', async () => {
